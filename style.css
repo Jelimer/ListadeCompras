@@ -138,6 +138,7 @@ td input[type="checkbox"] {
     /* Aumentar el área de toque para móviles */
     min-width: 24px;
     min-height: 24px;
+    touch-action: manipulation; /* Previene el doble toque para zoom */
 }
 
 .item-text {
@@ -174,6 +175,7 @@ td:last-child {
     display: flex; /* Para centrar el texto si el padding es grande */
     justify-content: center;
     align-items: center;
+    touch-action: manipulation; /* Previene el doble toque para zoom */
 }
 
 .edit-button {
