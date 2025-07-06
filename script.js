@@ -221,13 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
     new Sortable(shoppingListTableBody, {
         animation: 150,
         ghostClass: 'sortable-ghost', // Clase para el elemento fantasma
-        filter: 'input[type="checkbox"], .edit-button, .delete-button', // Ignorar arrastre en estos elementos
-        onMove: function (evt) {
-            // Permitir el arrastre solo si no se está tocando un elemento filtrado
-            return evt.related.className.indexOf('product-content') === -1 &&
-                   evt.related.className.indexOf('edit-button') === -1 &&
-                   evt.related.className.indexOf('delete-button') === -1;
-        },
+        handle: '.drag-handle', // Solo arrastrar desde el handle
         onEnd: async function (evt) {
             const newOrderIds = Array.from(shoppingListTableBody.children).map(tr => tr.dataset.id);
             const batch = db.batch();
