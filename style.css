@@ -135,6 +135,9 @@ td input[type="checkbox"] {
     transform: scale(1.3);
     accent-color: #22c55e; /* Green checkbox */
     cursor: pointer;
+    /* Aumentar el área de toque para móviles */
+    min-width: 24px;
+    min-height: 24px;
 }
 
 .item-text {
@@ -165,6 +168,12 @@ td:last-child {
     font-size: 0.9em;
     font-weight: 600;
     transition: background-color 0.3s ease, transform 0.1s ease;
+    /* Aumentar el área de toque para móviles */
+    min-width: 44px;
+    min-height: 44px;
+    display: flex; /* Para centrar el texto si el padding es grande */
+    justify-content: center;
+    align-items: center;
 }
 
 .edit-button {
