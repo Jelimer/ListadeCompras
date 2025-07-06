@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Celda para la cantidad
             const quantityCell = document.createElement('td');
             const quantitySpan = document.createElement('span');
-            quantitySpan.textContent = item.quantity || '1'; // Valor por defecto
+            quantitySpan.textContent = item.quantity || '';
             quantityCell.appendChild(quantitySpan);
             tr.appendChild(quantityCell);
 
@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     addItemButton.addEventListener('click', () => {
         const itemName = itemInput.value.trim();
-        const itemQuantity = parseInt(quantityInput.value) || 1;
+        const itemQuantity = quantityInput.value.trim();
         const itemLocation = locationInput.value.trim();
         const itemObservations = observationsInput.value.trim();
 
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 observations: itemObservations
             });
             itemInput.value = '';
-            quantityInput.value = '1'; // Reset a 1
+            quantityInput.value = ''; // Reset a vacío
             locationInput.value = '';
             observationsInput.value = '';
             saveItems();
