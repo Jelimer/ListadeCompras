@@ -67,8 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = item.completed;
-            checkbox.addEventListener('change', () => {
-                updateItemInFirestore(itemDoc.id, { completed: checkbox.checked });
+            checkbox.addEventListener('change', async () => {
+                const newCompletedStatus = checkbox.checked;
+                // Al cambiar el estado de completado, actualizamos el orden para que se mueva al final de su grupo
+                await updateItemInFirestore(itemDoc.id, {
+                    completed: newCompletedStatus,
+                    order: firebase.firestore.FieldValue.serverTimestamp() // Nuevo timestamp para reordenar
+                });
             });
 
             const itemText = document.createElement('span');
@@ -150,7 +155,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 addItemButton.textContent = 'Añadir'; // Volver al texto original del botón
             } else {
                 // Añadir nuevo item con un campo de orden
-                const snapshot = await itemsCollection.orderBy('order', 'desc').limit(1).get();
+                // Obtener el orden más alto de los elementos NO completados
+                const snapshot = await itemsCollection.where('completed', '==', false).orderBy('order', 'desc').limit(1).get();
                 let newOrder = 0;
                 if (!snapshot.empty) {
                     newOrder = snapshot.docs[0].data().order + 1;
@@ -196,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Listener en tiempo real de Firestore (ordenado por el nuevo campo 'order')
-    itemsCollection.orderBy('order', 'asc').onSnapshot(snapshot => {
+    itemsCollection.orderBy('completed', 'asc').orderBy('order', 'asc').onSnapshot(snapshot => {
         renderItems(snapshot.docs);
     }, error => {
         console.error("Error getting documents: ", error);
@@ -210,9 +216,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const newOrderIds = Array.from(shoppingListTableBody.children).map(tr => tr.dataset.id);
             const batch = db.batch();
 
+            // Obtener los documentos actuales para saber su estado de completado
+            const currentItemsSnapshot = await itemsCollection.get();
+            const currentItemsMap = new Map();
+            currentItemsSnapshot.docs.forEach(doc => {
+                currentItemsMap.set(doc.id, doc.data());
+            });
+
+            // Asignar nuevos valores de orden basados en la posición visual
             newOrderIds.forEach((id, index) => {
                 const docRef = itemsCollection.doc(id);
-                batch.update(docRef, { order: index });
+                const itemData = currentItemsMap.get(id);
+                // Solo actualizamos el orden si el elemento no está completado
+                // o si lo estamos moviendo dentro de los completados
+                if (itemData && !itemData.completed) {
+                    batch.update(docRef, { order: index });
+                } else if (itemData && itemData.completed) {
+                    // Si está completado, le damos un orden alto para que se quede al final
+                    // Esto es para asegurar que el drag-and-drop funcione dentro de los completados
+                    batch.update(docRef, { order: index + 1000000 }); // Un número grande
+                }
             });
 
             try {

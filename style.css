@@ -101,6 +101,11 @@ th {
     font-size: 0.9em;
 }
 
+/* Centrar la columna de Cantidad */
+td:nth-child(2) {
+    text-align: center;
+}
+
 tr {
     cursor: grab;
     transition: background-color 0.2s ease;
