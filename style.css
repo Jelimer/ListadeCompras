@@ -148,6 +148,14 @@ td input[type="checkbox"] {
     color: #94a3b8;
 }
 
+/* Contenedor de botones de acción */
+td:last-child {
+    display: flex;
+    gap: 8px; /* Espacio entre los botones */
+    justify-content: flex-end; /* Alinea los botones a la derecha */
+    align-items: center; /* Centra verticalmente los botones */
+}
+
 .edit-button,
 .delete-button {
     padding: 8px 12px;
@@ -157,7 +165,6 @@ td input[type="checkbox"] {
     font-size: 0.9em;
     font-weight: 600;
     transition: background-color 0.3s ease, transform 0.1s ease;
-    margin-left: 5px; /* Espacio entre botones */
 }
 
 .edit-button {
