@@ -11,12 +11,25 @@
         <h1>Lista de Compras</h1>
         <div class="input-section">
             <input type="text" id="itemInput" placeholder="Añadir nuevo producto">
+            <input type="number" id="quantityInput" placeholder="Cantidad" min="1" value="1">
             <input type="text" id="locationInput" placeholder="Lugar de compra (opcional)">
+            <input type="text" id="observationsInput" placeholder="Observaciones (opcional)">
             <button id="addItemButton">Añadir</button>
         </div>
-        <ul id="shoppingList">
-            <!-- Los elementos de la lista se añadirán aquí con JavaScript -->
-        </ul>
+        <table id="shoppingListTable">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Lugar</th>
+                    <th>Observaciones</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Los elementos de la lista se añadirán aquí con JavaScript -->
+            </tbody>
+        </table>
     </div>
     <script src="script.js"></script>
 </body>

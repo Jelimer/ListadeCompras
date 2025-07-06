@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const itemInput = document.getElementById('itemInput');
+    const quantityInput = document.getElementById('quantityInput');
     const locationInput = document.getElementById('locationInput');
+    const observationsInput = document.getElementById('observationsInput');
     const addItemButton = document.getElementById('addItemButton');
-    const shoppingList = document.getElementById('shoppingList');
+    const shoppingListTableBody = document.querySelector('#shoppingListTable tbody');
 
     let items = JSON.parse(localStorage.getItem('shoppingListItems')) || [];
 
@@ -11,10 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderItems() {
-        shoppingList.innerHTML = '';
+        shoppingListTableBody.innerHTML = '';
         items.forEach((item, index) => {
-            const li = document.createElement('li');
+            const tr = document.createElement('tr');
 
+            // Celda para el checkbox y el nombre del producto
+            const productCell = document.createElement('td');
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = item.completed;
@@ -34,17 +38,33 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.completed) {
                 itemText.classList.add('completed');
             }
+            productCell.appendChild(checkbox);
+            productCell.appendChild(itemText);
+            tr.appendChild(productCell);
 
-            const locInput = document.createElement('input');
-            locInput.type = 'text';
-            locInput.classList.add('location-input');
-            locInput.placeholder = 'Lugar';
-            locInput.value = item.location || '';
-            locInput.addEventListener('input', () => {
-                item.location = locInput.value;
-                saveItems();
-            });
+            // Celda para la cantidad
+            const quantityCell = document.createElement('td');
+            const quantitySpan = document.createElement('span');
+            quantitySpan.textContent = item.quantity || '1'; // Valor por defecto
+            quantityCell.appendChild(quantitySpan);
+            tr.appendChild(quantityCell);
 
+            // Celda para el lugar
+            const locationCell = document.createElement('td');
+            const locationSpan = document.createElement('span');
+            locationSpan.textContent = item.location || '';
+            locationCell.appendChild(locationSpan);
+            tr.appendChild(locationCell);
+
+            // Celda para las observaciones
+            const observationsCell = document.createElement('td');
+            const observationsSpan = document.createElement('span');
+            observationsSpan.textContent = item.observations || '';
+            observationsCell.appendChild(observationsSpan);
+            tr.appendChild(observationsCell);
+
+            // Celda para las acciones (eliminar)
+            const actionsCell = document.createElement('td');
             const deleteButton = document.createElement('button');
             deleteButton.classList.add('delete-button');
             deleteButton.textContent = 'Eliminar';
@@ -53,36 +73,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveItems();
                 renderItems();
             });
+            actionsCell.appendChild(deleteButton);
+            tr.appendChild(actionsCell);
 
-            li.appendChild(checkbox);
-            li.appendChild(itemText);
-            li.appendChild(locInput);
-            li.appendChild(deleteButton);
-            shoppingList.appendChild(li);
+            shoppingListTableBody.appendChild(tr);
         });
     }
 
     addItemButton.addEventListener('click', () => {
         const itemName = itemInput.value.trim();
+        const itemQuantity = parseInt(quantityInput.value) || 1;
         const itemLocation = locationInput.value.trim();
+        const itemObservations = observationsInput.value.trim();
+
         if (itemName) {
-            items.push({ name: itemName, completed: false, location: itemLocation });
+            items.push({
+                name: itemName,
+                completed: false,
+                quantity: itemQuantity,
+                location: itemLocation,
+                observations: itemObservations
+            });
             itemInput.value = '';
+            quantityInput.value = '1'; // Reset a 1
             locationInput.value = '';
+            observationsInput.value = '';
             saveItems();
             renderItems();
         }
     });
 
-    // Permite añadir con Enter en el campo de producto
+    // Permite añadir con Enter en los campos de entrada
     itemInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             addItemButton.click();
         }
     });
-
-    // Permite añadir con Enter en el campo de lugar
+    quantityInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            addItemButton.click();
+        }
+    });
     locationInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            addItemButton.click();
+        }
+    });
+    observationsInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             addItemButton.click();
         }

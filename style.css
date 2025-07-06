@@ -14,7 +14,7 @@ body {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     width: 100%;
-    max-width: 600px;
+    max-width: 800px; /* Aumentar el ancho máximo para acomodar más columnas */
 }
 
 h1 {
@@ -29,12 +29,13 @@ h1 {
     flex-wrap: wrap;
 }
 
-.input-section input[type="text"] {
+.input-section input[type="text"],
+.input-section input[type="number"] {
     flex: 1;
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    min-width: 150px;
+    min-width: 120px; /* Ajustar el ancho mínimo para los inputs */
 }
 
 .input-section button {
@@ -51,46 +52,56 @@ h1 {
     background-color: #218838;
 }
 
-ul {
-    list-style: none;
-    padding: 0;
+/* Estilos para la tabla */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
 }
 
-li {
+th,
+td {
+    border: 1px solid #eee;
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background-color: #f8f8f8;
+    font-weight: bold;
+    color: #555;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:hover {
+    background-color: #f1f1f1;
+}
+
+td:first-child {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 0;
-    border-bottom: 1px solid #eee;
 }
 
-li:last-child {
-    border-bottom: none;
-}
-
-li input[type="checkbox"] {
+td input[type="checkbox"] {
     transform: scale(1.2);
 }
 
-li .item-text {
+.item-text {
     flex-grow: 1;
     font-size: 1.1em;
     color: #333;
 }
 
-li .item-text.completed {
+.item-text.completed {
     text-decoration: line-through;
     color: #888;
 }
 
-li .location-input {
-    padding: 5px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    width: 120px;
-}
-
-li .delete-button {
+.delete-button {
     background-color: #dc3545;
     color: white;
     border: none;
@@ -100,6 +111,6 @@ li .delete-button {
     transition: background-color 0.3s ease;
 }
 
-li .delete-button:hover {
+.delete-button:hover {
     background-color: #c82333;
 }
