@@ -1,87 +1,121 @@
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
+    font-family: 'Inter', sans-serif;
+    background-color: #e0f2f7; /* Light blue background */
     display: flex;
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
     margin: 20px;
+    color: #334155; /* Darker text for readability */
 }
 
 .container {
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* More pronounced shadow */
     width: 100%;
-    max-width: 800px; /* Aumentar el ancho máximo para acomodar más columnas */
+    max-width: 850px; /* Slightly wider for better layout */
+    box-sizing: border-box;
 }
 
 h1 {
     text-align: center;
-    color: #333;
+    color: #1e293b; /* Darker heading */
+    margin-bottom: 30px;
+    font-weight: 700;
 }
 
 .input-section {
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 25px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .input-section input[type="text"],
 .input-section input[type="number"] {
     flex: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    min-width: 120px; /* Ajustar el ancho mínimo para los inputs */
+    padding: 12px 15px;
+    border: 1px solid #cbd5e1; /* Lighter border */
+    border-radius: 8px;
+    min-width: 140px;
+    font-size: 1em;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.input-section input[type="text"]:focus,
+.input-section input[type="number"]:focus {
+    border-color: #3b82f6; /* Blue focus border */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    outline: none;
 }
 
 .input-section button {
-    padding: 10px 15px;
-    background-color: #28a745;
+    padding: 12px 20px;
+    background-color: #22c55e; /* Green button */
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    font-size: 1em;
+    font-weight: 600;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    flex-shrink: 0;
 }
 
 .input-section button:hover {
-    background-color: #218838;
+    background-color: #16a34a;
+    transform: translateY(-1px);
+}
+
+.input-section button:active {
+    transform: translateY(0);
 }
 
 /* Estilos para la tabla */
 table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate; /* Use separate for rounded corners on cells */
+    border-spacing: 0;
     margin-top: 20px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    overflow: hidden; /* Ensures rounded corners are visible */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
 th,
 td {
-    border: 1px solid #eee;
-    padding: 10px;
+    padding: 15px;
     text-align: left;
+    border-bottom: 1px solid #e2e8f0; /* Lighter separator */
 }
 
 th {
-    background-color: #f8f8f8;
-    font-weight: bold;
-    color: #555;
+    background-color: #f1f5f9; /* Light gray header */
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    font-size: 0.9em;
 }
 
 tr {
-    cursor: grab; /* Indicar que las filas son arrastrables */
+    cursor: grab;
+    transition: background-color 0.2s ease;
+}
+
+tr:last-child td {
+    border-bottom: none;
 }
 
 tr:nth-child(even) {
-    background-color: #f9f9f9;
+    background-color: #f8fafc; /* Very light blue for even rows */
 }
 
 tr:hover {
-    background-color: #f1f1f1;
+    background-color: #e2f3f8; /* Light blue on hover */
 }
 
 td:first-child {
@@ -91,51 +125,57 @@ td:first-child {
 }
 
 td input[type="checkbox"] {
-    transform: scale(1.2);
+    transform: scale(1.3);
+    accent-color: #22c55e; /* Green checkbox */
+    cursor: pointer;
 }
 
 .item-text {
     flex-grow: 1;
-    font-size: 1.1em;
-    color: #333;
+    font-size: 1.05em;
+    color: #334155;
 }
 
 .item-text.completed {
     text-decoration: line-through;
-    color: #888;
+    color: #94a3b8;
+}
+
+.edit-button,
+.delete-button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    margin-left: 5px; /* Espacio entre botones */
 }
 
 .edit-button {
-    background-color: #007bff;
+    background-color: #3b82f6; /* Blue edit button */
     color: white;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    margin-right: 5px; /* Espacio entre botones */
 }
 
 .edit-button:hover {
-    background-color: #0056b3;
+    background-color: #2563eb;
+    transform: translateY(-1px);
 }
 
 .delete-button {
-    background-color: #dc3545;
+    background-color: #ef4444; /* Red delete button */
     color: white;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
 }
 
 .delete-button:hover {
-    background-color: #c82333;
+    background-color: #dc2626;
+    transform: translateY(-1px);
 }
 
 /* Estilos para Sortable.js */
 .sortable-ghost {
-    opacity: 0.4;
-    background-color: #f0f0f0;
+    opacity: 0.6;
+    background-color: #bfdbfe; /* Light blue ghost */
+    border-radius: 8px;
 }
