@@ -108,7 +108,6 @@ td:nth-child(2) {
 }
 
 tr {
-    cursor: grab;
     transition: background-color 0.2s ease;
 }
 
