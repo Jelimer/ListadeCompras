@@ -230,14 +230,24 @@ td:last-child {
     }
 
     table {
-        width: 600px; /* Ancho fijo para permitir el desplazamiento */
+        /* Eliminar el ancho fijo */
+        width: 100%; /* Permitir que la tabla se ajuste al contenedor */
+        min-width: 500px; /* Establecer un ancho mínimo para que las columnas no se compriman demasiado */
     }
 
     th,
     td {
         padding: 10px;
         font-size: 0.9em;
+        white-space: nowrap; /* Evitar que el texto se rompa en varias líneas */
     }
+
+    /* Ajustar anchos de columna para móviles */
+    th:nth-child(1), td:nth-child(1) { width: 30%; }
+    th:nth-child(2), td:nth-child(2) { width: 15%; }
+    th:nth-child(3), td:nth-child(3) { width: 20%; }
+    th:nth-child(4), td:nth-child(4) { width: 20%; }
+    th:nth-child(5), td:nth-child(5) { width: 15%; }
 
     .edit-button,
     .delete-button {
