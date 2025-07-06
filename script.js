@@ -22,8 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addItemButton = document.getElementById('addItemButton');
     const shoppingListTableBody = document.querySelector('#shoppingListTable tbody');
 
-    // No necesitamos 'items' como array local, ya que Firestore lo manejará
-    // let items = JSON.parse(localStorage.getItem('shoppingListItems')) || [];
+    let editingItemId = null; // Variable para almacenar el ID del item que se está editando
 
     // Función para guardar un item en Firestore
     async function addItemToFirestore(item) {
@@ -103,14 +102,28 @@ document.addEventListener('DOMContentLoaded', () => {
             observationsCell.appendChild(observationsSpan);
             tr.appendChild(observationsCell);
 
-            // Celda para las acciones (eliminar)
+            // Celda para las acciones (eliminar y editar)
             const actionsCell = document.createElement('td');
+
+            const editButton = document.createElement('button');
+            editButton.classList.add('edit-button');
+            editButton.textContent = 'Editar';
+            editButton.addEventListener('click', () => {
+                editingItemId = itemDoc.id;
+                itemInput.value = item.name;
+                quantityInput.value = item.quantity || '';
+                locationInput.value = item.location || '';
+                observationsInput.value = item.observations || '';
+                addItemButton.textContent = 'Actualizar';
+            });
+
             const deleteButton = document.createElement('button');
             deleteButton.classList.add('delete-button');
             deleteButton.textContent = 'Eliminar';
             deleteButton.addEventListener('click', () => {
                 deleteItemFromFirestore(itemDoc.id);
             });
+            actionsCell.appendChild(editButton);
             actionsCell.appendChild(deleteButton);
             tr.appendChild(actionsCell);
 
@@ -125,14 +138,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemObservations = observationsInput.value.trim();
 
         if (itemName) {
-            addItemToFirestore({
-                name: itemName,
-                completed: false,
-                quantity: itemQuantity,
-                location: itemLocation,
-                observations: itemObservations,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp() // Para ordenar
-            });
+            if (editingItemId) {
+                // Actualizar item existente
+                updateItemInFirestore(editingItemId, {
+                    name: itemName,
+                    quantity: itemQuantity,
+                    location: itemLocation,
+                    observations: itemObservations
+                });
+                editingItemId = null; // Resetear el modo edición
+                addItemButton.textContent = 'Añadir'; // Volver al texto original del botón
+            } else {
+                // Añadir nuevo item
+                addItemToFirestore({
+                    name: itemName,
+                    completed: false,
+                    quantity: itemQuantity,
+                    location: itemLocation,
+                    observations: itemObservations,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp() // Para ordenar
+                });
+            }
             itemInput.value = '';
             quantityInput.value = '';
             locationInput.value = '';
@@ -180,11 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Obtener los IDs de los documentos en el nuevo orden
             const newOrderIds = Array.from(shoppingListTableBody.children).map(tr => tr.dataset.id);
 
-            // Actualizar el campo 'timestamp' de los documentos afectados para reflejar el nuevo orden
-            // Esto es una solución simplificada para el reordenamiento en Firestore.
-            // Para un reordenamiento robusto, se necesitaría un campo de 'orden' numérico
+            // Para un reordenamiento robusto en Firestore, se necesitaría un campo de 'orden' numérico
             // y actualizar todos los elementos entre oldIndex y newIndex.
-            // Aquí, simplemente actualizamos el timestamp del elemento movido.
+            // Aquí, simplemente actualizamos el timestamp del elemento movido para que Firestore lo reordene.
             const movedItemId = newOrderIds[newIndex];
             await updateItemInFirestore(movedItemId, { timestamp: firebase.firestore.FieldValue.serverTimestamp() });
 
