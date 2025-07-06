@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    addItemButton.addEventListener('click', () => {
+    addItemButton.addEventListener('click', async () => {
         const itemName = itemInput.value.trim();
         const itemQuantity = quantityInput.value.trim();
         const itemLocation = locationInput.value.trim();
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemName) {
             if (editingItemId) {
                 // Actualizar item existente
-                updateItemInFirestore(editingItemId, {
+                await updateItemInFirestore(editingItemId, {
                     name: itemName,
                     quantity: itemQuantity,
                     location: itemLocation,
@@ -149,14 +149,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 editingItemId = null; // Resetear el modo edición
                 addItemButton.textContent = 'Añadir'; // Volver al texto original del botón
             } else {
-                // Añadir nuevo item
+                // Añadir nuevo item con un campo de orden
+                const snapshot = await itemsCollection.orderBy('order', 'desc').limit(1).get();
+                let newOrder = 0;
+                if (!snapshot.empty) {
+                    newOrder = snapshot.docs[0].data().order + 1;
+                }
+
                 addItemToFirestore({
                     name: itemName,
                     completed: false,
                     quantity: itemQuantity,
                     location: itemLocation,
                     observations: itemObservations,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp() // Para ordenar
+                    order: newOrder, // Nuevo campo de orden
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp() // Mantener timestamp para desempate o referencia
                 });
             }
             itemInput.value = '';
@@ -188,8 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Listener en tiempo real de Firestore
-    itemsCollection.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+    // Listener en tiempo real de Firestore (ordenado por el nuevo campo 'order')
+    itemsCollection.orderBy('order', 'asc').onSnapshot(snapshot => {
         renderItems(snapshot.docs);
     }, error => {
         console.error("Error getting documents: ", error);
@@ -200,19 +207,20 @@ document.addEventListener('DOMContentLoaded', () => {
         animation: 150,
         ghostClass: 'sortable-ghost', // Clase para el elemento fantasma
         onEnd: async function (evt) {
-            const oldIndex = evt.oldIndex;
-            const newIndex = evt.newIndex;
-
-            // Obtener los IDs de los documentos en el nuevo orden
             const newOrderIds = Array.from(shoppingListTableBody.children).map(tr => tr.dataset.id);
+            const batch = db.batch();
 
-            // Para un reordenamiento robusto en Firestore, se necesitaría un campo de 'orden' numérico
-            // y actualizar todos los elementos entre oldIndex y newIndex.
-            // Aquí, simplemente actualizamos el timestamp del elemento movido para que Firestore lo reordene.
-            const movedItemId = newOrderIds[newIndex];
-            await updateItemInFirestore(movedItemId, { timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+            newOrderIds.forEach((id, index) => {
+                const docRef = itemsCollection.doc(id);
+                batch.update(docRef, { order: index });
+            });
 
-            // Firestore se encargará de re-renderizar a través del listener
+            try {
+                await batch.commit();
+                console.log("Order updated successfully!");
+            } catch (error) {
+                console.error("Error updating order: ", error);
+            }
         },
     });
 });
