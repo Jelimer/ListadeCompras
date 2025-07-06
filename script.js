@@ -67,6 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const productContent = document.createElement('div');
             productContent.classList.add('product-content'); // Nueva clase para el div
 
+            const dragHandle = document.createElement('span');
+            dragHandle.classList.add('drag-handle');
+            dragHandle.innerHTML = '&#x2261;'; // Icono de hamburguesa o similar
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = item.completed;
@@ -85,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.completed) {
                 itemText.classList.add('completed');
             }
+            productContent.appendChild(dragHandle);
             productContent.appendChild(checkbox);
             productContent.appendChild(itemText);
             productCell.appendChild(productContent);
