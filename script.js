@@ -64,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Celda para el checkbox y el nombre del producto
             const productCell = document.createElement('td');
+            const productContent = document.createElement('div');
+            productContent.classList.add('product-content'); // Nueva clase para el div
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = item.completed;
@@ -82,8 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.completed) {
                 itemText.classList.add('completed');
             }
-            productCell.appendChild(checkbox);
-            productCell.appendChild(itemText);
+            productContent.appendChild(checkbox);
+            productContent.appendChild(itemText);
+            productCell.appendChild(productContent);
             tr.appendChild(productCell);
 
             // Celda para la cantidad
