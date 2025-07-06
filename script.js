@@ -1,4 +1,20 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Tu configuración de Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyB-FqW5XJ3bBm4CPxXKNBfHiLLWt8wE_nY",
+        authDomain: "listadecomprasapp-734cf.firebaseapp.com",
+        projectId: "listadecomprasapp-734cf",
+        storageBucket: "listadecomprasapp-734cf.firebasestorage.app",
+        messagingSenderId: "816059785698",
+        appId: "1:816059785698:web:c7b9559f25ce5a273559bb",
+        measurementId: "G-EDHEG28Y4T"
+    };
+
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const itemsCollection = db.collection('shoppingItems');
+
     const itemInput = document.getElementById('itemInput');
     const quantityInput = document.getElementById('quantityInput');
     const locationInput = document.getElementById('locationInput');
@@ -6,17 +22,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const addItemButton = document.getElementById('addItemButton');
     const shoppingListTableBody = document.querySelector('#shoppingListTable tbody');
 
-    let items = JSON.parse(localStorage.getItem('shoppingListItems')) || [];
+    // No necesitamos 'items' como array local, ya que Firestore lo manejará
+    // let items = JSON.parse(localStorage.getItem('shoppingListItems')) || [];
 
-    function saveItems() {
-        localStorage.setItem('shoppingListItems', JSON.stringify(items));
+    // Función para guardar un item en Firestore
+    async function addItemToFirestore(item) {
+        try {
+            await itemsCollection.add(item);
+            console.log("Document successfully written!");
+        } catch (error) {
+            console.error("Error writing document: ", error);
+        }
     }
 
-    function renderItems() {
+    // Función para actualizar un item en Firestore
+    async function updateItemInFirestore(id, updates) {
+        try {
+            await itemsCollection.doc(id).update(updates);
+            console.log("Document successfully updated!");
+        } catch (error) {
+            console.error("Error updating document: ", error);
+        }
+    }
+
+    // Función para eliminar un item de Firestore
+    async function deleteItemFromFirestore(id) {
+        try {
+            await itemsCollection.doc(id).delete();
+            console.log("Document successfully deleted!");
+        } catch (error) {
+            console.error("Error removing document: ", error);
+        }
+    }
+
+    // Renderizar items desde Firestore
+    function renderItems(itemsFromFirestore) {
         shoppingListTableBody.innerHTML = '';
-        items.forEach((item, index) => {
+        itemsFromFirestore.forEach(itemDoc => {
+            const item = itemDoc.data();
             const tr = document.createElement('tr');
-            tr.dataset.id = index; // Usar el índice como ID para Sortable.js
+            tr.dataset.id = itemDoc.id; // Usar el ID del documento de Firestore
 
             // Celda para el checkbox y el nombre del producto
             const productCell = document.createElement('td');
@@ -24,13 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             checkbox.type = 'checkbox';
             checkbox.checked = item.completed;
             checkbox.addEventListener('change', () => {
-                item.completed = checkbox.checked;
-                if (item.completed) {
-                    itemText.classList.add('completed');
-                } else {
-                    itemText.classList.remove('completed');
-                }
-                saveItems();
+                updateItemInFirestore(itemDoc.id, { completed: checkbox.checked });
             });
 
             const itemText = document.createElement('span');
@@ -70,9 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteButton.classList.add('delete-button');
             deleteButton.textContent = 'Eliminar';
             deleteButton.addEventListener('click', () => {
-                items.splice(index, 1);
-                saveItems();
-                renderItems();
+                deleteItemFromFirestore(itemDoc.id);
             });
             actionsCell.appendChild(deleteButton);
             tr.appendChild(actionsCell);
@@ -88,19 +125,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemObservations = observationsInput.value.trim();
 
         if (itemName) {
-            items.push({
+            addItemToFirestore({
                 name: itemName,
                 completed: false,
                 quantity: itemQuantity,
                 location: itemLocation,
-                observations: itemObservations
+                observations: itemObservations,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp() // Para ordenar
             });
             itemInput.value = '';
-            quantityInput.value = ''; // Reset a vacío
+            quantityInput.value = '';
             locationInput.value = '';
             observationsInput.value = '';
-            saveItems();
-            renderItems();
         }
     });
 
@@ -126,22 +162,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Listener en tiempo real de Firestore
+    itemsCollection.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        renderItems(snapshot.docs);
+    }, error => {
+        console.error("Error getting documents: ", error);
+    });
+
     // Inicializar Sortable.js
     new Sortable(shoppingListTableBody, {
         animation: 150,
         ghostClass: 'sortable-ghost', // Clase para el elemento fantasma
-        onEnd: function (evt) {
+        onEnd: async function (evt) {
             const oldIndex = evt.oldIndex;
             const newIndex = evt.newIndex;
 
-            // Reordenar el array de items
-            const [movedItem] = items.splice(oldIndex, 1);
-            items.splice(newIndex, 0, movedItem);
+            // Obtener los IDs de los documentos en el nuevo orden
+            const newOrderIds = Array.from(shoppingListTableBody.children).map(tr => tr.dataset.id);
 
-            saveItems();
-            // No es necesario renderizar de nuevo, Sortable.js ya movió el DOM
+            // Actualizar el campo 'timestamp' de los documentos afectados para reflejar el nuevo orden
+            // Esto es una solución simplificada para el reordenamiento en Firestore.
+            // Para un reordenamiento robusto, se necesitaría un campo de 'orden' numérico
+            // y actualizar todos los elementos entre oldIndex y newIndex.
+            // Aquí, simplemente actualizamos el timestamp del elemento movido.
+            const movedItemId = newOrderIds[newIndex];
+            await updateItemInFirestore(movedItemId, { timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+
+            // Firestore se encargará de re-renderizar a través del listener
         },
     });
-
-    renderItems();
 });
