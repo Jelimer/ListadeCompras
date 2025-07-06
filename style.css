@@ -72,6 +72,10 @@ th {
     color: #555;
 }
 
+tr {
+    cursor: grab; /* Indicar que las filas son arrastrables */
+}
+
 tr:nth-child(even) {
     background-color: #f9f9f9;
 }
@@ -113,4 +117,10 @@ td input[type="checkbox"] {
 
 .delete-button:hover {
     background-color: #c82333;
+}
+
+/* Estilos para Sortable.js */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: #f0f0f0;
 }

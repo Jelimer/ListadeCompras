@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shoppingListTableBody.innerHTML = '';
         items.forEach((item, index) => {
             const tr = document.createElement('tr');
+            tr.dataset.id = index; // Usar el índice como ID para Sortable.js
 
             // Celda para el checkbox y el nombre del producto
             const productCell = document.createElement('td');
@@ -123,6 +124,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') {
             addItemButton.click();
         }
+    });
+
+    // Inicializar Sortable.js
+    new Sortable(shoppingListTableBody, {
+        animation: 150,
+        ghostClass: 'sortable-ghost', // Clase para el elemento fantasma
+        onEnd: function (evt) {
+            const oldIndex = evt.oldIndex;
+            const newIndex = evt.newIndex;
+
+            // Reordenar el array de items
+            const [movedItem] = items.splice(oldIndex, 1);
+            items.splice(newIndex, 0, movedItem);
+
+            saveItems();
+            // No es necesario renderizar de nuevo, Sortable.js ya movió el DOM
+        },
     });
 
     renderItems();
