@@ -193,3 +193,68 @@ td:last-child {
     background-color: #bfdbfe; /* Light blue ghost */
     border-radius: 8px;
 }
+
+/* Media Queries para Responsividad */
+@media (max-width: 768px) {
+    .container {
+        padding: 20px;
+        margin: 10px;
+    }
+
+    .input-section {
+        flex-direction: column; /* Apilar los inputs y el botón */
+        align-items: stretch;
+    }
+
+    .input-section input,
+    .input-section button {
+        width: 100%; /* Ocupar todo el ancho disponible */
+        min-width: unset; /* Eliminar el min-width */
+    }
+
+    /* Hacer la tabla desplazable horizontalmente */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch; /* Para un desplazamiento suave en iOS */
+    }
+
+    table {
+        width: 600px; /* Ancho fijo para permitir el desplazamiento */
+    }
+
+    th,
+    td {
+        padding: 10px;
+        font-size: 0.9em;
+    }
+
+    .edit-button,
+    .delete-button {
+        padding: 6px 10px;
+        font-size: 0.85em;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.8em;
+    }
+
+    .input-section input,
+    .input-section button {
+        font-size: 0.9em;
+        padding: 10px;
+    }
+
+    th,
+    td {
+        padding: 8px;
+        font-size: 0.8em;
+    }
+
+    .edit-button,
+    .delete-button {
+        padding: 5px 8px;
+        font-size: 0.8em;
+    }
+}
