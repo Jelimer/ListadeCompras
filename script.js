@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const locationInput = document.getElementById('locationInput');
     const observationsInput = document.getElementById('observationsInput');
     const addItemButton = document.getElementById('addItemButton');
+    const resetListButton = document.getElementById('resetListButton');
     const shoppingListTableBody = document.querySelector('#shoppingListTable tbody');
 
     let editingItemId = null; // Variable para almacenar el ID del item que se está editando
@@ -207,6 +208,26 @@ document.addEventListener('DOMContentLoaded', () => {
     observationsInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             addItemButton.click();
+        }
+    });
+
+    resetListButton.addEventListener('click', async () => {
+        const snapshot = await itemsCollection.where('completed', '==', true).get();
+        if (snapshot.empty) {
+            console.log("No completed items to reset.");
+            return;
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => {
+            batch.update(doc.ref, { completed: false });
+        });
+
+        try {
+            await batch.commit();
+            console.log("Successfully reset completed items.");
+        } catch (error) {
+            console.error("Error resetting items: ", error);
         }
     });
 

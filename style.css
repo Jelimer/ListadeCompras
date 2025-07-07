@@ -74,6 +74,14 @@ h1 {
     transform: translateY(0);
 }
 
+#resetListButton {
+    background-color: #3b82f6; /* Blue */
+}
+
+#resetListButton:hover {
+    background-color: #2563eb;
+}
+
 /* Estilos para la tabla */
 table {
     width: 100%;
