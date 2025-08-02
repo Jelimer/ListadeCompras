@@ -15,26 +15,17 @@
         <div class="input-section">
             <input type="text" id="itemInput" placeholder="Añadir nuevo producto">
             <input type="text" id="quantityInput" placeholder="Cantidad" value="1">
-            <input type="text" id="locationInput" placeholder="Lugar de compra (opcional)">
+            <input type="text" id="locationInput" placeholder="Lugar de compra (opcional)" list="location-suggestions">
+            <datalist id="location-suggestions"></datalist>
             <input type="text" id="observationsInput" placeholder="Observaciones (opcional)">
             <button id="addItemButton">Añadir</button>
-            <button id="resetListButton">Reiniciar Lista</button>
         </div>
-        <div class="table-responsive">
-            <table id="shoppingListTable">
-                <thead>
-                    <tr>
-                        <th>Producto</th>
-                        <th>Cantidad</th>
-                        <th>Lugar</th>
-                        <th>Observaciones</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Los elementos de la lista se añadirán aquí con JavaScript -->
-                </tbody>
-            </table>
+        <div id="shoppingListContainer">
+            <!-- Las listas agrupadas se añadirán aquí con JavaScript -->
+        </div>
+        <div class="footer-actions">
+            <button id="resetListButton">Reiniciar Lista</button>
+            <button id="undoButton" class="hidden">Deshacer</button>
         </div>
     </div>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
