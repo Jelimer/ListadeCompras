@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Tu configuración de Firebase
+    // Configuración de Firebase
     const firebaseConfig = {
         apiKey: "AIzaSyB-FqW5XJ3bBm4CPxXKNBfHiLLWt8wE_nY",
         authDomain: "listadecomprasapp-734cf.firebaseapp.com",
@@ -15,266 +15,268 @@ document.addEventListener('DOMContentLoaded', () => {
     const db = firebase.firestore();
     const itemsCollection = db.collection('shoppingItems');
 
+    // Referencias del DOM
     const itemInput = document.getElementById('itemInput');
     const quantityInput = document.getElementById('quantityInput');
     const locationInput = document.getElementById('locationInput');
     const observationsInput = document.getElementById('observationsInput');
     const addItemButton = document.getElementById('addItemButton');
     const resetListButton = document.getElementById('resetListButton');
-    const shoppingListTableBody = document.querySelector('#shoppingListTable tbody');
+    const undoButton = document.getElementById('undoButton');
+    const shoppingListContainer = document.getElementById('shoppingListContainer');
+    const locationSuggestions = document.getElementById('location-suggestions');
 
-    let editingItemId = null; // Variable para almacenar el ID del item que se está editando
+    // Variables de estado
+    let editingItemId = null;
+    let lastResetItemsIds = [];
+    let undoTimeout = null;
 
-    // Función para guardar un item en Firestore
-    async function addItemToFirestore(item) {
-        try {
-            await itemsCollection.add(item);
-            console.log("Document successfully written!");
-        } catch (error) {
-            console.error("Error writing document: ", error);
+    // --- FUNCIONES DE FIRESTORE ---
+    const addItemToFirestore = async (item) => {
+        try { await itemsCollection.add(item); } catch (error) {
+            console.error("Error al añadir item: ", error);
         }
-    }
+    };
 
-    // Función para actualizar un item en Firestore
-    async function updateItemInFirestore(id, updates) {
-        try {
-            await itemsCollection.doc(id).update(updates);
-            console.log("Document successfully updated!");
-        } catch (error) {
-            console.error("Error updating document: ", error);
+    const updateItemInFirestore = async (id, updates) => {
+        try { await itemsCollection.doc(id).update(updates); } catch (error) {
+            console.error("Error al actualizar item: ", error);
         }
-    }
+    };
 
-    // Función para eliminar un item de Firestore
-    async function deleteItemFromFirestore(id) {
-        try {
-            await itemsCollection.doc(id).delete();
-            console.log("Document successfully deleted!");
-        } catch (error) {
-            console.error("Error removing document: ", error);
+    const deleteItemFromFirestore = async (id) => {
+        try { await itemsCollection.doc(id).delete(); } catch (error) {
+            console.error("Error al eliminar item: ", error);
         }
-    }
+    };
 
-    // Renderizar items desde Firestore
-    function renderItems(itemsFromFirestore) {
-        shoppingListTableBody.innerHTML = '';
-        itemsFromFirestore.forEach(itemDoc => {
-            const item = itemDoc.data();
-            const tr = document.createElement('tr');
-            tr.dataset.id = itemDoc.id; // Usar el ID del documento de Firestore
+    // --- RENDERIZADO DE LA LISTA ---
+    const renderItems = (docs) => {
+        updateLocationSuggestions(docs);
+        shoppingListContainer.innerHTML = '';
+        const groupedItems = {};
 
-            // Celda para el checkbox y el nombre del producto
-            const productCell = document.createElement('td');
-            const productContent = document.createElement('div');
-            productContent.classList.add('product-content'); // Nueva clase para el div
-
-            const dragHandle = document.createElement('span');
-            dragHandle.classList.add('drag-handle');
-            dragHandle.innerHTML = '&#x2261;'; // Icono de hamburguesa o similar
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = item.completed;
-            checkbox.addEventListener('change', async () => {
-                const newCompletedStatus = checkbox.checked;
-                // Al cambiar el estado de completado, actualizamos el orden para que se mueva al final de su grupo
-                await updateItemInFirestore(itemDoc.id, {
-                    completed: newCompletedStatus,
-                    order: firebase.firestore.FieldValue.serverTimestamp() // Nuevo timestamp para reordenar
-                });
-            });
-
-            const itemText = document.createElement('span');
-            itemText.classList.add('item-text');
-            itemText.textContent = item.name;
-            if (item.completed) {
-                itemText.classList.add('completed');
-            }
-            productContent.appendChild(dragHandle);
-            productContent.appendChild(checkbox);
-            productContent.appendChild(itemText);
-            productCell.appendChild(productContent);
-            tr.appendChild(productCell);
-
-            // Celda para la cantidad
-            const quantityCell = document.createElement('td');
-            const quantitySpan = document.createElement('span');
-            quantitySpan.textContent = item.quantity || '';
-            quantityCell.appendChild(quantitySpan);
-            tr.appendChild(quantityCell);
-
-            // Celda para el lugar
-            const locationCell = document.createElement('td');
-            const locationSpan = document.createElement('span');
-            locationSpan.textContent = item.location || '';
-            locationCell.appendChild(locationSpan);
-            tr.appendChild(locationCell);
-
-            // Celda para las observaciones
-            const observationsCell = document.createElement('td');
-            const observationsSpan = document.createElement('span');
-            observationsSpan.textContent = item.observations || '';
-            observationsCell.appendChild(observationsSpan);
-            tr.appendChild(observationsCell);
-
-            // Celda para las acciones (eliminar y editar)
-            const actionsCell = document.createElement('td');
-
-            const editButton = document.createElement('button');
-            editButton.classList.add('edit-button');
-            editButton.textContent = 'Editar';
-            editButton.addEventListener('click', () => {
-                editingItemId = itemDoc.id;
-                itemInput.value = item.name;
-                quantityInput.value = item.quantity || '';
-                locationInput.value = item.location || '';
-                observationsInput.value = item.observations || '';
-                addItemButton.textContent = 'Actualizar';
-            });
-
-            const deleteButton = document.createElement('button');
-            deleteButton.classList.add('delete-button');
-            deleteButton.textContent = 'Eliminar';
-            deleteButton.addEventListener('click', () => {
-                deleteItemFromFirestore(itemDoc.id);
-            });
-            actionsCell.appendChild(editButton);
-            actionsCell.appendChild(deleteButton);
-            tr.appendChild(actionsCell);
-
-            shoppingListTableBody.appendChild(tr);
+        docs.forEach(doc => {
+            const item = { id: doc.id, ...doc.data() };
+            const location = item.location?.trim() || 'Varios';
+            if (!groupedItems[location]) groupedItems[location] = [];
+            groupedItems[location].push(item);
         });
-    }
 
+        const activeGroups = [];
+        const completedGroups = [];
+
+        for (const location in groupedItems) {
+            const items = groupedItems[location];
+            const allCompleted = items.every(item => item.completed);
+            if (allCompleted) {
+                completedGroups.push({ location, items });
+            } else {
+                activeGroups.push({ location, items });
+            }
+        }
+
+        const sortFn = (a, b) => {
+            if (a.location === 'Varios') return 1;
+            if (b.location === 'Varios') return -1;
+            return a.location.localeCompare(b.location);
+        };
+
+        activeGroups.sort(sortFn);
+        completedGroups.sort(sortFn);
+
+        const sortedGroups = [...activeGroups, ...completedGroups];
+
+        sortedGroups.forEach(({ location, items }) => {
+            if (items.length === 0) return;
+            const allCompleted = items.every(item => item.completed);
+            const groupContainer = createGroupContainer(location, items, allCompleted);
+            shoppingListContainer.appendChild(groupContainer);
+
+            const listElement = groupContainer.querySelector('.shopping-list');
+            new Sortable(listElement, {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                filter: '.list-header',
+                onEnd: async (evt) => {
+                    const itemElements = Array.from(evt.target.children).filter(el => !el.classList.contains('list-header'));
+                    const batch = db.batch();
+                    itemElements.forEach((itemEl, index) => {
+                        batch.update(itemsCollection.doc(itemEl.dataset.id), { order: index });
+                    });
+                    try { await batch.commit(); } catch (error) { console.error("Error al reordenar: ", error); }
+                }
+            });
+        });
+    };
+
+    const createGroupContainer = (location, items, isCompleted) => {
+        const groupContainer = document.createElement('div');
+        groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''}`;
+
+        const header = document.createElement('div');
+        header.className = 'group-header';
+        header.innerHTML = `<h2>${location}</h2><span class="toggle-icon">▼</span>`;
+        header.addEventListener('click', () => groupContainer.classList.toggle('collapsed'));
+
+        const list = document.createElement('ul');
+        list.className = 'shopping-list';
+
+        const listHeader = document.createElement('li');
+        listHeader.className = 'shopping-item list-header';
+        listHeader.innerHTML = `
+            <span class="item-main">Producto</span>
+            <span class="item-quantity">Cantidad</span>
+            <span class="item-observations">Observaciones</span>
+            <span class="item-actions">Acciones</span>
+        `;
+        list.appendChild(listHeader);
+
+        items.forEach(item => list.appendChild(createListItem(item)));
+
+        groupContainer.appendChild(header);
+        groupContainer.appendChild(list);
+        return groupContainer;
+    };
+
+    const createListItem = (item) => {
+        const li = document.createElement('li');
+        li.className = `shopping-item ${item.completed ? 'completed' : ''}`;
+        li.dataset.id = item.id;
+
+        li.innerHTML = `
+            <div class="item-main">
+                <span class="drag-handle">&#x2261;</span>
+                <input type="checkbox" ${item.completed ? 'checked' : ''}>
+                <span class="item-text">${item.name}</span>
+            </div>
+            <span class="item-quantity">${item.quantity || ''}</span>
+            <span class="item-observations">${item.observations || ''}</span>
+            <div class="item-actions">
+                <button class="edit-button">Editar</button>
+                <button class="delete-button">Eliminar</button>
+            </div>
+        `;
+
+        li.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
+            updateItemInFirestore(item.id, { completed: e.target.checked });
+        });
+
+        li.querySelector('.edit-button').addEventListener('click', () => {
+            editingItemId = item.id;
+            itemInput.value = item.name;
+            quantityInput.value = item.quantity || '1';
+            locationInput.value = item.location || '';
+            observationsInput.value = item.observations || '';
+            addItemButton.textContent = 'Actualizar';
+            itemInput.focus();
+        });
+
+        li.querySelector('.delete-button').addEventListener('click', () => {
+            deleteItemFromFirestore(item.id);
+        });
+
+        return li;
+    };
+
+    const updateLocationSuggestions = (docs) => {
+        const locations = new Set();
+        docs.forEach(doc => {
+            const location = doc.data().location?.trim();
+            if (location) locations.add(location);
+        });
+
+        locationSuggestions.innerHTML = '';
+        locations.forEach(location => {
+            const option = document.createElement('option');
+            option.value = location;
+            locationSuggestions.appendChild(option);
+        });
+    };
+
+    // --- MANEJADORES DE EVENTOS ---
     addItemButton.addEventListener('click', async () => {
         const itemName = itemInput.value.trim();
-        const itemQuantity = quantityInput.value.trim();
-        const itemLocation = locationInput.value.trim();
-        const itemObservations = observationsInput.value.trim();
+        if (!itemName) return;
 
-        if (itemName) {
-            if (editingItemId) {
-                // Actualizar item existente
-                await updateItemInFirestore(editingItemId, {
-                    name: itemName,
-                    quantity: itemQuantity,
-                    location: itemLocation,
-                    observations: itemObservations
-                });
-                editingItemId = null; // Resetear el modo edición
-                addItemButton.textContent = 'Añadir'; // Volver al texto original del botón
-            } else {
-                // Añadir nuevo item con un campo de orden
-                // Obtener el orden más alto de los elementos NO completados
-                const snapshot = await itemsCollection.where('completed', '==', false).orderBy('order', 'desc').limit(1).get();
-                let newOrder = 0;
-                if (!snapshot.empty) {
-                    newOrder = snapshot.docs[0].data().order + 1;
-                }
+        const itemData = {
+            name: itemName,
+            quantity: quantityInput.value.trim() || '1',
+            location: locationInput.value.trim(),
+            observations: observationsInput.value.trim(),
+        };
 
-                addItemToFirestore({
-                    name: itemName,
-                    completed: false,
-                    quantity: itemQuantity,
-                    location: itemLocation,
-                    observations: itemObservations,
-                    order: newOrder, // Nuevo campo de orden
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp() // Mantener timestamp para desempate o referencia
-                });
+        if (editingItemId) {
+            await updateItemInFirestore(editingItemId, itemData);
+            editingItemId = null;
+            addItemButton.textContent = 'Añadir';
+        } else {
+            itemData.completed = false;
+            itemData.order = await getNextOrder(itemData.location);
+            itemData.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+            await addItemToFirestore(itemData);
+        }
+
+        [itemInput, locationInput, observationsInput].forEach(i => i.value = '');
+        quantityInput.value = '1';
+    });
+
+    const getNextOrder = async (location) => {
+        const locationStr = location?.trim() || '';
+        const snapshot = await itemsCollection.where('location', '==', locationStr).get();
+        if (snapshot.empty) {
+            return 0;
+        }
+        // Find the highest order number from the returned documents
+        let maxOrder = -1;
+        snapshot.docs.forEach(doc => {
+            const order = doc.data().order;
+            if (order > maxOrder) {
+                maxOrder = order;
             }
-            itemInput.value = '';
-            quantityInput.value = '';
-            locationInput.value = '';
-            observationsInput.value = '';
-        }
-    });
-
-    // Permite añadir con Enter en los campos de entrada
-    itemInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addItemButton.click();
-        }
-    });
-    quantityInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addItemButton.click();
-        }
-    });
-    locationInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addItemButton.click();
-        }
-    });
-    observationsInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addItemButton.click();
-        }
-    });
+        });
+        return maxOrder + 1;
+    };
 
     resetListButton.addEventListener('click', async () => {
         const snapshot = await itemsCollection.where('completed', '==', true).get();
-        if (snapshot.empty) {
-            console.log("No completed items to reset.");
-            return;
-        }
+        if (snapshot.empty) return;
 
-        const batch = db.batch();
-        snapshot.docs.forEach(doc => {
-            batch.update(doc.ref, { completed: false });
-        });
+        lastResetItemsIds = snapshot.docs.map(doc => doc.id);
 
-        try {
-            await batch.commit();
-            console.log("Successfully reset completed items.");
-        } catch (error) {
-            console.error("Error resetting items: ", error);
-        }
+        resetListButton.classList.add('hidden');
+        undoButton.classList.remove('hidden');
+
+        undoTimeout = setTimeout(async () => {
+            const batch = db.batch();
+            lastResetItemsIds.forEach(id => {
+                batch.update(itemsCollection.doc(id), { completed: false });
+            });
+            try { await batch.commit(); } catch (error) { console.error("Error al reiniciar items: ", error); }
+            lastResetItemsIds = [];
+            undoButton.classList.add('hidden');
+            resetListButton.classList.remove('hidden');
+        }, 20000);
     });
 
-    // Listener en tiempo real de Firestore (ordenado por el nuevo campo 'order')
-    itemsCollection.orderBy('completed', 'asc').orderBy('order', 'asc').onSnapshot(snapshot => {
+    undoButton.addEventListener('click', () => {
+        clearTimeout(undoTimeout);
+        lastResetItemsIds = [];
+        undoButton.classList.add('hidden');
+        resetListButton.classList.remove('hidden');
+    });
+
+    [itemInput, quantityInput, locationInput, observationsInput].forEach(input => {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addItemButton.click();
+        });
+    });
+
+    // Listener de Firestore en tiempo real
+    itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
         renderItems(snapshot.docs);
     }, error => {
-        console.error("Error getting documents: ", error);
-    });
-
-    // Inicializar Sortable.js
-    new Sortable(shoppingListTableBody, {
-        animation: 150,
-        ghostClass: 'sortable-ghost', // Clase para el elemento fantasma
-        handle: '.drag-handle', // Solo arrastrar desde el handle
-        onEnd: async function (evt) {
-            const newOrderIds = Array.from(shoppingListTableBody.children).map(tr => tr.dataset.id);
-            const batch = db.batch();
-
-            // Obtener los documentos actuales para saber su estado de completado
-            const currentItemsSnapshot = await itemsCollection.get();
-            const currentItemsMap = new Map();
-            currentItemsSnapshot.docs.forEach(doc => {
-                currentItemsMap.set(doc.id, doc.data());
-            });
-
-            // Asignar nuevos valores de orden basados en la posición visual
-            newOrderIds.forEach((id, index) => {
-                const docRef = itemsCollection.doc(id);
-                const itemData = currentItemsMap.get(id);
-                // Solo actualizamos el orden si el elemento no está completado
-                // o si lo estamos moviendo dentro de los completados
-                if (itemData && !itemData.completed) {
-                    batch.update(docRef, { order: index });
-                } else if (itemData && itemData.completed) {
-                    // Si está completado, le damos un orden alto para que se quede al final
-                    // Esto es para asegurar que el drag-and-drop funcione dentro de los completados
-                    batch.update(docRef, { order: index + 1000000 }); // Un número grande
-                }
-            });
-
-            try {
-                await batch.commit();
-                console.log("Order updated successfully!");
-            } catch (error) {
-                console.error("Error updating order: ", error);
-            }
-        },
+        console.error("Error al obtener documentos: ", error);
     });
 });
