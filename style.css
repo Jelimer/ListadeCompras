@@ -219,6 +219,20 @@ h1 {
         gap: 5px;
     }
 
+    .shopping-item.list-header {
+        flex-direction: column; /* Stack header items vertically */
+        align-items: flex-start; /* Align text to the start */
+        gap: 5px; /* Add some gap between stacked items */
+    }
+
+    .shopping-item.list-header .item-main,
+    .shopping-item.list-header .item-quantity,
+    .shopping-item.list-header .item-observations,
+    .shopping-item.list-header .item-actions {
+        flex-basis: 100%; /* Make each header item take full width */
+        text-align: left; /* Ensure text is left-aligned */
+    }
+
     .item-main {
         flex-basis: 100%;
         margin-bottom: 5px;
