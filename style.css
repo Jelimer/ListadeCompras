@@ -1,265 +1,237 @@
 :root {
-    --background-color: #1a1a2e;
-    --surface-color: #16213e;
-    --primary-color: #0f3460;
-    --secondary-color: #e94560;
-    --text-color: #dcdcdc;
-    --text-color-muted: #a9a9a9;
-    --border-color: #2a3b5e;
-    --font-family: 'Poppins', sans-serif;
-}
-
-body {
-    font-family: var(--font-family);
-    background-color: var(--background-color);
-    color: var(--text-color);
-    margin: 0;
-    padding: 20px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-.container {
-    max-width: 800px;
-    margin: 0 auto;
-    background-color: var(--surface-color);
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-}
-
-h1 {
-    text-align: center;
-    color: #fff;
-    font-weight: 600;
-    margin-bottom: 30px;
-}
-
+    2     --background-color: #1a1a2e;
+    3     --surface-color: #16213e;
+    4     --primary-color: #0f3460;
+    5     --secondary-color: #e94560;
+    6     --text-color: #dcdcdc;
+    7     --text-color-muted: #a9a9a9;
+    8     --border-color: #2a3b5e;
+    9     --font-family: 'Poppins', sans-serif;
+   10 }
+   11
+   12 body {
+   13     font-family: var(--font-family);
+   14     background-color: var(--background-color);
+   15     color: var(--text-color);
+   16     margin: 0;
+   17     padding: 20px;
+   18     -webkit-font-smoothing: antialiased;
+   19     -moz-osx-font-smoothing: grayscale;
+   20 }
+   21
+   22 .container {
+   23     max-width: 800px;
+   24     margin: 0 auto;
+   25     background-color: var(--surface-color);
+   26     padding: 30px;
+   27     border-radius: 12px;
+   28     box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+   29 }
+   30
+   31 h1 {
+   32     text-align: center;
+   33     color: #fff;
+   34     font-weight: 600;
+   35     margin-bottom: 30px;
+   36 }
 /* Input Section */
-.input-section {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 30px;
-}
-
-.input-section input[type="text"] {
-    flex: 1 1 150px;
-    padding: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    font-size: 1em;
-    background-color: var(--primary-color);
-    color: var(--text-color);
-    transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-.input-section input[type="text"]::placeholder {
-    color: var(--text-color-muted);
-}
-
-.input-section input[type="text"]:focus {
-    outline: none;
-    border-color: var(--secondary-color);
-    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.3);
-}
-
-#addItemButton {
-    padding: 12px 25px;
-    background: linear-gradient(45deg, var(--secondary-color), #c43049);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-#addItemButton:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
-}
-
-/* Shopping List */
-.location-group {
-    margin-bottom: 20px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    overflow: hidden; /* To keep children within rounded corners */
-}
-
-.group-header {
-    background-color: var(--primary-color);
-    padding: 15px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.group-header h2 {
-    margin: 0;
-    font-size: 1.3em;
-    font-weight: 600;
-}
-
-.shopping-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.shopping-item {
-    display: flex;
-    align-items: center;
-    padding: 15px;
-    background-color: var(--surface-color);
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.3s;
-}
-
-.shopping-item:last-child {
-    border-bottom: none;
-}
-
-.shopping-item:hover {
-    background-color: var(--primary-color);
-}
-
-.shopping-item.completed {
-    opacity: 0.6;
-}
-
-.shopping-item.completed .item-text {
-    text-decoration: line-through;
-    color: var(--text-color-muted);
-}
-
-.item-main {
-    flex-grow: 1;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.item-text {
-    font-size: 1.1em;
-}
-
-.item-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.item-actions button {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition: background-color 0.3s, transform 0.2s;
-}
-
-.item-actions button svg {
-    stroke: var(--text-color-muted);
-    transition: stroke 0.3s;
-}
-
-.item-actions button:hover {
-    background-color: rgba(255,255,255,0.1);
-    transform: scale(1.1);
-}
-
-.item-actions button:hover svg {
-    stroke: var(--secondary-color);
-}
-
-/* Footer Actions */
-.footer-actions {
-    text-align: center;
-    margin-top: 30px;
-}
-
-.hidden {
-    display: none;
-}
-
+    2 .input-section {
+    3     display: flex;
+    4     flex-wrap: wrap;
+    5     gap: 15px;
+    6     margin-bottom: 30px;
+    7 }
+    8
+    9 .input-section input[type="text"] {
+   10     flex: 1 1 150px;
+   11     padding: 12px;
+   12     border: 1px solid var(--border-color);
+   13     border-radius: 8px;
+   14     font-size: 1em;
+   15     background-color: var(--primary-color);
+   16     color: var(--text-color);
+   17     transition: border-color 0.3s, box-shadow 0.3s;
+   18 }
+   19
+   20 .input-section input[type="text"]::placeholder {
+   21     color: var(--text-color-muted);
+   22 }
+   23
+   24 .input-section input[type="text"]:focus {
+   25     outline: none;
+   26     border-color: var(--secondary-color);
+   27     box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.3);
+   28 }
+   29
+   30 #addItemButton {
+   31     padding: 12px 25px;
+   32     background: linear-gradient(45deg, var(--secondary-color), #c43049);
+   33     color: white;
+   34     border: none;
+   35     border-radius: 8px;
+   36     cursor: pointer;
+   37     font-weight: 600;
+   38     transition: transform 0.2s, box-shadow 0.2s;
+   39 }
+   40
+   41 #addItemButton:hover {
+   42     transform: translateY(-2px);
+   43     box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+   44 }
+1 /* Shopping List */
+    2 .location-group {
+    3     margin-bottom: 20px;
+    4     border: 1px solid var(--border-color);
+    5     border-radius: 8px;
+    6     overflow: hidden; /* To keep children within rounded corners */
+    7 }
+    8
+    9 .group-header {
+   10     background-color: var(--primary-color);
+   11     padding: 15px;
+   12     cursor: pointer;
+   13     display: flex;
+   14     justify-content: space-between;
+   15     align-items: center;
+   16 }
+   17
+   18 .group-header h2 {
+   19     margin: 0;
+   20     font-size: 1.3em;
+   21     font-weight: 600;
+   22 }
+   23
+   24 .shopping-list {
+   25     list-style: none;
+   26     padding: 0;
+   27     margin: 0;
+   28 }
+   29
+   30 .shopping-item {
+   31     display: flex;
+   32     align-items: center;
+   33     padding: 15px;
+   34     background-color: var(--surface-color);
+   35     border-bottom: 1px solid var(--border-color);
+   36     transition: background-color 0.3s;
+   37     gap: 10px; /* Ensure a gap between columns */
+   38 }
+   39
+   40 .shopping-item:last-child {
+   41     border-bottom: none;
+   42 }
+   43
+   44 .shopping-item:hover {
+   45     background-color: var(--primary-color);
+   46 }
+   47
+   48 .shopping-item.completed {
+   49     opacity: 0.6;
+   50 }
+   51
+   52 .shopping-item.completed .item-text {
+   53     text-decoration: line-through;
+   54     color: var(--text-color-muted);
+   55 }
+   56
+   57 .item-main {
+   58     flex-basis: 40%; /* Main item takes 40% */
+   59     flex-grow: 1; /* Allows it to grow if space available */
+   60     display: flex;
+   61     align-items: center;
+   62     gap: 15px;
+   63 }
+   64
+   65 .item-text {
+   66     font-size: 1.1em;
+   67 }
+   68
+   69 .item-actions {
+   70     flex-basis: 20%; /* Actions take 20% */
+   71     display: flex;
+   72     gap: 10px;
+   73     justify-content: flex-end; /* Align buttons to the right */
+   74 }
+   75
+   76 /* Footer Actions */
+   77 .footer-actions {
+   78     text-align: center;
+   79     margin-top: 30px;
+   80 }
+   81
+   82 .hidden {
+   83     display: none;
+   84 }
 /* Responsive Adjustments */
-@media (max-width: 600px) {
-    body {
-        padding: 10px;
-    }
-
-    .container {
-        padding: 15px;
-    }
-
-    h1 {
-        font-size: 1.8em;
-        margin-bottom: 20px;
-    }
-
-    .input-section {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .input-section input[type="text"],
-    #addItemButton {
-        width: 100%;
-        flex: none;
-    }
-
-    .shopping-item {
-        flex-wrap: wrap;
-        padding: 10px;
-        gap: 5px;
-    }
-
-    .shopping-item.list-header {
-        flex-direction: column; /* Stack header items vertically */
-        align-items: flex-start; /* Align text to the start */
-        gap: 5px; /* Add some gap between stacked items */
-    }
-
-    .shopping-item.list-header .item-main,
-    .shopping-item.list-header .item-quantity,
-    .shopping-item.list-header .item-observations,
-    .shopping-item.list-header .item-actions {
-        flex-basis: 100%; /* Make each header item take full width */
-        text-align: left; /* Ensure text is left-aligned */
-    }
-
-    .item-main {
-        flex-basis: 100%;
-        margin-bottom: 5px;
-    }
-
-    .item-quantity,
-    .item-observations {
-        flex-basis: calc(50% - 10px);
-        text-align: left;
-        min-width: unset;
-    }
-
-    .item-actions {
-        flex-basis: 100%;
-        justify-content: flex-end;
-    }
-
-    /* Adjust chart container for smaller screens */
-    #chartContainer {
-        height: 300px; /* Smaller height for mobile */
-        margin-bottom: 20px;
-    }
-}
-
-@media (max-width: 400px) {
-    .item-quantity,
-    .item-observations {
-        flex-basis: 100%;
-    }
-}
+    2 @media (max-width: 600px) {
+    3     body {
+    4         padding: 10px;
+    5     }
+    6
+    7     .container {
+    8         padding: 15px;
+    9     }
+   10
+   11     h1 {
+   12         font-size: 1.8em;
+   13         margin-bottom: 20px;
+   14     }
+   15
+   16     .input-section {
+   17         flex-direction: column;
+   18         gap: 10px;
+   19     }
+   20
+   21     .input-section input[type="text"],
+   22     #addItemButton {
+   23         width: 100%;
+   24         flex: none;
+   25     }
+   26
+   27     .shopping-item {
+   28         flex-wrap: wrap; /* Allow items to wrap */
+   29         padding: 10px;
+   30         gap: 5px; /* Smaller gap on mobile */
+   31     }
+   32
+   33     .shopping-item.list-header {
+   34         flex-direction: column; /* Stack header items vertically */
+   35         align-items: flex-start; /* Align text to the start */
+   36         gap: 5px; /* Add some gap between stacked items */
+   37     }
+   38
+   39     .shopping-item.list-header .item-main,
+   40     .shopping-item.list-header .item-quantity,
+   41     .shopping-item.list-header .item-observations,
+   42     .shopping-item.list-header .item-actions {
+   43         flex-basis: 100%; /* Make each header item take full width */
+   44         text-align: left; /* Ensure text is left-aligned */
+   45     }
+   46
+   47     .item-main,
+   48     .item-quantity,
+   49     .item-observations,
+   50     .item-actions {
+   51         flex-basis: 100%; /* Force stacking on mobile for all items */
+   52         text-align: left;
+   53         margin-bottom: 5px; /* Add some space between stacked items */
+   54     }
+   55
+   56     .item-actions {
+   57         justify-content: flex-start; /* Align actions to the left on mobile */
+   58         margin-bottom: 0; /* No margin after last item */
+   59     }
+   60
+   61     /* Adjust chart container for smaller screens */
+   62     #chartContainer {
+   63         height: 300px; /* Smaller height for mobile */
+   64         margin-bottom: 20px;
+   65     }
+   66 }
+   67
+   68 @media (max-width: 400px) {
+   69     .item-quantity,
+   70     .item-observations {
+   71         flex-basis: 100%;
+   72     }
+   73 }
