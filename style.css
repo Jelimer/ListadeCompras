@@ -219,7 +219,7 @@ h1 {
     .item-actions {
         /* flex-basis: 100%; */ /* REMOVE */
         text-align: left;
-        margin-bottom: 5px;
+        margin-bottom: 5px; /* Add some space between stacked items */
     }
 
     .item-quantity {
@@ -241,5 +241,8 @@ h1 {
 }
 
 @media (max-width: 400px) {
-    /* No specific changes needed here if 600px handles stacking well */
+    .item-quantity,
+    .item-observations {
+        flex-basis: 100%;
+    }
 }
