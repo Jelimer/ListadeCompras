@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- RENDERIZADO DE LA LISTA ---
     const renderItems = (docs) => {
+        updateChart(docs);
         updateLocationSuggestions(docs);
         shoppingListContainer.innerHTML = '';
         const groupedItems = {};
@@ -143,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="item-quantity">${item.quantity || ''}</span>
             <span class="item-observations">${item.observations || ''}</span>
             <div class="item-actions">
-                                <button class="edit-button" title="Editar">
+                <button class="edit-button" title="Editar">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
                 <button class="delete-button" title="Eliminar">
@@ -273,3 +274,86 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Error al obtener documentos: ", error);
     });
 });
+
+// --- ECHARTS CHART LOGIC ---
+let myChart = null; // Declare myChart globally or in a scope accessible by updateChart
+
+const initializeChart = () => {
+    const chartDom = document.getElementById('chartContainer');
+    if (chartDom) {
+        myChart = echarts.init(chartDom, 'dark'); // Initialize with 'dark' theme
+    }
+};
+
+// Call initializeChart when the DOM is ready
+document.addEventListener('DOMContentLoaded', initializeChart);
+
+
+const updateChart = (docs) => {
+    if (!myChart) {
+        initializeChart(); // Ensure chart is initialized if updateChart is called before DOMContentLoaded
+    }
+    if (!myChart) return; // If initialization still fails, exit
+
+    const groupedItems = {};
+    docs.forEach(doc => {
+        const item = doc.data();
+        const location = item.location?.trim() || 'Sin Ubicación';
+        if (!groupedItems[location]) {
+            groupedItems[location] = 0;
+        }
+        groupedItems[location]++;
+    });
+
+    const chartData = Object.keys(groupedItems).map(location => ({
+        value: groupedItems[location],
+        name: location
+    }));
+
+    const option = {
+        title: {
+            text: 'Compras por Ubicación',
+            left: 'center',
+            textStyle: {
+                color: '#dcdcdc' // Text color for dark theme
+            }
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{a} <br/>{b} : {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            textStyle: {
+                color: '#dcdcdc' // Text color for dark theme
+            }
+        },
+        series: [
+            {
+                name: 'Ubicaciones',
+                type: 'pie',
+                radius: '50%',
+                data: chartData,
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                },
+                label: {
+                    color: '#dcdcdc' // Label color for dark theme
+                },
+                labelLine: {
+                    lineStyle: {
+                        color: '#dcdcdc' // Label line color for dark theme
+                    }
+                }
+            }
+        ],
+        backgroundColor: 'transparent' // Use CSS background
+    };
+
+    myChart.setOption(option);
+};
