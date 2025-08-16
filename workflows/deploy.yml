@@ -1,0 +1,30 @@
+1 name: Deploy to Vercel
+    2
+    3 on:
+    4   push:
+    5     branches:
+    6       - master
+    7
+    8 jobs:
+    9   deploy:
+   10     runs-on: ubuntu-latest
+   11     steps:
+   12       - name: Checkout code
+   13         uses: actions/checkout@v4
+   14
+   15       - name: Setup Node.js
+   16         uses: actions/setup-node@v4
+   17         with:
+   18           node-version: '18' # Puedes usar '16', '18', '20'
+   19
+   20       - name: Install dependencies
+   21         run: npm install
+   22
+   23       - name: Run build script
+   24         run: npm run build
+   25
+   26       - name: Deploy to Vercel
+   27         run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
+   28         env:
+   29           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+   30           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
