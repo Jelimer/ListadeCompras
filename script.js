@@ -1,6 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    
-
     // Inicializar Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
