@@ -154,6 +154,7 @@ h1 {
     display: flex;
     gap: 5px; /* Reduced gap */
     justify-content: flex-end; /* Align buttons to the right */
+    justify-self: end; /* Align the whole item-actions to the end of its grid cell */
 }
 
 /* Footer Actions */
@@ -219,6 +220,10 @@ h1 {
         /* flex-basis: 100%; */ /* REMOVE */
         text-align: left;
         margin-bottom: 5px;
+    }
+
+    .item-quantity {
+        text-align: center; /* Ensure quantity is centered on mobile */
     }
 
     .item-actions {
