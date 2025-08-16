@@ -111,7 +111,7 @@ h1 {
 
 .shopping-item {
     display: grid; /* Change to Grid */
-    grid-template-columns: 40% 15% 25% 20%; /* Define 4 columns */
+    grid-template-columns: 40% 15% 20% 25%; /* Define 4 columns */
     gap: 10px; /* Gap between grid items */
     align-items: center;
     padding: 15px;
@@ -152,7 +152,7 @@ h1 {
 .item-actions {
     /* flex-basis: 20%; */ /* REMOVE */
     display: flex;
-    gap: 10px;
+    gap: 5px; /* Reduced gap */
     justify-content: flex-end; /* Align buttons to the right */
 }
 
