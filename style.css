@@ -186,3 +186,66 @@ h1 {
 .hidden {
     display: none;
 }
+
+/* Responsive Adjustments */
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+        margin-bottom: 20px;
+    }
+
+    .input-section {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .input-section input[type="text"],
+    #addItemButton {
+        width: 100%;
+        flex: none;
+    }
+
+    .shopping-item {
+        flex-wrap: wrap;
+        padding: 10px;
+        gap: 5px;
+    }
+
+    .item-main {
+        flex-basis: 100%;
+        margin-bottom: 5px;
+    }
+
+    .item-quantity,
+    .item-observations {
+        flex-basis: calc(50% - 10px);
+        text-align: left;
+        min-width: unset;
+    }
+
+    .item-actions {
+        flex-basis: 100%;
+        justify-content: flex-end;
+    }
+
+    /* Adjust chart container for smaller screens */
+    #chartContainer {
+        height: 300px; /* Smaller height for mobile */
+        margin-bottom: 20px;
+    }
+}
+
+@media (max-width: 400px) {
+    .item-quantity,
+    .item-observations {
+        flex-basis: 100%;
+    }
+}
