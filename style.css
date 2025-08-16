@@ -110,13 +110,14 @@ h1 {
 }
 
 .shopping-item {
-    display: flex;
+    display: grid; /* Change to Grid */
+    grid-template-columns: 40% 15% 25% 20%; /* Define 4 columns */
+    gap: 10px; /* Gap between grid items */
     align-items: center;
     padding: 15px;
     background-color: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
     transition: background-color 0.3s;
-    gap: 10px; /* Ensure a gap between columns */
 }
 
 .shopping-item:last-child {
@@ -137,9 +138,9 @@ h1 {
 }
 
 .item-main {
-    flex-basis: 40%; /* Main item takes 40% */
-    flex-grow: 1; /* Allows it to grow if space available */
-    display: flex;
+    /* flex-basis: 40%; */ /* REMOVE */
+    /* flex-grow: 1; */ /* REMOVE */
+    display: flex; /* Keep flex for internal alignment */
     align-items: center;
     gap: 15px;
 }
@@ -149,7 +150,7 @@ h1 {
 }
 
 .item-actions {
-    flex-basis: 20%; /* Actions take 20% */
+    /* flex-basis: 20%; */ /* REMOVE */
     display: flex;
     gap: 10px;
     justify-content: flex-end; /* Align buttons to the right */
@@ -192,37 +193,37 @@ h1 {
     }
 
     .shopping-item {
-        flex-wrap: wrap; /* Allow items to wrap */
-        padding: 10px;
+        grid-template-columns: 1fr; /* Stack all items vertically */
         gap: 5px; /* Smaller gap on mobile */
+        padding: 10px;
     }
 
     .shopping-item.list-header {
-        flex-direction: column; /* Stack header items vertically */
-        align-items: flex-start; /* Align text to the start */
-        gap: 5px; /* Add some gap between stacked items */
+        /* flex-direction: column; */ /* REMOVE - Grid handles stacking */
+        /* align-items: flex-start; */ /* REMOVE */
+        /* gap: 5px; */ /* REMOVE - handled by shopping-item gap */
     }
 
     .shopping-item.list-header .item-main,
     .shopping-item.list-header .item-quantity,
     .shopping-item.list-header .item-observations,
     .shopping-item.list-header .item-actions {
-        flex-basis: 100%; /* Make each header item take full width */
-        text-align: left; /* Ensure text is left-aligned */
+        /* flex-basis: 100%; */ /* REMOVE - Grid handles full width */
+        text-align: left;
     }
 
     .item-main,
     .item-quantity,
     .item-observations,
     .item-actions {
-        flex-basis: 100%; /* Force stacking on mobile for all items */
+        /* flex-basis: 100%; */ /* REMOVE */
         text-align: left;
-        margin-bottom: 5px; /* Add some space between stacked items */
+        margin-bottom: 5px;
     }
 
     .item-actions {
-        justify-content: flex-start; /* Align actions to the left on mobile */
-        margin-bottom: 0; /* No margin after last item */
+        justify-content: flex-start;
+        margin-bottom: 0;
     }
 
     /* Adjust chart container for smaller screens */
@@ -233,8 +234,5 @@ h1 {
 }
 
 @media (max-width: 400px) {
-    .item-quantity,
-    .item-observations {
-        flex-basis: 100%;
-    }
+    /* No specific changes needed here if 600px handles stacking well */
 }
