@@ -111,7 +111,7 @@ h1 {
 
 .shopping-item {
     display: grid; /* Change to Grid */
-    grid-template-columns: 40% 15% 20% 25%; /* Define 4 columns */
+    grid-template-columns: 40% 15% 15% 30%; /* Define 4 columns */
     gap: 10px; /* Gap between grid items */
     align-items: center;
     padding: 15px;
@@ -223,7 +223,9 @@ h1 {
     }
 
     .item-quantity {
-        text-align: center; /* Ensure quantity is centered on mobile */
+        display: flex; /* Ensure quantity is centered on mobile */
+        justify-content: center;
+        align-items: center;
     }
 
     .item-actions {
