@@ -1,0 +1,11 @@
+{
+  "name": "lista-de-compras",
+  "version": "1.0.0",
+  "description": "Una simple aplicación de lista de compras",
+  "main": "script.js",
+  "scripts": {
+    "build": "node generate-config.js"
+  },
+  "author": "",
+  "license": "ISC"
+}

@@ -1,231 +1,148 @@
+/* Estilos Generales */
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f0f4f8;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    min-height: 100vh;
+    background-color: #f4f7f9;
+    color: #333;
     margin: 0;
     padding: 20px;
-    color: #334155;
 }
 
 .container {
-    background-color: #ffffff;
-    padding: 30px;
-    border-radius: 16px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-    width: 100%;
-    max-width: 900px; /* Aumentado para el nuevo layout */
-    box-sizing: border-box;
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
 h1 {
     text-align: center;
-    color: #1e293b;
-    margin-bottom: 30px;
-    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 20px;
 }
 
-/* --- Sección de Inputs --- */
+/* Sección de Inputs */
 .input-section {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
-    margin-bottom: 30px;
-    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 .input-section input[type="text"] {
-    padding: 12px 15px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
+    flex: 1 1 150px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
     font-size: 1em;
-    transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-.input-section input[type="text"]:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-    outline: none;
 }
 
 .input-section button {
-    padding: 12px 20px;
+    padding: 10px 20px;
+    background-color: #3498db;
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 1em;
-    font-weight: 600;
-    transition: background-color 0.3s, transform 0.1s;
+    transition: background-color 0.3s;
 }
 
-#addItemButton { background-color: #22c55e; }
-#addItemButton:hover { background-color: #16a34a; }
-
-#resetListButton { background-color: #3b82f6; }
-#resetListButton:hover { background-color: #2563eb; }
-
-/* --- Grupos por Lugar --- */
-#shoppingListContainer {
-    margin-top: 20px;
-    display: grid;
-    gap: 20px;
+.input-section button:hover {
+    background-color: #2980b9;
 }
 
+/* Grupos de Localización */
 .location-group {
-    background-color: #fdfdff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
+    margin-bottom: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
 }
-
-.location-group.collapsed .shopping-list {
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    margin-top: 0;
-    opacity: 0;
-}
-
-.location-group.collapsed .toggle-icon { transform: rotate(-90deg); }
 
 .group-header {
+    background-color: #ecf0f1;
+    padding: 10px;
+    cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
-    cursor: pointer;
-    background-color: #f1f5f9;
 }
 
 .group-header h2 {
     margin: 0;
     font-size: 1.2em;
-    font-weight: 600;
-    color: #475569;
 }
 
-.toggle-icon {
-    font-size: 1.2em;
-    transition: transform 0.3s ease-in-out;
-}
-
-/* --- Lista de Items con CSS Grid --- */
+/* Lista de Compras */
 .shopping-list {
     list-style: none;
     padding: 0;
     margin: 0;
-    transition: all 0.4s ease-in-out;
 }
 
 .shopping-item {
-    display: grid;
-    grid-template-columns: 3fr 1fr 2fr 1.5fr; /* Producto, Cantidad, Observaciones, Acciones */
+    display: flex;
     align-items: center;
-    padding: 15px 20px;
-    border-bottom: 1px solid #e2e8f0;
-    gap: 15px;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
 }
 
-.shopping-item:last-child { border-bottom: none; }
+.shopping-item:last-child {
+    border-bottom: none;
+}
 
-.item-main { display: flex; align-items: center; gap: 15px; }
-.drag-handle { cursor: grab; color: #94a3b8; }
-input[type="checkbox"] { width: 18px; height: 18px; accent-color: #22c55e; cursor: pointer; }
-.shopping-item.completed .item-text { text-decoration: line-through; color: #94a3b8; }
+.shopping-item.completed .item-text {
+    text-decoration: line-through;
+    color: #95a5a6;
+}
 
-.item-quantity, .item-observations { text-align: left; color: #64748b; font-size: 0.95em; }
+.item-main {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+}
 
-.item-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.item-text {
+    margin-left: 10px;
+}
+
+.item-quantity, .item-observations {
+    min-width: 100px;
+    text-align: center;
+}
 
 .item-actions button {
-    padding: 8px 12px;
-    border: none;
-    border-radius: 6px;
-    color: white;
+    margin-left: 5px;
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
     cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s;
+    border-radius: 4px;
 }
 
-.edit-button { background-color: #3b82f6; }
-.edit-button:hover { background-color: #2563eb; }
-
-.delete-button { background-color: #ef4444; }
-.delete-button:hover { background-color: #dc2626; }
-
-/* Cabecera de la lista */
-.list-header {
-    font-weight: 600;
-    color: #475569;
-    background-color: #f8fafc;
-    font-size: 0.9em;
-    text-transform: uppercase;
-    border-bottom: 2px solid #e2e8f0;
-}
-
-.list-header .drag-handle, .list-header input[type="checkbox"] { visibility: hidden; }
-
-.sortable-ghost { opacity: 0.6; background-color: #dbeafe; }
-
-.location-group.group-completed {
-    opacity: 0.7;
-    background-color: #f1f5f9;
-}
-
-.location-group.group-completed .group-header {
-    background-color: #e2e8f0;
-}
-
-/* --- Footer Actions --- */
+/* Acciones del Footer */
 .footer-actions {
-    margin-top: 30px;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 12px;
+    text-align: center;
+    margin-top: 20px;
 }
 
 .footer-actions button {
-    padding: 10px 18px;
-    font-size: 0.95em;
-    font-weight: 500;
-    border-radius: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#resetListButton {
+    background-color: #e74c3c;
+    color: white;
 }
 
 #undoButton {
-    background-color: #f59e0b; /* Amber color */
-}
-
-#undoButton:hover {
-    background-color: #d97706;
+    background-color: #f1c40f;
+    color: #333;
 }
 
 .hidden {
     display: none;
-}
-
-/* --- Responsividad --- */
-@media (max-width: 768px) {
-    .container { padding: 15px; }
-
-    .shopping-item {
-        grid-template-columns: 1fr auto; /* Columna principal y acciones */
-        gap: 10px;
-    }
-
-    .item-quantity, .item-observations {
-        display: none; /* Ocultar en móviles para simplicidad */
-    }
-
-    .list-header .item-quantity, .list-header .item-observations { display: none; }
-}
-
-@media (max-width: 480px) {
-    .input-section { grid-template-columns: 1fr; }
-    h1 { font-size: 1.5em; }
-    .item-main .item-text { font-size: 0.95em; }
-    .item-actions button { padding: 6px 8px; font-size: 0.9em; }
 }
