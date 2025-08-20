@@ -66,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateChart(filteredDocs);
         updateLocationSuggestions(filteredDocs);
-        updateCategorySuggestions(filteredDocs);
         shoppingListContainer.innerHTML = '';
         const groupedItems = {};
 
