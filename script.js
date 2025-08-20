@@ -431,3 +431,4 @@ const updateChart = (docs) => {
 
     myChart.setOption(option);
 };
+});
