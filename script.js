@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const observationsInput = document.getElementById('observationsInput');
     const addItemButton = document.getElementById('addItemButton');
     const resetListButton = document.getElementById('resetListButton');
-    const undoButton = document.getElementById('undoButton');
     const shoppingListContainer = document.getElementById('shoppingListContainer');
     const locationSuggestions = document.getElementById('location-suggestions');
     const categorySuggestions = document.getElementById('category-suggestions');
@@ -20,8 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Variables de estado
     let editingItemId = null;
-    let lastResetItemsIds = [];
-    let undoTimeout = null;
 
     // --- FUNCIONES DE FIRESTORE ---
     const addItemToFirestore = async (item) => {
@@ -104,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const sortedGroups = [...activeGroups, ...completedGroups];
 
-        sortedGroups.forEach(({ category, items }) => {
+        sortedGroups.forEach(({ location, items }) => {
             if (items.length === 0) return;
             const allCompleted = items.every(item => item.completed);
             const groupContainer = createGroupContainer(category, items, allCompleted);
@@ -339,12 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    undoButton.addEventListener('click', () => {
-        clearTimeout(undoTimeout);
-        lastResetItemsIds = [];
-        undoButton.classList.add('hidden');
-        resetListButton.classList.remove('hidden');
-    });
+    
 
     [itemInput, quantityInput, locationInput, observationsInput, categoryInput].forEach(input => {
         input.addEventListener('keypress', (e) => {
