@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sortedGroups.forEach(({ location, items }) => {
             if (items.length === 0) return;
             const allCompleted = items.every(item => item.completed);
-            const groupContainer = createGroupContainer(category, items, allCompleted);
+            const groupContainer = createGroupContainer(location, items, allCompleted);
             shoppingListContainer.appendChild(groupContainer);
 
             const listElement = groupContainer.querySelector('.shopping-list');
