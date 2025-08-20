@@ -13,26 +13,47 @@
     <div class="container">
         <h1>Lista de Compras</h1>
         <div id="chartContainer" style="width: 100%; height: 400px; margin-bottom: 30px;"></div>
+        <div class="mb-3">
+            <input type="text" id="searchInput" class="form-control" placeholder="Buscar productos...">
+        </div>
         <div class="input-section">
-            <input type="text" id="itemInput" placeholder="Añadir nuevo producto">
-            <input type="text" id="quantityInput" placeholder="Cantidad" value="1">
-            <input type="text" id="locationInput" placeholder="Lugar de compra (opcional)" list="location-suggestions">
-            <datalist id="location-suggestions"></datalist>
-            <input type="text" id="observationsInput" placeholder="Observaciones (opcional)">
-            <button id="addItemButton">Añadir</button>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <input type="text" id="itemInput" class="form-control" placeholder="Añadir nuevo producto">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" id="quantityInput" class="form-control" placeholder="Cantidad" value="1">
+                </div>
+                <div class="col-md-4">
+                    <input type="text" id="locationInput" class="form-control" placeholder="Lugar de compra (opcional)" list="location-suggestions">
+                    <datalist id="location-suggestions"></datalist>
+                </div>
+                <div class="col-md-6"> <!-- New category input -->
+                    <input type="text" id="categoryInput" class="form-control" placeholder="Categoría (opcional)" list="category-suggestions">
+                    <datalist id="category-suggestions"></datalist>
+                </div>
+                <div class="col-md-6">
+                    <input type="text" id="observationsInput" class="form-control" placeholder="Observaciones (opcional)">
+                </div>
+                <div class="col-12 text-center">
+                    <button id="addItemButton" class="btn btn-primary w-100">Añadir</button>
+                </div>
+            </div>
         </div>
         <div id="shoppingListContainer">
             <!-- Las listas agrupadas se añadirán aquí con JavaScript -->
         </div>
-        <div class="footer-actions">
-            <button id="resetListButton">Reiniciar Lista</button>
-            <button id="undoButton" class="hidden">Deshacer</button>
+        <div class="d-grid gap-2 d-md-block text-center mt-4"> <!-- d-grid for full width buttons, gap-2 for spacing, d-md-block for block display on medium screens, mt-4 for margin-top -->
+            <button id="resetListButton" class="btn btn-secondary">Reiniciar Lista</button>
+            <button id="undoButton" class="btn btn-secondary hidden">Deshacer</button>
         </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.0/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
 </body>

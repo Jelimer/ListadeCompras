@@ -20,7 +20,8 @@ body {
 }
 
 .container {
-    max-width: 800px;
+    width: 90%;
+    max-width: 1600px; /* Increased width */
     margin: 0 auto;
     background-color: var(--surface-color);
     padding: 30px;
@@ -34,6 +35,58 @@ h1 {
     font-weight: 600;
     margin-bottom: 30px;
 }
+
+/* Bootstrap Overrides for Dark Theme */
+.form-control {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    transition: border-color 0.3s, box-shadow 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-control::placeholder {
+    color: var(--text-color-muted);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 0.25rem rgba(233, 69, 96, 0.3); /* Bootstrap's focus shadow */
+    background-color: var(--primary-color); /* Keep background consistent on focus */
+    color: var(--text-color); /* Keep text color consistent on focus */
+}
+
+.btn-primary {
+    padding: 12px 25px;
+    background: linear-gradient(45deg, var(--secondary-color), #c43049);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+    background: linear-gradient(45deg, var(--secondary-color), #c43049); /* Keep gradient on hover */
+    color: white; /* Keep text color on hover */
+}
+
+.btn-secondary {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    transition: background-color 0.3s, border-color 0.3s, filter 0.3s;
+}
+
+.btn-secondary:hover {
+    filter: brightness(1.2);
+}
+
+/* Shopping List */
 
 /* Input Section */
 .input-section {
@@ -117,7 +170,7 @@ h1 {
     padding: 15px;
     background-color: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.3s;
+    transition: background-color 0.2s ease-in-out;
 }
 
 .shopping-item:last-child {
@@ -155,12 +208,6 @@ h1 {
     gap: 5px; /* Reduced gap */
     justify-content: flex-end; /* Align buttons to the right */
     justify-self: end; /* Align the whole item-actions to the end of its grid cell */
-}
-
-/* Footer Actions */
-.footer-actions {
-    text-align: center;
-    margin-top: 30px;
 }
 
 .hidden {
@@ -245,4 +292,115 @@ h1 {
     .item-observations {
         flex-basis: 100%;
     }
+}
+
+
+.drag-handle {
+    cursor: grab;
+    margin-right: 10px;
+    color: var(--text-color-muted);
+}
+
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: var(--primary-color);
+}
+
+.location-group.collapsed .shopping-list {
+    display: none;
+}
+
+.location-group.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.toggle-icon {
+    transition: transform 0.3s;
+}
+
+.group-completed {
+    opacity: 0.7;
+    border-color: #4caf50; /* Green border for completed groups */
+}
+
+.group-completed .group-header {
+    background-color: #2e7d32; /* Darker green for completed header */
+}
+
+.shopping-item.list-header {
+    font-weight: bold;
+    color: var(--text-color-muted);
+    background-color: var(--primary-color);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.item-quantity,
+.item-observations {
+    color: var(--text-color-muted);
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.item-actions button {
+    background: none;
+    border: none;
+    color: var(--text-color-muted);
+    cursor: pointer;
+    padding: 5px;
+    transition: color 0.3s;
+}
+
+.item-actions button:hover {
+    color: var(--secondary-color);
+}
+
+.item-actions button.delete-button:hover {
+    color: #ff5252; /* A more distinct red for delete */
+}
+
+#resetListButton, #undoButton {
+    margin-top: 20px;
+}
+
+#undoButton {
+    background-color: #ffc107; /* Amber color for undo */
+    color: #000;
+}
+
+#undoButton:hover {
+    background-color: #ffa000;
+}
+
+#searchInput {
+    margin-bottom: 20px;
+}
+
+.item-category {
+    font-size: 0.8em;
+    color: var(--text-color-muted);
+    background-color: var(--primary-color);
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-left: 10px;
+}
+
+.item-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.item-text-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.item-name {
+    font-size: 1.1em;
+}
+
+.item-category-display {
+    font-size: 0.8em;
+    color: var(--text-color-muted);
+    margin-top: 2px;
 }

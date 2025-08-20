@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const undoButton = document.getElementById('undoButton');
     const shoppingListContainer = document.getElementById('shoppingListContainer');
     const locationSuggestions = document.getElementById('location-suggestions');
+    const categorySuggestions = document.getElementById('category-suggestions');
+    const searchInput = document.getElementById('searchInput'); // NEW
 
     // Variables de estado
     let editingItemId = null;
@@ -39,14 +41,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const saveItemsToLocalStorage = (items) => {
+        localStorage.setItem('shoppingListItems', JSON.stringify(items));
+    };
+
+    const loadItemsFromLocalStorage = () => {
+        const items = localStorage.getItem('shoppingListItems');
+        return items ? JSON.parse(items) : [];
+    };
+
     // --- RENDERIZADO DE LA LISTA ---
-    const renderItems = (docs) => {
-        updateChart(docs);
-        updateLocationSuggestions(docs);
+    const renderItems = (docs, searchQuery = '') => {
+        let filteredDocs = docs;
+        if (searchQuery) {
+            const lowerCaseQuery = searchQuery.toLowerCase();
+            filteredDocs = docs.filter(doc => {
+                const item = doc.data();
+                return (
+                    item.name.toLowerCase().includes(lowerCaseQuery) ||
+                    item.location?.toLowerCase().includes(lowerCaseQuery) ||
+                    item.observations?.toLowerCase().includes(lowerCaseQuery) ||
+                    item.category?.toLowerCase().includes(lowerCaseQuery)
+                );
+            });
+        }
+
+        updateChart(filteredDocs);
+        updateLocationSuggestions(filteredDocs);
+        updateCategorySuggestions(filteredDocs);
         shoppingListContainer.innerHTML = '';
         const groupedItems = {};
 
-        docs.forEach(doc => {
+        filteredDocs.forEach(doc => {
             const item = { id: doc.id, ...doc.data() };
             const location = item.location?.trim() || 'Varios';
             if (!groupedItems[location]) groupedItems[location] = [];
@@ -77,10 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const sortedGroups = [...activeGroups, ...completedGroups];
 
-        sortedGroups.forEach(({ location, items }) => {
+        sortedGroups.forEach(({ category, items }) => {
             if (items.length === 0) return;
             const allCompleted = items.every(item => item.completed);
-            const groupContainer = createGroupContainer(location, items, allCompleted);
+            const groupContainer = createGroupContainer(category, items, allCompleted);
             shoppingListContainer.appendChild(groupContainer);
 
             const listElement = groupContainer.querySelector('.shopping-list');
@@ -168,7 +194,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         li.querySelector('.delete-button').addEventListener('click', () => {
-            deleteItemFromFirestore(item.id);
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: `¿Realmente quieres eliminar "${item.name}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: 'var(--secondary-color)',
+                cancelButtonColor: 'var(--primary-color)',
+                confirmButtonText: 'Sí, eliminar!',
+                cancelButtonText: 'Cancelar',
+                background: 'var(--surface-color)',
+                color: 'var(--text-color)'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    deleteItemFromFirestore(item.id);
+                    Swal.fire({
+                        title: '¡Eliminado!',
+                        text: `"${item.name}" ha sido eliminado.`,
+                        icon: 'success',
+                        background: 'var(--surface-color)',
+                        color: 'var(--text-color)'
+                    });
+                }
+            });
         });
 
         return li;
@@ -235,23 +283,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resetListButton.addEventListener('click', async () => {
         const snapshot = await itemsCollection.where('completed', '==', true).get();
-        if (snapshot.empty) return;
-
-        lastResetItemsIds = snapshot.docs.map(doc => doc.id);
-
-        resetListButton.classList.add('hidden');
-        undoButton.classList.remove('hidden');
-
-        undoTimeout = setTimeout(async () => {
-            const batch = db.batch();
-            lastResetItemsIds.forEach(id => {
-                batch.update(itemsCollection.doc(id), { completed: false });
+        if (snapshot.empty) {
+            Swal.fire({
+                title: 'Nada que reiniciar',
+                text: 'No hay artículos completados para reiniciar.',
+                icon: 'info',
+                confirmButtonText: 'OK',
+                background: 'var(--surface-color)',
+                color: 'var(--text-color)'
             });
-            try { await batch.commit(); } catch (error) { console.error("Error al reiniciar items: ", error); }
-            lastResetItemsIds = [];
-            undoButton.classList.add('hidden');
-            resetListButton.classList.remove('hidden');
-        }, 20000);
+            return;
+        }
+
+        Swal.fire({
+            title: '¿Estás seguro?',
+            text: "Esto marcará todos los artículos completados como no completados.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: 'var(--secondary-color)',
+            cancelButtonColor: 'var(--primary-color)',
+            confirmButtonText: 'Sí, reiniciar!',
+            cancelButtonText: 'Cancelar',
+            background: 'var(--surface-color)',
+            color: 'var(--text-color)'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                lastResetItemsIds = snapshot.docs.map(doc => doc.id);
+
+                const batch = db.batch();
+                lastResetItemsIds.forEach(id => {
+                    batch.update(itemsCollection.doc(id), { completed: false });
+                });
+                try {
+                    await batch.commit();
+                    Swal.fire({
+                        title: '¡Reiniciado!',
+                        text: 'La lista ha sido reiniciada.',
+                        icon: 'success',
+                        background: 'var(--surface-color)',
+                        color: 'var(--text-color)'
+                    });
+                } catch (error) {
+                    console.error("Error al reiniciar items: ", error);
+                    Swal.fire({
+                        title: 'Error',
+                        text: 'No se pudo reiniciar la lista.',
+                        icon: 'error',
+                        background: 'var(--surface-color)',
+                        color: 'var(--text-color)'
+                    });
+                }
+                lastResetItemsIds = [];
+            }
+        });
     });
 
     undoButton.addEventListener('click', () => {
@@ -261,18 +345,15 @@ document.addEventListener('DOMContentLoaded', () => {
         resetListButton.classList.remove('hidden');
     });
 
-    [itemInput, quantityInput, locationInput, observationsInput].forEach(input => {
+    [itemInput, quantityInput, locationInput, observationsInput, categoryInput].forEach(input => {
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') addItemButton.click();
         });
     });
 
     // Listener de Firestore en tiempo real
-    itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
-        renderItems(snapshot.docs);
-    }, error => {
-        console.error("Error al obtener documentos: ", error);
-    });
+        itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
+        renderItems(snapshot.docs, searchInput.value); // Pass searchInput.value
 });
 
 // --- ECHARTS CHART LOGIC ---
