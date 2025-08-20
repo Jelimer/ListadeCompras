@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const locationSuggestions = document.getElementById('location-suggestions');
     const categorySuggestions = document.getElementById('category-suggestions');
     const searchInput = document.getElementById('searchInput'); // NEW
+    const categoryInput = document.getElementById('categoryInput'); // FIX
 
     // Variables de estado
     let editingItemId = null;
