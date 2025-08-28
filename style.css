@@ -99,9 +99,10 @@ h1 {
 
 #search-container { grid-column: 1 / 9; }
 #button-container { grid-column: 9 / 13; }
-#item-container { grid-column: 1 / 7; }
-#quantity-container { grid-column: 7 / 9; }
-#location-container { grid-column: 9 / 13; }
+#item-container { grid-column: 1 / 6; }
+#quantity-container { grid-column: 6 / 8; }
+#unitPrice-container { grid-column: 8 / 10; }
+#location-container { grid-column: 10 / 13; }
 #category-container { grid-column: 1 / 7; }
 #observations-container { grid-column: 7 / 13; }
 
@@ -149,6 +150,12 @@ h1 {
     font-weight: 600;
 }
 
+.group-subtotal {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
 .shopping-list {
     list-style: none;
     padding: 0;
@@ -157,7 +164,7 @@ h1 {
 
 .shopping-item {
     display: grid; /* Change to Grid */
-    grid-template-columns: 1fr 100px 150px 100px; /* Define columns with fixed and flexible widths */
+    grid-template-columns: 1fr 80px 110px 110px 1fr 100px; /* product, qty, price, total, obs, actions */
     gap: 10px; /* Gap between grid items */
     align-items: center;
     padding: 15px;
@@ -328,10 +335,17 @@ h1 {
 }
 
 .item-quantity,
+.item-price,
+.item-total,
 .item-observations {
     color: var(--text-color-muted);
     font-size: 0.9em;
     text-align: center;
+}
+
+.item-price, .item-total {
+    font-weight: 500;
+    color: var(--text-color);
 }
 
 .item-actions button {
@@ -396,4 +410,18 @@ h1 {
     font-size: 0.8em;
     color: var(--text-color-muted);
     margin-top: 2px;
+}
+
+#grandTotalContainer {
+    text-align: right;
+    padding: 20px;
+    margin-top: 20px;
+    border-top: 2px solid var(--border-color);
+}
+
+#grandTotalContainer h3 {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--text-color);
 }

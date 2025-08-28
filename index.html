@@ -26,6 +26,9 @@
         <div id="quantity-container">
             <input type="text" id="quantityInput" class="form-control" placeholder="Cantidad" value="1">
         </div>
+        <div id="unitPrice-container">
+            <input type="number" id="unitPriceInput" class="form-control" placeholder="Precio Unitario" step="0.01">
+        </div>
         <div id="location-container">
             <input type="text" id="locationInput" class="form-control" placeholder="Lugar de compra" list="location-suggestions">
             <datalist id="location-suggestions"></datalist>
@@ -41,6 +44,7 @@
         <div id="shoppingListContainer">
             <!-- Las listas agrupadas se añadirán aquí con JavaScript -->
         </div>
+        <div id="grandTotalContainer" class="grand-total"></div>
         <div class="d-grid gap-2 d-md-block text-center mt-4"> <!-- d-grid for full width buttons, gap-2 for spacing, d-md-block for block display on medium screens, mt-4 for margin-top -->
             <button id="resetListButton" class="btn btn-secondary">Reiniciar Lista</button>
         </div>
