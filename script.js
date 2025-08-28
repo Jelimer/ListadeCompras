@@ -20,6 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Variables de estado
     let editingItemId = null;
+    let allItems = []; // Caché local para todos los items
+
+    // --- FUNCIÓN UTILITARIA ---
+    const formatCurrency = (number) => {
+        // Formatea el número como moneda argentina (ARS), que usa '.' para miles y ',' para decimales.
+        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(number);
+    };
 
     // --- FUNCIONES DE FIRESTORE ---
     const addItemToFirestore = async (item) => {
@@ -50,25 +57,40 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- RENDERIZADO DE LA LISTA ---
-    const renderItems = (docs, searchQuery = '') => {
-        let filteredDocs = docs;
+    const renderItems = () => {
+        const searchQuery = searchInput.value.toLowerCase();
+        let filteredDocs = allItems;
+
         if (searchQuery) {
-            const lowerCaseQuery = searchQuery.toLowerCase();
-            filteredDocs = docs.filter(doc => {
+            filteredDocs = allItems.filter(doc => {
                 const item = doc.data();
+                // Asegurarse de que los campos existan para evitar errores
+                const name = item.name || '';
+                const location = item.location || '';
+                const observations = item.observations || '';
+                const category = item.category || '';
+
                 return (
-                    item.name.toLowerCase().includes(lowerCaseQuery) ||
-                    item.location?.toLowerCase().includes(lowerCaseQuery) ||
-                    item.observations?.toLowerCase().includes(lowerCaseQuery) ||
-                    item.category?.toLowerCase().includes(lowerCaseQuery)
+                    name.toLowerCase().includes(searchQuery) ||
+                    location.toLowerCase().includes(searchQuery) ||
+                    observations.toLowerCase().includes(searchQuery) ||
+                    category.toLowerCase().includes(searchQuery)
                 );
             });
         }
 
         updateChart(filteredDocs);
-        updateLocationSuggestions(filteredDocs);
+        // Las sugerencias de ubicación siempre deben basarse en todos los artículos, no en los filtrados
+        updateLocationSuggestions(allItems);
         shoppingListContainer.innerHTML = '';
         const grandTotalContainer = document.getElementById('grandTotalContainer');
+        grandTotalContainer.innerHTML = ''; // Limpiar para evitar que se muestre el total anterior
+
+        if (allItems.length === 0) {
+            shoppingListContainer.innerHTML = '<div class="empty-list-message">Tu lista de compras está vacía. ¡Añade tu primer producto!</div>';
+            updateChart([]); // Limpiar el gráfico
+            return;
+        }
         let grandTotal = 0;
         const groupedItems = {};
 
@@ -137,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        grandTotalContainer.innerHTML = `<h3>Total General: $${grandTotal.toFixed(2)}</h3>`;
+        grandTotalContainer.innerHTML = `<h3>Total General: ${formatCurrency(grandTotal)}</h3>`;
     };
 
     const createGroupContainer = (location, items, isCompleted, subtotal) => {
@@ -146,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const header = document.createElement('div');
         header.className = 'group-header';
-        header.innerHTML = `<h2>${location}</h2><span class="group-subtotal">$${subtotal.toFixed(2)}</span><span class="toggle-icon">▼</span>`;
+        header.innerHTML = `<h2>${location}</h2><span class="group-subtotal">${formatCurrency(subtotal)}</span><span class="toggle-icon">▼</span>`;
         header.addEventListener('click', () => groupContainer.classList.toggle('collapsed'));
 
         const list = document.createElement('ul');
@@ -187,8 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="item-text">${item.name}</span>
             </div>
             <span class="item-quantity">${item.quantity || ''}</span>
-            <span class="item-price">$${unitPrice.toFixed(2)}</span>
-            <span class="item-total">$${total.toFixed(2)}</span>
+            <span class="item-price">${formatCurrency(unitPrice)}</span>
+            <span class="item-total">${formatCurrency(total)}</span>
             <span class="item-observations">${item.observations || ''}</span>
             <div class="item-actions">
                 <button class="edit-button" title="Editar">
@@ -370,9 +392,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Listener de Firestore en tiempo real
-        itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
-        renderItems(snapshot.docs, searchInput.value); // Pass searchInput.value
-});
+    itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
+        allItems = snapshot.docs;
+        renderItems();
+    });
+
+    // Listener para el buscador en tiempo real
+    searchInput.addEventListener('input', renderItems);
 
 // --- ECHARTS CHART LOGIC ---
 let myChart = null; // Declare myChart globally or in a scope accessible by updateChart
@@ -390,36 +416,42 @@ document.addEventListener('DOMContentLoaded', initializeChart);
 
 const updateChart = (docs) => {
     if (!myChart) {
-        initializeChart(); // Ensure chart is initialized if updateChart is called before DOMContentLoaded
+        initializeChart();
     }
-    if (!myChart) return; // If initialization still fails, exit
+    if (!myChart) return;
 
-    const groupedItems = {};
+    const costByLocation = {};
     docs.forEach(doc => {
         const item = doc.data();
         const location = item.location?.trim() || 'Sin Ubicación';
-        if (!groupedItems[location]) {
-            groupedItems[location] = 0;
+        if (costByLocation[location] === undefined) {
+            costByLocation[location] = 0;
         }
-        groupedItems[location]++;
+        if (!item.completed) {
+            const quantity = parseFloat(item.quantity) || 0;
+            const price = parseFloat(item.unitPrice) || 0;
+            costByLocation[location] += quantity * price;
+        }
     });
 
-    const chartData = Object.keys(groupedItems).map(location => ({
-        value: groupedItems[location],
-        name: location
-    }));
+    const chartData = Object.entries(costByLocation)
+        .filter(([, cost]) => cost > 0)
+        .map(([location, cost]) => ({
+            value: cost,
+            name: location
+        }));
 
     const option = {
         title: {
-            text: 'Compras por Ubicación',
+            text: 'Coste por Ubicación',
             left: 'center',
             textStyle: {
-                color: '#dcdcdc' // Text color for dark theme
+                color: '#dcdcdc'
             }
         },
         tooltip: {
             trigger: 'item',
-            formatter: '{a} <br/>{b} : {c} ({d}%)'
+            formatter: (params) => `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`
         },
         legend: {
             orient: 'vertical',
