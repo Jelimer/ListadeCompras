@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const shoppingListContainer = document.getElementById('shoppingListContainer');
     const locationSuggestions = document.getElementById('location-suggestions');
     const categorySuggestions = document.getElementById('category-suggestions');
-    const searchInput = document.getElementById('searchInput'); // NEW
-    const categoryInput = document.getElementById('categoryInput'); // FIX
+    const searchInput = document.getElementById('searchInput');
+    const categoryInput = document.getElementById('categoryInput');
 
     // Variables de estado
     let editingItemId = null;
@@ -47,15 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const saveItemsToLocalStorage = (items) => {
-        localStorage.setItem('shoppingListItems', JSON.stringify(items));
-    };
-
-    const loadItemsFromLocalStorage = () => {
-        const items = localStorage.getItem('shoppingListItems');
-        return items ? JSON.parse(items) : [];
-    };
-
     // --- RENDERIZADO DE LA LISTA ---
     const renderItems = () => {
         const searchQuery = searchInput.value.toLowerCase();
@@ -64,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchQuery) {
             filteredDocs = allItems.filter(doc => {
                 const item = doc.data();
-                // Asegurarse de que los campos existan para evitar errores
                 const name = item.name || '';
                 const location = item.location || '';
                 const observations = item.observations || '';
@@ -80,15 +70,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateChart(filteredDocs);
-        // Las sugerencias de ubicación siempre deben basarse en todos los artículos, no en los filtrados
         updateLocationSuggestions(allItems);
         shoppingListContainer.innerHTML = '';
         const grandTotalContainer = document.getElementById('grandTotalContainer');
-        grandTotalContainer.innerHTML = ''; // Limpiar para evitar que se muestre el total anterior
+        grandTotalContainer.innerHTML = '';
 
         if (allItems.length === 0) {
             shoppingListContainer.innerHTML = '<div class="empty-list-message">Tu lista de compras está vacía. ¡Añade tu primer producto!</div>';
-            updateChart([]); // Limpiar el gráfico
+            updateChart([]);
             return;
         }
         let grandTotal = 0;
@@ -266,21 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return li;
     };
 
-    const updateLocationSuggestions = (docs) => {
-        const locations = new Set();
-        docs.forEach(doc => {
-            const location = doc.data().location?.trim();
-            if (location) locations.add(location);
-        });
-
-        locationSuggestions.innerHTML = '';
-        locations.forEach(location => {
-            const option = document.createElement('option');
-            option.value = location;
-            locationSuggestions.appendChild(option);
-        });
-    };
-
     // --- MANEJADORES DE EVENTOS ---
     addItemButton.addEventListener('click', async () => {
         const itemName = itemInput.value.trim();
@@ -315,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (snapshot.empty) {
             return 0;
         }
-        // Find the highest order number from the returned documents
         let maxOrder = -1;
         snapshot.docs.forEach(doc => {
             const order = doc.data().order;
@@ -353,11 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
             color: 'var(--text-color)'
         }).then(async (result) => {
             if (result.isConfirmed) {
-                lastResetItemsIds = snapshot.docs.map(doc => doc.id);
-
                 const batch = db.batch();
-                lastResetItemsIds.forEach(id => {
-                    batch.update(itemsCollection.doc(id), { completed: false });
+                snapshot.docs.forEach(doc => {
+                    batch.update(itemsCollection.doc(doc.id), { completed: false });
                 });
                 try {
                     await batch.commit();
@@ -378,12 +349,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         color: 'var(--text-color)'
                     });
                 }
-                lastResetItemsIds = [];
             }
         });
     });
-
-    
 
     [itemInput, quantityInput, unitPriceInput, locationInput, observationsInput, categoryInput].forEach(input => {
         input.addEventListener('keypress', (e) => {
@@ -401,18 +369,16 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('input', renderItems);
 
 // --- ECHARTS CHART LOGIC ---
-let myChart = null; // Declare myChart globally or in a scope accessible by updateChart
+let myChart = null;
 
 const initializeChart = () => {
     const chartDom = document.getElementById('chartContainer');
     if (chartDom) {
-        myChart = echarts.init(chartDom, 'dark'); // Initialize with 'dark' theme
+        myChart = echarts.init(chartDom, 'dark');
     }
 };
 
-// Call initializeChart when the DOM is ready
 document.addEventListener('DOMContentLoaded', initializeChart);
-
 
 const updateChart = (docs) => {
     if (!myChart) {
@@ -434,58 +400,68 @@ const updateChart = (docs) => {
         }
     });
 
-    const chartData = Object.entries(costByLocation)
+    const sortedLocations = Object.entries(costByLocation)
         .filter(([, cost]) => cost > 0)
-        .map(([location, cost]) => ({
-            value: cost,
-            name: location
-        }));
+        .sort((a, b) => a[1] - b[1]);
+
+    const locationNames = sortedLocations.map(entry => entry[0]);
+    const costValues = sortedLocations.map(entry => entry[1]);
 
     const option = {
         title: {
             text: 'Coste por Ubicación',
             left: 'center',
-            textStyle: {
-                color: '#dcdcdc'
-            }
+            textStyle: { color: '#dcdcdc' }
         },
         tooltip: {
-            trigger: 'item',
-            formatter: (params) => `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`
-        },
-        legend: {
-            orient: 'vertical',
-            left: 'left',
-            textStyle: {
-                color: '#dcdcdc' // Text color for dark theme
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: (params) => {
+                const data = params[0];
+                if (typeof data.value !== 'number' || isNaN(data.value)) {
+                    return `${data.name}<br/><b>Datos no disponibles</b>`;
+                }
+                return `${data.name}<br/><b>${formatCurrency(data.value)}</b>`;
             }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '3%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'value',
+            boundaryGap: [0, 0.01],
+            axisLabel: { color: '#dcdcdc' }
+        },
+        yAxis: {
+            type: 'category',
+            data: locationNames,
+            axisLabel: { color: '#dcdcdc' }
         },
         series: [
             {
-                name: 'Ubicaciones',
-                type: 'pie',
-                radius: '50%',
-                data: chartData,
-                emphasis: {
-                    itemStyle: {
-                        shadowBlur: 10,
-                        shadowOffsetX: 0,
-                        shadowColor: 'rgba(0, 0, 0, 0.5)'
-                    }
+                name: 'Coste',
+                type: 'bar',
+                data: costValues,
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#0f3460' },
+                        { offset: 1, color: '#e94560' }
+                    ])
                 },
                 label: {
-                    color: '#dcdcdc' // Label color for dark theme
-                },
-                labelLine: {
-                    lineStyle: {
-                        color: '#dcdcdc' // Label line color for dark theme
-                    }
+                    show: true,
+                    position: 'right',
+                    formatter: (params) => formatCurrency(params.value),
+                    color: '#dcdcdc'
                 }
             }
         ],
-        backgroundColor: 'transparent' // Use CSS background
+        backgroundColor: 'transparent'
     };
 
-    myChart.setOption(option);
+    myChart.setOption(option, true);
 };
 });

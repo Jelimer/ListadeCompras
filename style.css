@@ -21,7 +21,7 @@ body {
 
 .container {
     width: 90%;
-    max-width: 1600px; /* Increased width */
+    max-width: 1600px;
     margin: 0 auto;
     background-color: var(--surface-color);
     padding: 30px;
@@ -36,7 +36,6 @@ h1 {
     margin-bottom: 30px;
 }
 
-/* Bootstrap Overrides for Dark Theme */
 .form-control {
     background-color: var(--primary-color);
     color: var(--text-color);
@@ -52,9 +51,9 @@ h1 {
 .form-control:focus {
     outline: none;
     border-color: var(--secondary-color);
-    box-shadow: 0 0 0 0.25rem rgba(233, 69, 96, 0.3); /* Bootstrap's focus shadow */
-    background-color: var(--primary-color); /* Keep background consistent on focus */
-    color: var(--text-color); /* Keep text color consistent on focus */
+    box-shadow: 0 0 0 0.25rem rgba(233, 69, 96, 0.3);
+    background-color: var(--primary-color);
+    color: var(--text-color);
 }
 
 .btn-primary {
@@ -71,8 +70,8 @@ h1 {
 .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
-    background: linear-gradient(45deg, var(--secondary-color), #c43049); /* Keep gradient on hover */
-    color: white; /* Keep text color on hover */
+    background: linear-gradient(45deg, var(--secondary-color), #c43049);
+    color: white;
 }
 
 .btn-secondary {
@@ -86,15 +85,12 @@ h1 {
     filter: brightness(1.2);
 }
 
-/* Shopping List */
-
-/* Input Section */
 .input-section {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
     gap: 15px;
     margin-bottom: 30px;
-    align-items: center; /* Vertically align items in the grid */
+    align-items: center;
 }
 
 #search-container { grid-column: 1 / 9; }
@@ -127,27 +123,35 @@ h1 {
     box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
-/* Shopping List */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 .location-group {
     margin-bottom: 20px;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    overflow: hidden; /* To keep children within rounded corners */
+    overflow: hidden;
+    animation: fadeIn 0.4s ease-out;
 }
 
 .group-header {
     background-color: var(--primary-color);
-    padding: 15px;
+    padding: 15px 20px;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 15px;
 }
 
 .group-header h2 {
     margin: 0;
     font-size: 1.3em;
     font-weight: 600;
+    flex-grow: 1;
+    text-align: center;
 }
 
 .group-subtotal {
@@ -163,9 +167,9 @@ h1 {
 }
 
 .shopping-item {
-    display: grid; /* Change to Grid */
-    grid-template-columns: 1fr 80px 110px 110px 1fr 100px; /* product, qty, price, total, obs, actions */
-    gap: 10px; /* Gap between grid items */
+    display: grid;
+    grid-template-columns: 1fr 80px 110px 110px 1fr 100px;
+    gap: 10px;
     align-items: center;
     padding: 15px;
     background-color: var(--surface-color);
@@ -179,6 +183,9 @@ h1 {
 
 .shopping-item:hover {
     background-color: var(--primary-color);
+    transform: scale(1.01);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, background-color 0.2s ease-in-out;
 }
 
 .shopping-item.completed {
@@ -191,9 +198,7 @@ h1 {
 }
 
 .item-main {
-    /* flex-basis: 40%; */ /* REMOVE */
-    /* flex-grow: 1; */ /* REMOVE */
-    display: flex; /* Keep flex for internal alignment */
+    display: flex;
     align-items: center;
     gap: 15px;
 }
@@ -203,135 +208,24 @@ h1 {
 }
 
 .item-actions {
-    /* flex-basis: 20%; */ /* REMOVE */
     display: flex;
-    gap: 5px; /* Reduced gap */
-    justify-content: flex-end; /* Align buttons to the right */
-    justify-self: end; /* Align the whole item-actions to the end of its grid cell */
+    gap: 5px;
+    justify-content: flex-end;
+    justify-self: end;
 }
 
 .hidden {
     display: none;
 }
 
-/* Responsive Adjustments */
-@media (max-width: 600px) {
-    body {
-        padding: 10px;
-    }
-
-    .container {
-        padding: 15px;
-    }
-
-    h1 {
-        font-size: 1.8em;
-        margin-bottom: 20px;
-    }
-
-    .input-section {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .input-section input[type="text"],
-    #addItemButton {
-        width: 100%;
-        flex: none;
-    }
-
-    .shopping-item {
-        grid-template-columns: 1fr; /* Stack all items vertically */
-        gap: 5px; /* Smaller gap on mobile */
-        padding: 10px;
-    }
-
-    .shopping-item.list-header {
-        /* flex-direction: column; */ /* REMOVE - Grid handles stacking */
-        /* align-items: flex-start; */ /* REMOVE */
-        /* gap: 5px; */ /* REMOVE - handled by shopping-item gap */
-    }
-
-    .shopping-item.list-header .item-main,
-    .shopping-item.list-header .item-quantity,
-    .shopping-item.list-header .item-observations,
-    .shopping-item.list-header .item-actions {
-        /* flex-basis: 100%; */ /* REMOVE - Grid handles full width */
-        text-align: left;
-    }
-
-    .item-main,
-    .item-quantity,
-    .item-observations,
-    .item-actions {
-        /* flex-basis: 100%; */ /* REMOVE */
-        text-align: left;
-        margin-bottom: 5px; /* Add some space between stacked items */
-    }
-
-    .item-quantity {
-        display: flex; /* Ensure quantity is centered on mobile */
-        justify-content: center;
-        align-items: center;
-    }
-
-    .item-actions {
-        justify-content: flex-start;
-        margin-bottom: 0;
-    }
-
-    /* Adjust chart container for smaller screens */
-    #chartContainer {
-        height: 300px; /* Smaller height for mobile */
-        margin-bottom: 20px;
-    }
-}
-
-@media (max-width: 400px) {
-    .item-quantity,
-    .item-observations {
-        flex-basis: 100%;
-    }
-}
-
-
-.drag-handle {
-    cursor: grab;
-    margin-right: 10px;
-    color: var(--text-color-muted);
-}
-
-.sortable-ghost {
-    opacity: 0.4;
-    background-color: var(--primary-color);
-}
-
-.location-group.collapsed .shopping-list {
-    display: none;
-}
-
-.location-group.collapsed .toggle-icon {
-    transform: rotate(-90deg);
-}
-
-.toggle-icon {
-    transition: transform 0.3s;
-}
-
-.group-completed {
-    opacity: 0.7;
-    border-color: #4caf50; /* Green border for completed groups */
-}
-
-.group-completed .group-header {
-    background-color: #2e7d32; /* Darker green for completed header */
-}
-
-.shopping-item.list-header {
+.location-group .shopping-list .shopping-item.list-header {
     font-weight: bold;
     color: var(--text-color);
-    background-color: #0c2a4c; /* Un color ligeramente más oscuro para la cabecera */
+    background-color: #0c2a4c;
     border-bottom: 2px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .empty-list-message {
@@ -372,54 +266,7 @@ h1 {
 }
 
 .item-actions button.delete-button:hover {
-    color: #ff5252; /* A more distinct red for delete */
-}
-
-#resetListButton, #undoButton {
-    margin-top: 20px;
-}
-
-#undoButton {
-    background-color: #ffc107; /* Amber color for undo */
-    color: #000;
-}
-
-#undoButton:hover {
-    background-color: #ffa000;
-}
-
-#searchInput {
-    margin-bottom: 20px;
-}
-
-.item-category {
-    font-size: 0.8em;
-    color: var(--text-color-muted);
-    background-color: var(--primary-color);
-    padding: 3px 8px;
-    border-radius: 12px;
-    margin-left: 10px;
-}
-
-.item-main {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.item-text-container {
-    display: flex;
-    flex-direction: column;
-}
-
-.item-name {
-    font-size: 1.1em;
-}
-
-.item-category-display {
-    font-size: 0.8em;
-    color: var(--text-color-muted);
-    margin-top: 2px;
+    color: #ff5252;
 }
 
 #grandTotalContainer {
