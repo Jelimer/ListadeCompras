@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Referencias del DOM
     const itemInput = document.getElementById('itemInput');
     const quantityInput = document.getElementById('quantityInput');
+    const unitPriceInput = document.getElementById('unitPriceInput');
     const locationInput = document.getElementById('locationInput');
     const observationsInput = document.getElementById('observationsInput');
     const addItemButton = document.getElementById('addItemButton');
@@ -67,6 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateChart(filteredDocs);
         updateLocationSuggestions(filteredDocs);
         shoppingListContainer.innerHTML = '';
+        const grandTotalContainer = document.getElementById('grandTotalContainer');
+        let grandTotal = 0;
         const groupedItems = {};
 
         filteredDocs.forEach(doc => {
@@ -102,8 +105,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         sortedGroups.forEach(({ location, items }) => {
             if (items.length === 0) return;
+
+            const subtotal = items.reduce((acc, item) => {
+                const quantity = parseFloat(item.quantity) || 0;
+                const price = parseFloat(item.unitPrice) || 0;
+                if (!item.completed) {
+                    return acc + (quantity * price);
+                }
+                return acc;
+            }, 0);
+            grandTotal += subtotal;
+
             const allCompleted = items.every(item => item.completed);
-            const groupContainer = createGroupContainer(location, items, allCompleted);
+            const groupContainer = createGroupContainer(location, items, allCompleted, subtotal);
             shoppingListContainer.appendChild(groupContainer);
 
             const listElement = groupContainer.querySelector('.shopping-list');
@@ -122,15 +136,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+
+        grandTotalContainer.innerHTML = `<h3>Total General: $${grandTotal.toFixed(2)}</h3>`;
     };
 
-    const createGroupContainer = (location, items, isCompleted) => {
+    const createGroupContainer = (location, items, isCompleted, subtotal) => {
         const groupContainer = document.createElement('div');
         groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''}`;
 
         const header = document.createElement('div');
         header.className = 'group-header';
-        header.innerHTML = `<h2>${location}</h2><span class="toggle-icon">▼</span>`;
+        header.innerHTML = `<h2>${location}</h2><span class="group-subtotal">$${subtotal.toFixed(2)}</span><span class="toggle-icon">▼</span>`;
         header.addEventListener('click', () => groupContainer.classList.toggle('collapsed'));
 
         const list = document.createElement('ul');
@@ -141,6 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
         listHeader.innerHTML = `
             <span class="item-main">Producto</span>
             <span class="item-quantity">Cantidad</span>
+            <span class="item-price">Precio Unit.</span>
+            <span class="item-total">Total</span>
             <span class="item-observations">Observaciones</span>
             <span class="item-actions">Acciones</span>
         `;
@@ -158,6 +176,10 @@ document.addEventListener('DOMContentLoaded', () => {
         li.className = `shopping-item ${item.completed ? 'completed' : ''}`;
         li.dataset.id = item.id;
 
+        const quantity = parseFloat(item.quantity) || 1;
+        const unitPrice = parseFloat(item.unitPrice) || 0;
+        const total = quantity * unitPrice;
+
         li.innerHTML = `
             <div class="item-main">
                 <span class="drag-handle">&#x2261;</span>
@@ -165,6 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="item-text">${item.name}</span>
             </div>
             <span class="item-quantity">${item.quantity || ''}</span>
+            <span class="item-price">$${unitPrice.toFixed(2)}</span>
+            <span class="item-total">$${total.toFixed(2)}</span>
             <span class="item-observations">${item.observations || ''}</span>
             <div class="item-actions">
                 <button class="edit-button" title="Editar">
@@ -184,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editingItemId = item.id;
             itemInput.value = item.name;
             quantityInput.value = item.quantity || '1';
+            unitPriceInput.value = item.unitPrice || '';
             locationInput.value = item.location || '';
             observationsInput.value = item.observations || '';
             addItemButton.textContent = 'Actualizar';
@@ -242,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemData = {
             name: itemName,
             quantity: quantityInput.value.trim() || '1',
+            unitPrice: parseFloat(unitPriceInput.value) || 0,
             location: locationInput.value.trim(),
             observations: observationsInput.value.trim(),
         };
@@ -257,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await addItemToFirestore(itemData);
         }
 
-        [itemInput, locationInput, observationsInput].forEach(i => i.value = '');
+        [itemInput, unitPriceInput, locationInput, observationsInput].forEach(i => i.value = '');
         quantityInput.value = '1';
     });
 
@@ -337,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
 
-    [itemInput, quantityInput, locationInput, observationsInput, categoryInput].forEach(input => {
+    [itemInput, quantityInput, unitPriceInput, locationInput, observationsInput, categoryInput].forEach(input => {
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') addItemButton.click();
         });
