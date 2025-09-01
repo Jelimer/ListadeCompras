@@ -1,4 +1,5 @@
 const fs = require('fs');
+require('dotenv').config();
 
 // Nombres de las variables de entorno que configuraremos en Vercel
 const envVars = {
@@ -10,6 +11,16 @@ const envVars = {
     appId: process.env.APP_ID,
     measurementId: process.env.MEASUREMENT_ID
 };
+
+// Verificar que todas las variables de entorno necesarias estén definidas
+const requiredVars = Object.entries(envVars).filter(([key, value]) => !value);
+
+if (requiredVars.length > 0) {
+    console.error('Error: Faltan las siguientes variables de entorno en el archivo .env:');
+    requiredVars.forEach(([key]) => console.error(`- ${key}`));
+    process.exit(1); // Salir del proceso con un código de error
+}
+
 
 // Contenido del archivo de configuración que se generará
 const configFileContent = `

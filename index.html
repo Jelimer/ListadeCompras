@@ -10,37 +10,59 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <div id="loader" class="loader-container">
+        <div class="loader-spinner"></div>
+    </div>
+    <div class="container content-hidden">
         <h1>Lista de Compras</h1>
         <div id="chartContainer" style="width: 100%; height: 400px; margin-bottom: 30px;"></div>
-        <div class="input-section">
-        <div id="search-container">
-            <input type="text" id="searchInput" class="form-control" placeholder="Buscar productos...">
+        <div class="controls-section">
+            <!-- Nueva sección de Filtros -->
+            <div class="filter-section">
+                <h2>Filtros</h2>
+                <div class="filter-controls">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Buscar en la lista...">
+                    <select id="locationFilter" class="form-control">
+                        <option value="">Todas las ubicaciones</option>
+                    </select>
+                    <select id="categoryFilter" class="form-control">
+                        <option value="">Todas las categorías</option>
+                    </select>
+                    <button id="clearFiltersButton" class="btn btn-secondary">Limpiar Filtros</button>
+                </div>
+            </div>
+
+            <!-- Formulario para añadir/editar items -->
+            <div id="addEditFormContainer" class="add-edit-form-container">
+                <h2 id="formTitle">Añadir Producto</h2>
+                <div class="input-section">
+                    <div id="item-container">
+                        <input type="text" id="itemInput" class="form-control" placeholder="Nombre del producto">
+                    </div>
+                    <div id="quantity-container">
+                        <input type="number" id="quantityInput" class="form-control" placeholder="Cantidad" value="1" min="0">
+                    </div>
+                    <div id="unitPrice-container">
+                        <input type="number" id="unitPriceInput" class="form-control" placeholder="Precio Unitario" step="0.01">
+                    </div>
+                    <div id="location-container">
+                        <input type="text" id="locationInput" class="form-control" placeholder="Lugar de compra" list="location-suggestions">
+                        <datalist id="location-suggestions"></datalist>
+                    </div>
+                    <div id="category-container">
+                        <input type="text" id="categoryInput" class="form-control" placeholder="Categoría" list="category-suggestions">
+                        <datalist id="category-suggestions"></datalist>
+                    </div>
+                    <div id="observations-container">
+                        <input type="text" id="observationsInput" class="form-control" placeholder="Observaciones">
+                    </div>
+                </div>
+                <div class="form-buttons">
+                    <button id="saveItemButton" class="btn btn-primary">Guardar Producto</button>
+                    <button id="cancelEditButton" class="btn btn-secondary hidden">Cancelar Edición</button>
+                </div>
+            </div>
         </div>
-        <div id="button-container">
-            <button id="addItemButton" class="btn btn-primary">Añadir</button>
-        </div>
-        <div id="item-container">
-            <input type="text" id="itemInput" class="form-control" placeholder="Añadir nuevo producto">
-        </div>
-        <div id="quantity-container">
-            <input type="text" id="quantityInput" class="form-control" placeholder="Cantidad" value="1">
-        </div>
-        <div id="unitPrice-container">
-            <input type="number" id="unitPriceInput" class="form-control" placeholder="Precio Unitario" step="0.01">
-        </div>
-        <div id="location-container">
-            <input type="text" id="locationInput" class="form-control" placeholder="Lugar de compra" list="location-suggestions">
-            <datalist id="location-suggestions"></datalist>
-        </div>
-        <div id="category-container">
-            <input type="text" id="categoryInput" class="form-control" placeholder="Categoría" list="category-suggestions">
-            <datalist id="category-suggestions"></datalist>
-        </div>
-        <div id="observations-container">
-            <input type="text" id="observationsInput" class="form-control" placeholder="Observaciones">
-        </div>
-    </div>
         <div id="shoppingListContainer">
             <!-- Las listas agrupadas se añadirán aquí con JavaScript -->
         </div>
@@ -54,8 +76,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.0/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="firebase-config.js"></script>
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>

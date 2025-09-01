@@ -1,162 +1,190 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const itemsCollection = db.collection('shoppingItems');
+window.addEventListener('error', function(event) {
+    alert('Error global detectado: ' + event.message);
+});
 
+window.addEventListener('unhandledrejection', function(event) {
+    alert('Error de promesa no manejado: ' + event.reason);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
     // Referencias del DOM
+    const loader = document.getElementById('loader');
+    const container = document.querySelector('.container');
+    const shoppingListContainer = document.getElementById('shoppingListContainer');
+    const grandTotalContainer = document.getElementById('grandTotalContainer');
+    const resetListButton = document.getElementById('resetListButton');
+
+    // --- Controles de Filtros ---
+    const searchInput = document.getElementById('searchInput');
+    const locationFilter = document.getElementById('locationFilter');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const clearFiltersButton = document.getElementById('clearFiltersButton');
+
+    // --- Formulario Principal ---
+    const formTitle = document.getElementById('formTitle');
     const itemInput = document.getElementById('itemInput');
     const quantityInput = document.getElementById('quantityInput');
     const unitPriceInput = document.getElementById('unitPriceInput');
     const locationInput = document.getElementById('locationInput');
+    const categoryInput = document.getElementById('categoryInput');
     const observationsInput = document.getElementById('observationsInput');
-    const addItemButton = document.getElementById('addItemButton');
-    const resetListButton = document.getElementById('resetListButton');
-    const shoppingListContainer = document.getElementById('shoppingListContainer');
+    const saveItemButton = document.getElementById('saveItemButton');
+    const cancelEditButton = document.getElementById('cancelEditButton');
     const locationSuggestions = document.getElementById('location-suggestions');
     const categorySuggestions = document.getElementById('category-suggestions');
-    const searchInput = document.getElementById('searchInput'); // NEW
-    const categoryInput = document.getElementById('categoryInput'); // FIX
 
-    // Variables de estado
+    // --- Variables de estado ---
     let editingItemId = null;
-    let allItems = []; // Caché local para todos los items
+    let allItems = [];
+    let db, itemsCollection;
+    let initialLoad = true;
+    let myChart;
 
-    // --- FUNCIÓN UTILITARIA ---
-    const formatCurrency = (number) => {
-        // Formatea el número como moneda argentina (ARS), que usa '.' para miles y ',' para decimales.
-        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(number);
+    // --- Funciones Auxiliares ---
+    const formatCurrency = (value) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
+
+    const showLoader = (show) => {
+        loader.style.display = show ? 'flex' : 'none';
+        container.classList.toggle('content-hidden', show);
     };
 
-    // --- FUNCIONES DE FIRESTORE ---
-    const addItemToFirestore = async (item) => {
-        try { await itemsCollection.add(item); } catch (error) {
-            console.error("Error al añadir item: ", error);
-        }
+    const resetForm = () => {
+        editingItemId = null;
+        formTitle.textContent = 'Añadir Producto';
+        itemInput.value = '';
+        quantityInput.value = '1';
+        unitPriceInput.value = '';
+        locationInput.value = '';
+        categoryInput.value = '';
+        observationsInput.value = '';
+        saveItemButton.textContent = 'Guardar Producto';
+        cancelEditButton.classList.add('hidden');
     };
 
-    const updateItemInFirestore = async (id, updates) => {
-        try { await itemsCollection.doc(id).update(updates); } catch (error) {
-            console.error("Error al actualizar item: ", error);
-        }
-    };
+    // --- Lógica de Firebase ---
+    const addItemToFirestore = async (item) => itemsCollection.add(item).catch(e => console.error("Error al añadir item: ", e));
+    const updateItemInFirestore = async (id, updates) => itemsCollection.doc(id).update(updates).catch(e => console.error("Error al actualizar item: ", e));
+    const deleteItemFromFirestore = async (id) => itemsCollection.doc(id).delete().catch(e => console.error("Error al eliminar item: ", e));
 
-    const deleteItemFromFirestore = async (id) => {
-        try { await itemsCollection.doc(id).delete(); } catch (error) {
-            console.error("Error al eliminar item: ", error);
-        }
-    };
+    showLoader(true);
 
-    const saveItemsToLocalStorage = (items) => {
-        localStorage.setItem('shoppingListItems', JSON.stringify(items));
-    };
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        itemsCollection = db.collection('shoppingItems');
 
-    const loadItemsFromLocalStorage = () => {
-        const items = localStorage.getItem('shoppingListItems');
-        return items ? JSON.parse(items) : [];
-    };
+        itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
+            allItems = snapshot.docs;
+            updateFilterOptions();
+            renderItems();
+            if (initialLoad) {
+                showLoader(false);
+                initialLoad = false;
+            }
+        });
+    } catch (error) {
+        console.error("Error al inicializar Firebase: ", error);
+        shoppingListContainer.innerHTML = '<div class="empty-list-message">Error de conexión.</div>';
+        showLoader(false);
+    }
 
-    // --- RENDERIZADO DE LA LISTA ---
-    const renderItems = () => {
-        const searchQuery = searchInput.value.toLowerCase();
-        let filteredDocs = allItems;
-
-        if (searchQuery) {
-            filteredDocs = allItems.filter(doc => {
-                const item = doc.data();
-                // Asegurarse de que los campos existan para evitar errores
-                const name = item.name || '';
-                const location = item.location || '';
-                const observations = item.observations || '';
-                const category = item.category || '';
-
-                return (
-                    name.toLowerCase().includes(searchQuery) ||
-                    location.toLowerCase().includes(searchQuery) ||
-                    observations.toLowerCase().includes(searchQuery) ||
-                    category.toLowerCase().includes(searchQuery)
-                );
+    // --- Lógica de Gráfico (ECharts) ---
+    const initializeChart = () => {
+        const chartDom = document.getElementById('chartContainer');
+        if (chartDom) {
+            myChart = echarts.init(chartDom, 'dark');
+            myChart.on('click', (params) => {
+                if (params.name) {
+                    locationFilter.value = params.name;
+                    renderItems();
+                }
             });
         }
+    };
+    initializeChart();
 
-        updateChart(filteredDocs);
-        // Las sugerencias de ubicación siempre deben basarse en todos los artículos, no en los filtrados
-        updateLocationSuggestions(allItems);
-        shoppingListContainer.innerHTML = '';
-        const grandTotalContainer = document.getElementById('grandTotalContainer');
-        grandTotalContainer.innerHTML = ''; // Limpiar para evitar que se muestre el total anterior
+    const updateChart = (docs) => {
+        if (!myChart) return;
 
-        if (allItems.length === 0) {
-            shoppingListContainer.innerHTML = '<div class="empty-list-message">Tu lista de compras está vacía. ¡Añade tu primer producto!</div>';
-            updateChart([]); // Limpiar el gráfico
-            return;
-        }
-        let grandTotal = 0;
-        const groupedItems = {};
-
-        filteredDocs.forEach(doc => {
-            const item = { id: doc.id, ...doc.data() };
-            const location = item.location?.trim() || 'Varios';
-            if (!groupedItems[location]) groupedItems[location] = [];
-            groupedItems[location].push(item);
+        const costByLocation = {};
+        docs.forEach(doc => {
+            const item = doc.data();
+            if (!item.completed) {
+                const location = item.location?.trim() || 'Sin Ubicación';
+                const price = parseFloat(item.unitPrice) || 0;
+                const quantity = parseFloat(item.quantity) || 0;
+                costByLocation[location] = (costByLocation[location] || 0) + (price * quantity);
+            }
         });
 
-        const activeGroups = [];
-        const completedGroups = [];
+        const pieChartData = Object.entries(costByLocation).filter(([, cost]) => cost > 0).map(([name, value]) => ({ name, value }));
+        const pendingItemsCount = docs.filter(doc => !doc.data().completed).length;
 
-        for (const location in groupedItems) {
-            const items = groupedItems[location];
-            const allCompleted = items.every(item => item.completed);
-            if (allCompleted) {
-                completedGroups.push({ location, items });
-            } else {
-                activeGroups.push({ location, items });
-            }
+        myChart.setOption({
+            title: { text: 'Coste por Ubicación', subtext: `${pendingItemsCount} artículos pendientes`, left: 'center', textStyle: { color: '#dcdcdc' }, subtextStyle: { color: '#a9a9a9' } },
+            tooltip: { trigger: 'item', formatter: (p) => `${p.name}<br/><b>${formatCurrency(p.value)}</b> (${p.percent}%)` },
+            legend: { orient: 'vertical', left: 'left', textStyle: { color: '#dcdcdc' } },
+            series: [{ name: 'Coste', type: 'pie', radius: '50%', data: pieChartData, label: { color: '#dcdcdc' }, labelLine: { lineStyle: { color: '#dcdcdc' } } }],
+            backgroundColor: 'transparent'
+        });
+    };
+
+    // --- Lógica de Filtros y Renderizado ---
+    const updateFilterOptions = () => {
+        const locations = new Set(allItems.map(doc => doc.data().location?.trim()).filter(Boolean));
+        const categories = new Set(allItems.map(doc => doc.data().category?.trim()).filter(Boolean));
+        const populateDropdown = (select, options) => {
+            const val = select.value;
+            select.innerHTML = `<option value="">${select.id === 'locationFilter' ? 'Todas las ubicaciones' : 'Todas las categorías'}</option>`;
+            options.forEach(opt => select.add(new Option(opt, opt)));
+            select.value = val;
+        };
+        populateDropdown(locationFilter, locations);
+        populateDropdown(categoryFilter, categories);
+    };
+
+    const renderItems = () => {
+        const filters = { search: searchInput.value.toLowerCase(), location: locationFilter.value, category: categoryFilter.value };
+        const filteredDocs = allItems.filter(doc => {
+            const item = doc.data();
+            const searchStr = [item.name, item.location, item.category, item.observations].join(' ').toLowerCase();
+            return (!filters.search || searchStr.includes(filters.search)) &&
+                   (!filters.location || item.location === filters.location) &&
+                   (!filters.category || item.category === filters.category);
+        });
+
+        updateChart(filteredDocs);
+        updateDatalists(allItems);
+        shoppingListContainer.innerHTML = '';
+
+        if (filteredDocs.length === 0) {
+            shoppingListContainer.innerHTML = '<div class="empty-list-message">No hay productos que coincidan.</div>';
+            grandTotalContainer.innerHTML = '';
+            return;
         }
 
-        const sortFn = (a, b) => {
-            if (a.location === 'Varios') return 1;
-            if (b.location === 'Varios') return -1;
-            return a.location.localeCompare(b.location);
-        };
+        let grandTotal = 0;
+        const groupedItems = filteredDocs.reduce((acc, doc) => {
+            const item = { id: doc.id, ...doc.data() };
+            const location = item.location?.trim() || 'Varios';
+            (acc[location] = acc[location] || []).push(item);
+            return acc;
+        }, {});
 
-        activeGroups.sort(sortFn);
-        completedGroups.sort(sortFn);
+        Object.keys(groupedItems).sort((a, b) => a === 'Varios' ? 1 : b === 'Varios' ? -1 : a.localeCompare(b)).forEach(location => {
+            const items = groupedItems[location];
 
-        const sortedGroups = [...activeGroups, ...completedGroups];
-
-        sortedGroups.forEach(({ location, items }) => {
-            if (items.length === 0) return;
-
-            const subtotal = items.reduce((acc, item) => {
-                const quantity = parseFloat(item.quantity) || 0;
+            let subtotal = 0;
+            items.forEach(item => {
                 const price = parseFloat(item.unitPrice) || 0;
+                const quantity = parseFloat(item.quantity) || 0;
                 if (!item.completed) {
-                    return acc + (quantity * price);
-                }
-                return acc;
-            }, 0);
-            grandTotal += subtotal;
-
-            const allCompleted = items.every(item => item.completed);
-            const groupContainer = createGroupContainer(location, items, allCompleted, subtotal);
-            shoppingListContainer.appendChild(groupContainer);
-
-            const listElement = groupContainer.querySelector('.shopping-list');
-            new Sortable(listElement, {
-                animation: 150,
-                handle: '.drag-handle',
-                ghostClass: 'sortable-ghost',
-                filter: '.list-header',
-                onEnd: async (evt) => {
-                    const itemElements = Array.from(evt.target.children).filter(el => !el.classList.contains('list-header'));
-                    const batch = db.batch();
-                    itemElements.forEach((itemEl, index) => {
-                        batch.update(itemsCollection.doc(itemEl.dataset.id), { order: index });
-                    });
-                    try { await batch.commit(); } catch (error) { console.error("Error al reordenar: ", error); }
+                    subtotal += price * quantity;
                 }
             });
+
+            grandTotal += subtotal;
+            shoppingListContainer.appendChild(createGroupContainer(location, items, items.every(i => i.completed), subtotal));
         });
 
         grandTotalContainer.innerHTML = `<h3>Total General: ${formatCurrency(grandTotal)}</h3>`;
@@ -165,29 +193,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const createGroupContainer = (location, items, isCompleted, subtotal) => {
         const groupContainer = document.createElement('div');
         groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''}`;
-
         const header = document.createElement('div');
         header.className = 'group-header';
-        header.innerHTML = `<h2>${location}</h2><span class="group-subtotal">${formatCurrency(subtotal)}</span><span class="toggle-icon">▼</span>`;
+
+        const title = document.createElement('h2');
+        title.textContent = location;
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = `Buscar en ${location}...`;
+        searchInput.className = 'group-search-input';
+        searchInput.addEventListener('click', e => e.stopPropagation()); // Evitar que el clic colapse el grupo
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const list = groupContainer.querySelector('.shopping-list');
+            const items = list.querySelectorAll('.shopping-item:not(.list-header)');
+            items.forEach(item => {
+                const itemText = item.querySelector('.item-text').textContent.toLowerCase();
+                item.classList.toggle('hidden', !itemText.includes(searchTerm));
+            });
+        });
+
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.alignItems = 'center';
+
+        const subtotalSpan = document.createElement('span');
+        subtotalSpan.className = 'group-subtotal';
+        subtotalSpan.innerHTML = formatCurrency(subtotal);
+
+        const addButton = document.createElement('button');
+        addButton.className = 'add-item-in-group-button';
+        addButton.innerHTML = '+';
+        addButton.title = `Añadir item a ${location}`;
+        addButton.addEventListener('click', (e) => { e.stopPropagation(); promptForItemInLocation(location); });
+
+        const toggleIcon = document.createElement('span');
+        toggleIcon.className = 'toggle-icon';
+        toggleIcon.innerHTML = '▼';
+
+        controls.appendChild(subtotalSpan); 
+        controls.appendChild(addButton);
+        controls.appendChild(toggleIcon);
+
+        header.appendChild(title);
+        header.appendChild(searchInput);
+        header.appendChild(controls);
+
         header.addEventListener('click', () => groupContainer.classList.toggle('collapsed'));
 
         const list = document.createElement('ul');
         list.className = 'shopping-list';
-
         const listHeader = document.createElement('li');
         listHeader.className = 'shopping-item list-header';
-        listHeader.innerHTML = `
-            <span class="item-main">Producto</span>
-            <span class="item-quantity">Cantidad</span>
-            <span class="item-price">Precio Unit.</span>
-            <span class="item-total">Total</span>
-            <span class="item-observations">Observaciones</span>
-            <span class="item-actions">Acciones</span>
-        `;
+        listHeader.innerHTML = `<span class="item-main">Producto</span><span class="item-quantity">Cantidad</span><span class="item-price">Precio Unit.</span><span class="item-total">Total</span><span class="item-observations">Observaciones</span><span class="item-actions">Acciones</span>`;
         list.appendChild(listHeader);
-
         items.forEach(item => list.appendChild(createListItem(item)));
-
         groupContainer.appendChild(header);
         groupContainer.appendChild(list);
         return groupContainer;
@@ -197,11 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const li = document.createElement('li');
         li.className = `shopping-item ${item.completed ? 'completed' : ''}`;
         li.dataset.id = item.id;
-
         const quantity = parseFloat(item.quantity) || 1;
         const unitPrice = parseFloat(item.unitPrice) || 0;
-        const total = quantity * unitPrice;
-
         li.innerHTML = `
             <div class="item-main">
                 <span class="drag-handle">&#x2261;</span>
@@ -210,79 +268,107 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <span class="item-quantity">${item.quantity || ''}</span>
             <span class="item-price">${formatCurrency(unitPrice)}</span>
-            <span class="item-total">${formatCurrency(total)}</span>
+            <span class="item-total">${formatCurrency(quantity * unitPrice)}</span>
             <span class="item-observations">${item.observations || ''}</span>
             <div class="item-actions">
-                <button class="edit-button" title="Editar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                </button>
-                <button class="delete-button" title="Eliminar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                </button>
-            </div>
-        `;
-
-        li.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
-            updateItemInFirestore(item.id, { completed: e.target.checked });
-        });
-
-        li.querySelector('.edit-button').addEventListener('click', () => {
-            editingItemId = item.id;
-            itemInput.value = item.name;
-            quantityInput.value = item.quantity || '1';
-            unitPriceInput.value = item.unitPrice || '';
-            locationInput.value = item.location || '';
-            observationsInput.value = item.observations || '';
-            addItemButton.textContent = 'Actualizar';
-            itemInput.focus();
-        });
-
-        li.querySelector('.delete-button').addEventListener('click', () => {
-            Swal.fire({
-                title: '¿Estás seguro?',
-                text: `¿Realmente quieres eliminar "${item.name}"?`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: 'var(--secondary-color)',
-                cancelButtonColor: 'var(--primary-color)',
-                confirmButtonText: 'Sí, eliminar!',
-                cancelButtonText: 'Cancelar',
-                background: 'var(--surface-color)',
-                color: 'var(--text-color)'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    deleteItemFromFirestore(item.id);
-                    Swal.fire({
-                        title: '¡Eliminado!',
-                        text: `"${item.name}" ha sido eliminado.`,
-                        icon: 'success',
-                        background: 'var(--surface-color)',
-                        color: 'var(--text-color)'
-                    });
-                }
-            });
-        });
-
+                <button class="edit-button" title="Editar">...</button>
+                <button class="delete-button" title="Eliminar">...</button>
+            </div>`;
+        li.querySelector('input[type="checkbox"]').addEventListener('change', (e) => updateItemInFirestore(item.id, { completed: e.target.checked }));
+        li.querySelector('.edit-button').addEventListener('click', () => handleEditItem(item));
+        li.querySelector('.delete-button').addEventListener('click', () => handleDeleteItem(item));
         return li;
     };
 
-    const updateLocationSuggestions = (docs) => {
-        const locations = new Set();
-        docs.forEach(doc => {
-            const location = doc.data().location?.trim();
-            if (location) locations.add(location);
-        });
+    const updateDatalists = (docs) => {
+        const locations = new Set(docs.map(doc => doc.data().location?.trim()).filter(Boolean));
+        const categories = new Set(docs.map(doc => doc.data().category?.trim()).filter(Boolean));
+        const populate = (datalist, options) => {
+            datalist.innerHTML = '';
+            options.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                datalist.appendChild(option);
+            });
+        };
+        populate(locationSuggestions, locations);
+        populate(categorySuggestions, categories);
+    };
 
-        locationSuggestions.innerHTML = '';
-        locations.forEach(location => {
-            const option = document.createElement('option');
-            option.value = location;
-            locationSuggestions.appendChild(option);
+    // --- Manejadores de Eventos ---
+    clearFiltersButton.addEventListener('click', () => {
+        searchInput.value = '';
+        locationFilter.value = '';
+        categoryFilter.value = '';
+        renderItems();
+    });
+
+    [searchInput, locationFilter, categoryFilter].forEach(el => el.addEventListener('input', renderItems));
+
+    const handleEditItem = (item) => {
+        editingItemId = item.id;
+        formTitle.textContent = 'Editar Producto';
+        itemInput.value = item.name;
+        quantityInput.value = item.quantity || '1';
+        unitPriceInput.value = item.unitPrice || '';
+        locationInput.value = item.location || '';
+        categoryInput.value = item.category || '';
+        observationsInput.value = item.observations || '';
+        saveItemButton.textContent = 'Actualizar Producto';
+        cancelEditButton.classList.remove('hidden');
+        itemInput.focus();
+    };
+
+    const handleDeleteItem = (item) => {
+        Swal.fire({
+            title: '¿Estás seguro?',
+            text: `¿Realmente quieres eliminar "${item.name}"?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar!',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                deleteItemFromFirestore(item.id);
+                Swal.fire('¡Eliminado!', `"${item.name}" ha sido eliminado.`, 'success');
+            }
         });
     };
 
-    // --- MANEJADORES DE EVENTOS ---
-    addItemButton.addEventListener('click', async () => {
+    const promptForItemInLocation = (location) => {
+        Swal.fire({
+            title: `Añadir item a ${location}`,
+            html: `
+                <input id="swal-name" class="swal2-input" placeholder="Nombre del Producto">
+                <input id="swal-quantity" class="swal2-input" placeholder="Cantidad" type="number" value="1">
+                <input id="swal-price" class="swal2-input" placeholder="Precio Unitario" type="number" step="0.01">
+                <input id="swal-category" class="swal2-input" placeholder="Categoría">
+                <input id="swal-observations" class="swal2-input" placeholder="Observaciones">
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            preConfirm: () => ({
+                name: document.getElementById('swal-name').value,
+                quantity: document.getElementById('swal-quantity').value,
+                unitPrice: document.getElementById('swal-price').value,
+                category: document.getElementById('swal-category').value,
+                observations: document.getElementById('swal-observations').value,
+            })
+        }).then((result) => {
+            if (result.isConfirmed && result.value.name) {
+                const itemData = {
+                    ...result.value,
+                    location,
+                    unitPrice: parseFloat(result.value.unitPrice) || 0,
+                    completed: false,
+                    order: allItems.length,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                };
+                addItemToFirestore(itemData);
+            }
+        });
+    };
+
+    saveItemButton.addEventListener('click', async () => {
         const itemName = itemInput.value.trim();
         if (!itemName) return;
 
@@ -291,201 +377,32 @@ document.addEventListener('DOMContentLoaded', () => {
             quantity: quantityInput.value.trim() || '1',
             unitPrice: parseFloat(unitPriceInput.value) || 0,
             location: locationInput.value.trim(),
+            category: categoryInput.value.trim(),
             observations: observationsInput.value.trim(),
         };
 
         if (editingItemId) {
             await updateItemInFirestore(editingItemId, itemData);
-            editingItemId = null;
-            addItemButton.textContent = 'Añadir';
         } else {
             itemData.completed = false;
-            itemData.order = await getNextOrder(itemData.location);
+            itemData.order = allItems.length;
             itemData.timestamp = firebase.firestore.FieldValue.serverTimestamp();
             await addItemToFirestore(itemData);
         }
-
-        [itemInput, unitPriceInput, locationInput, observationsInput].forEach(i => i.value = '');
-        quantityInput.value = '1';
+        resetForm();
     });
 
-    const getNextOrder = async (location) => {
-        const locationStr = location?.trim() || '';
-        const snapshot = await itemsCollection.where('location', '==', locationStr).get();
-        if (snapshot.empty) {
-            return 0;
-        }
-        // Find the highest order number from the returned documents
-        let maxOrder = -1;
-        snapshot.docs.forEach(doc => {
-            const order = doc.data().order;
-            if (order > maxOrder) {
-                maxOrder = order;
-            }
-        });
-        return maxOrder + 1;
-    };
+    cancelEditButton.addEventListener('click', resetForm);
 
     resetListButton.addEventListener('click', async () => {
-        const snapshot = await itemsCollection.where('completed', '==', true).get();
-        if (snapshot.empty) {
-            Swal.fire({
-                title: 'Nada que reiniciar',
-                text: 'No hay artículos completados para reiniciar.',
-                icon: 'info',
-                confirmButtonText: 'OK',
-                background: 'var(--surface-color)',
-                color: 'var(--text-color)'
+        const result = await Swal.fire({ title: '¿Estás seguro?', text: "Esto marcará todos los artículos completados como no completados.", icon: 'warning', showCancelButton: true });
+        if (result.isConfirmed) {
+            const batch = db.batch();
+            allItems.forEach(doc => {
+                if(doc.data().completed) batch.update(doc.ref, { completed: false });
             });
-            return;
-        }
-
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Esto marcará todos los artículos completados como no completados.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: 'var(--secondary-color)',
-            cancelButtonColor: 'var(--primary-color)',
-            confirmButtonText: 'Sí, reiniciar!',
-            cancelButtonText: 'Cancelar',
-            background: 'var(--surface-color)',
-            color: 'var(--text-color)'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                lastResetItemsIds = snapshot.docs.map(doc => doc.id);
-
-                const batch = db.batch();
-                lastResetItemsIds.forEach(id => {
-                    batch.update(itemsCollection.doc(id), { completed: false });
-                });
-                try {
-                    await batch.commit();
-                    Swal.fire({
-                        title: '¡Reiniciado!',
-                        text: 'La lista ha sido reiniciada.',
-                        icon: 'success',
-                        background: 'var(--surface-color)',
-                        color: 'var(--text-color)'
-                    });
-                } catch (error) {
-                    console.error("Error al reiniciar items: ", error);
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'No se pudo reiniciar la lista.',
-                        icon: 'error',
-                        background: 'var(--surface-color)',
-                        color: 'var(--text-color)'
-                    });
-                }
-                lastResetItemsIds = [];
-            }
-        });
-    });
-
-    
-
-    [itemInput, quantityInput, unitPriceInput, locationInput, observationsInput, categoryInput].forEach(input => {
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addItemButton.click();
-        });
-    });
-
-    // Listener de Firestore en tiempo real
-    itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
-        allItems = snapshot.docs;
-        renderItems();
-    });
-
-    // Listener para el buscador en tiempo real
-    searchInput.addEventListener('input', renderItems);
-
-// --- ECHARTS CHART LOGIC ---
-let myChart = null; // Declare myChart globally or in a scope accessible by updateChart
-
-const initializeChart = () => {
-    const chartDom = document.getElementById('chartContainer');
-    if (chartDom) {
-        myChart = echarts.init(chartDom, 'dark'); // Initialize with 'dark' theme
-    }
-};
-
-// Call initializeChart when the DOM is ready
-document.addEventListener('DOMContentLoaded', initializeChart);
-
-
-const updateChart = (docs) => {
-    if (!myChart) {
-        initializeChart();
-    }
-    if (!myChart) return;
-
-    const costByLocation = {};
-    docs.forEach(doc => {
-        const item = doc.data();
-        const location = item.location?.trim() || 'Sin Ubicación';
-        if (costByLocation[location] === undefined) {
-            costByLocation[location] = 0;
-        }
-        if (!item.completed) {
-            const quantity = parseFloat(item.quantity) || 0;
-            const price = parseFloat(item.unitPrice) || 0;
-            costByLocation[location] += quantity * price;
+            await batch.commit();
+            Swal.fire('¡Reiniciado!', 'La lista ha sido reiniciada.', 'success');
         }
     });
-
-    const chartData = Object.entries(costByLocation)
-        .filter(([, cost]) => cost > 0)
-        .map(([location, cost]) => ({
-            value: cost,
-            name: location
-        }));
-
-    const option = {
-        title: {
-            text: 'Coste por Ubicación',
-            left: 'center',
-            textStyle: {
-                color: '#dcdcdc'
-            }
-        },
-        tooltip: {
-            trigger: 'item',
-            formatter: (params) => `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`
-        },
-        legend: {
-            orient: 'vertical',
-            left: 'left',
-            textStyle: {
-                color: '#dcdcdc' // Text color for dark theme
-            }
-        },
-        series: [
-            {
-                name: 'Ubicaciones',
-                type: 'pie',
-                radius: '50%',
-                data: chartData,
-                emphasis: {
-                    itemStyle: {
-                        shadowBlur: 10,
-                        shadowOffsetX: 0,
-                        shadowColor: 'rgba(0, 0, 0, 0.5)'
-                    }
-                },
-                label: {
-                    color: '#dcdcdc' // Label color for dark theme
-                },
-                labelLine: {
-                    lineStyle: {
-                        color: '#dcdcdc' // Label line color for dark theme
-                    }
-                }
-            }
-        ],
-        backgroundColor: 'transparent' // Use CSS background
-    };
-
-    myChart.setOption(option);
-};
 });
