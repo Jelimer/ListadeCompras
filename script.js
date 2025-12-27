@@ -221,6 +221,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = summary[loc];
             const card = document.createElement('div');
             card.className = 'summary-card';
+            
+            // Chequear si este filtro está activo
+            const isActive = searchInput.value === loc;
+            if (isActive) card.classList.add('active');
+
             card.innerHTML = `
                 <h4>${loc}</h4>
                 <div class="summary-stats-row">
@@ -228,9 +233,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="stat-done" title="Completados">✅ ${data.done}</span>
                 </div>
             `;
-            // Clic en la tarjeta filtra por ese lugar
+            
+            // Clic: Alternar filtro
             card.addEventListener('click', () => {
-                searchInput.value = loc;
+                if (searchInput.value === loc) {
+                    searchInput.value = ''; // Deseleccionar
+                } else {
+                    searchInput.value = loc; // Seleccionar
+                }
                 renderItems();
             });
             card.style.cursor = 'pointer';

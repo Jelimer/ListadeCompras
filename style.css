@@ -548,6 +548,12 @@ input[type="checkbox"] {
     border-color: var(--primary-color);
 }
 
+.summary-card.active {
+    border-color: var(--primary-color);
+    background-color: var(--input-bg); /* Un tono sutilmente distinto */
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2); /* Anillo de foco */
+}
+
 .summary-card h4 {
     margin: 0;
     font-size: 0.95rem;
