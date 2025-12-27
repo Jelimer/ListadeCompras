@@ -43,15 +43,15 @@ body {
 
 .container {
     width: 95%;
-    max-width: 1400px;
+    max-width: 1000px; /* Más compacto */
     margin: 0 auto;
     background-color: var(--surface-color);
-    padding: 40px;
+    padding: 30px; /* Un poco menos de padding */
     border-radius: 12px;
     box-shadow: 0 4px 20px var(--shadow-color);
     border: 1px solid var(--border-color);
     transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-    position: relative; /* Para posicionar el toggle */
+    position: relative;
 }
 
 /* Header Flex para Título y Toggle */
@@ -68,7 +68,7 @@ h1 {
     margin: 0;
     color: var(--primary-color);
     font-weight: 700;
-    font-size: 1.8rem;
+    font-size: 1.5rem; /* Letra un poco más chica */
     letter-spacing: -0.5px;
     border: none;
     padding: 0;
@@ -150,14 +150,35 @@ h1 {
     gap: 15px;
     margin-bottom: 30px;
     align-items: end;
-    background-color: var(--background-color); /* Ligeramente distinto al surface */
+    background-color: var(--background-color);
     padding: 20px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     transition: background-color 0.3s ease;
 }
 
-#search-container { grid-column: 1 / 13; margin-bottom: 10px; }
+#search-container { 
+    grid-column: 1 / 13; 
+    margin-bottom: 10px;
+    display: flex; /* Alinear horizontalmente */
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap; /* Permitir bajar si no hay espacio */
+}
+
+#searchInput {
+    flex-grow: 1; /* Ocupa el espacio disponible */
+    min-width: 200px;
+}
+
+#quick-add-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end; /* Alinear chips a la derecha */
+    flex-shrink: 0;
+}
+
 #item-container { grid-column: 1 / 5; }
 #category-container { grid-column: 5 / 8; }
 #quantity-container { grid-column: 8 / 10; }
@@ -400,9 +421,18 @@ input[type="checkbox"] {
         flex-direction: column;
         gap: 10px;
     }
+
+    #search-container {
+        flex-direction: column; /* Apilar en móvil */
+        align-items: stretch;
+    }
+    
+    #quick-add-container {
+        justify-content: flex-start; /* Chips a la izquierda en móvil */
+    }
     
     /* Reset grid columns for mobile */
-    #search-container, #item-container, #category-container,
+    #item-container, #category-container,
     #quantity-container, #unitPrice-container, #button-container,
     #location-container, #observations-container {
         grid-column: auto;
