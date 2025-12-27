@@ -1,15 +1,34 @@
 :root {
-    /* Smartsheet-inspired Palette */
-    --background-color: #f4f5f7; /* Gris muy suave de fondo */
-    --surface-color: #ffffff;    /* Blanco puro para tarjetas/listas */
-    --primary-color: #1a73e8;    /* Azul profesional (Google/Smartsheet vibe) */
+    /* --- TEMA CLARO (Default - Smartsheet Style) --- */
+    --background-color: #f4f5f7;
+    --surface-color: #ffffff;
+    --primary-color: #1a73e8;
     --primary-hover: #1557b0;
-    --secondary-color: #e94560;  /* Mantenemos para alertas/borrar */
-    --text-color: #172b4d;       /* Azul marino muy oscuro para texto (no negro puro) */
-    --text-color-muted: #5e6c84; /* Gris medio para secundarios */
-    --border-color: #dfe1e6;     /* Gris claro para bordes */
-    --success-color: #00875a;    /* Verde éxito */
+    --secondary-color: #e94560;
+    --text-color: #172b4d;
+    --text-color-muted: #5e6c84;
+    --border-color: #dfe1e6;
+    --success-color: #00875a;
+    --input-bg: #fafbfc;
+    --item-hover: #f8f9fa;
+    --shadow-color: rgba(0,0,0,0.08);
     --font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* --- TEMA OSCURO (Clase activada por JS) --- */
+body.dark-mode {
+    --background-color: #0f111a; /* Negro azulado profundo */
+    --surface-color: #1a1c29;    /* Gris oscuro azulado */
+    --primary-color: #3b82f6;    /* Azul brillante */
+    --primary-hover: #60a5fa;
+    --secondary-color: #ff4757;
+    --text-color: #e2e8f0;       /* Blanco grisáceo */
+    --text-color-muted: #94a3b8;
+    --border-color: #2d3748;     /* Gris oscuro */
+    --success-color: #10b981;    /* Verde neón suave */
+    --input-bg: #23273a;
+    --item-hover: #2d3748;
+    --shadow-color: rgba(0,0,0,0.5);
 }
 
 body {
@@ -19,72 +38,102 @@ body {
     margin: 0;
     padding: 20px;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
     width: 95%;
-    max-width: 1400px; /* Más ancho para aprovechar pantallas */
+    max-width: 1400px;
     margin: 0 auto;
     background-color: var(--surface-color);
     padding: 40px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08); /* Sombra sutil y elegante */
+    border-radius: 12px;
+    box-shadow: 0 4px 20px var(--shadow-color);
     border: 1px solid var(--border-color);
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    position: relative; /* Para posicionar el toggle */
 }
 
-h1 {
-    text-align: left; /* Más empresarial, alineado a izquierda */
-    color: var(--primary-color);
-    font-weight: 700;
+/* Header Flex para Título y Toggle */
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 20px;
-    font-size: 1.8rem;
-    letter-spacing: -0.5px;
     border-bottom: 2px solid var(--border-color);
     padding-bottom: 15px;
 }
 
-/* Inputs estilo Formulario Profesional */
+h1 {
+    margin: 0;
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 1.8rem;
+    letter-spacing: -0.5px;
+    border: none;
+    padding: 0;
+}
+
+/* Botón Toggle Theme */
+#themeToggle {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 8px 12px;
+    border-radius: 50px; /* Redondo */
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#themeToggle:hover {
+    background-color: var(--input-bg);
+    transform: rotate(15deg);
+}
+
+/* Inputs */
 .form-control {
-    background-color: #fafbfc;
+    background-color: var(--input-bg);
     color: var(--text-color);
     border: 2px solid var(--border-color);
-    border-radius: 4px; /* Bordes menos redondeados */
+    border-radius: 6px;
     padding: 10px 12px;
     font-size: 0.95rem;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .form-control::placeholder {
-    color: #97a0af;
+    color: var(--text-color-muted);
 }
 
 .form-control:focus {
     outline: none;
-    background-color: #fff;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.2);
+    background-color: var(--surface-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
-/* Botones estilo UI moderna */
+/* Botones */
 .btn {
-    border-radius: 4px;
-    font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0.3px;
+    border-radius: 6px;
+    font-weight: 600;
     padding: 10px 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .btn-primary, #addItemButton {
     background: var(--primary-color);
     color: white;
     border: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
 .btn-primary:hover, #addItemButton:hover {
-    background: var(--primary-hover);
+    filter: brightness(1.1);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 #copyListButton {
@@ -92,24 +141,23 @@ h1 {
     border: none;
     color: white;
 }
-#copyListButton:hover {
-    background-color: #006644;
-}
+#copyListButton:hover { filter: brightness(1.1); }
 
-/* Layout de Inputs */
+/* Layout Grid */
 .input-section {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
     gap: 15px;
     margin-bottom: 30px;
-    align-items: end; /* Alinear abajo para que cuadren con el botón */
-    background-color: #f9f9fa; /* Fondo sutil para el área de entrada */
+    align-items: end;
+    background-color: var(--background-color); /* Ligeramente distinto al surface */
     padding: 20px;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
+    transition: background-color 0.3s ease;
 }
 
-#search-container { grid-column: 1 / 13; margin-bottom: 10px; } /* Buscador arriba completo */
+#search-container { grid-column: 1 / 13; margin-bottom: 10px; }
 #item-container { grid-column: 1 / 5; }
 #category-container { grid-column: 5 / 8; }
 #quantity-container { grid-column: 8 / 10; }
@@ -118,24 +166,26 @@ h1 {
 #location-container { grid-column: 1 / 7; margin-top: 10px;}
 #observations-container { grid-column: 7 / 13; margin-top: 10px;}
 
-/* Listas y Grupos */
+/* Grupos y Listas */
 .location-group {
     margin-bottom: 25px;
-    background: white;
+    background: var(--surface-color);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: border-color 0.3s ease, background-color 0.3s ease;
 }
 
 .group-header {
-    background-color: #f4f5f7;
+    background-color: var(--background-color);
     padding: 12px 20px;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
     color: var(--text-color);
+    transition: background-color 0.3s ease;
 }
 
 .group-header h2 {
@@ -147,31 +197,28 @@ h1 {
     letter-spacing: 0.5px;
 }
 
-/* Tabla de Items */
-.shopping-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
+.shopping-list { list-style: none; padding: 0; margin: 0; }
 
 .shopping-item {
     display: grid;
-    grid-template-columns: 40px 1fr 100px 100px 100px 1fr 80px; /* Checkbox, Nombre, Cat, Cant, Precio, Obs, Acciones */
+    grid-template-columns: 40px 1fr 100px 100px 100px 1fr 80px;
     gap: 15px;
     align-items: center;
     padding: 12px 20px;
     border-bottom: 1px solid var(--border-color);
-    background-color: white;
+    background-color: var(--surface-color);
     font-size: 0.95rem;
+    transition: background-color 0.2s ease;
 }
+
+.shopping-item:last-child { border-bottom: none; }
 
 .shopping-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--item-hover);
 }
 
-/* Header de la lista (tipo tabla) */
 .shopping-item.list-header {
-    background-color: #fafbfc;
+    background-color: var(--background-color);
     font-weight: 600;
     color: var(--text-color-muted);
     font-size: 0.85rem;
@@ -181,84 +228,74 @@ h1 {
 }
 
 .shopping-item.completed {
-    background-color: #f4f5f7;
-    color: #a0a0a0;
+    opacity: 0.6;
 }
 .shopping-item.completed .item-text {
     text-decoration: line-through;
-    color: #a0a0a0;
+    color: var(--text-color-muted);
 }
 
 .item-main {
     display: flex;
     align-items: center;
     gap: 10px;
-    grid-column: 2 / 3; /* Nombre ocupa espacio principal */
+    grid-column: 2 / 3;
 }
 
-/* Checkbox customizado */
 input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 18px; height: 18px;
     cursor: pointer;
     accent-color: var(--success-color);
     grid-column: 1 / 2;
 }
 
-.item-quantity, .item-price, .item-total {
-    text-align: right;
-    font-feature-settings: "tnum"; /* Números tabulares */
+.item-quantity, .item-price, .item-total, .item-observations {
+    color: var(--text-color-muted);
 }
+.item-price, .item-total { text-align: right; }
+.item-total { font-weight: 600; color: var(--text-color); }
 
-.item-total {
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.item-actions {
-    display: flex;
-    justify-content: flex-end;
-}
+.item-actions { display: flex; justify-content: flex-end; }
 
 .edit-button, .delete-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
     color: var(--text-color-muted);
     padding: 6px;
     border-radius: 4px;
+    transition: color 0.2s;
 }
-.edit-button:hover { color: var(--primary-color); background: #e8f0fe; }
-.delete-button:hover { color: #d32f2f; background: #ffebee; }
+.edit-button:hover { color: var(--primary-color); background: rgba(59, 130, 246, 0.1); }
+.delete-button:hover { color: var(--secondary-color); background: rgba(233, 69, 96, 0.1); }
 
 /* Totales */
 #grandTotalContainer {
     margin-top: 30px;
     padding: 20px;
-    background-color: #f1f8ff; /* Azul muy pálido para el total */
-    border: 1px solid #cce5ff;
-    border-radius: 6px;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
     text-align: right;
+    transition: background-color 0.3s ease;
 }
 
 #grandTotalContainer h3 {
+    margin: 0;
     color: var(--primary-color);
     font-weight: 700;
 }
 
-/* Toolbar (Switch y Botones extra) */
+/* Toolbar */
 .toolbar-section {
-    background: white;
+    background: var(--surface-color);
     padding: 15px;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
     margin-bottom: 20px;
+    transition: background-color 0.3s ease;
 }
 
-.form-check-label {
-    color: var(--text-color);
-    font-weight: 500;
-}
+.form-check-label { color: var(--text-color); }
 
-.drag-handle {
-    cursor: grab;
-    color: #b3b3b3;
-    margin-right: 8px;
-}
+.drag-handle { cursor: grab; color: var(--text-color-muted); margin-right: 8px; }

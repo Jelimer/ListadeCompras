@@ -19,6 +19,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const categoryInput = document.getElementById('categoryInput');
     const hideCompletedSwitch = document.getElementById('hideCompletedSwitch');
     const copyListButton = document.getElementById('copyListButton');
+    const themeToggle = document.getElementById('themeToggle');
+
+    // --- LÓGICA DE TEMA (DARK/LIGHT) ---
+    const toggleTheme = () => {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        updateThemeIcon(isDark);
+        // Forzar actualización del gráfico para cambiar colores
+        if (myChart) {
+            // Pequeño hack: reiniciar chart para aplicar nuevos estilos base si fuera necesario,
+            // pero con setOption basta para colores.
+            renderItems(); 
+        }
+    };
+
+    const updateThemeIcon = (isDark) => {
+        themeToggle.innerHTML = isDark 
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>' // Sun
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'; // Moon
+    };
+
+    // Cargar preferencia guardada
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark-mode');
+        updateThemeIcon(true);
+    }
+
+    themeToggle.addEventListener('click', toggleTheme);
+
 
     // Variables de estado
     let editingItemId = null;
@@ -474,23 +504,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listener para el buscador en tiempo real
     searchInput.addEventListener('input', renderItems);
 
-// --- ECHARTS CHART LOGIC ---
+// --- ECHARTS CHART LOGIC (DASHBOARD STYLE) ---
 let myChart = null;
 
 const initializeChart = () => {
     const chartDom = document.getElementById('chartContainer');
     if (chartDom) {
-        myChart = echarts.init(chartDom); // Tema claro por defecto
+        myChart = echarts.init(chartDom);
+        window.addEventListener('resize', () => myChart.resize());
     }
 };
 
 document.addEventListener('DOMContentLoaded', initializeChart);
 
 const updateChart = (docs) => {
-    if (!myChart) {
-        initializeChart();
-    }
+    if (!myChart) initializeChart();
     if (!myChart) return;
+
+    const isDark = document.body.classList.contains('dark-mode');
+    
+    // Paleta de colores dinámica
+    const textColor = isDark ? '#e2e8f0' : '#172b4d';
+    const axisColor = isDark ? '#475569' : '#dfe1e6';
+    const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+    const tooltipText = isDark ? '#f8fafc' : '#1e293b';
+    
+    // Gradiente de Barras
+    const barGradient = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+        { offset: 0, color: isDark ? '#60a5fa' : '#1a73e8' }, // Color Top
+        { offset: 1, color: isDark ? '#3b82f6' : '#1557b0' }  // Color Bottom
+    ]);
 
     const costByLocation = {};
     docs.forEach(doc => {
@@ -515,49 +558,75 @@ const updateChart = (docs) => {
 
     const option = {
         title: {
-            text: 'Gastos por Ubicación',
-            left: 'center',
-            textStyle: { color: '#333', fontSize: 16 }
+            text: 'Gastos Pendientes por Ubicación',
+            left: 'left',
+            textStyle: { 
+                color: textColor, 
+                fontSize: 16,
+                fontWeight: 600
+            }
         },
         tooltip: {
             trigger: 'axis',
-            axisPointer: { type: 'shadow' },
+            backgroundColor: tooltipBg,
+            borderColor: axisColor,
+            textStyle: { color: tooltipText },
+            axisPointer: { 
+                type: 'shadow',
+                shadowStyle: { opacity: 0.1 }
+            },
             formatter: (params) => {
                 const data = params[0];
-                return `${data.name}<br/><b>${formatCurrency(data.value)}</b>`;
+                return `<div style="font-weight:600; margin-bottom:4px;">${data.name}</div>
+                        <div>Total: ${formatCurrency(data.value)}</div>`;
             }
         },
         grid: {
-            left: '3%',
-            right: '4%',
-            bottom: '3%',
+            left: '10px',
+            right: '30px',
+            bottom: '10px',
+            top: '50px',
             containLabel: true
         },
         xAxis: {
             type: 'value',
             boundaryGap: [0, 0.01],
-            axisLabel: { color: '#666' }
+            axisLabel: { color: isDark ? '#94a3b8' : '#5e6c84' },
+            splitLine: {
+                show: true,
+                lineStyle: { color: axisColor, type: 'dashed' }
+            }
         },
         yAxis: {
             type: 'category',
             data: locationNames,
-            axisLabel: { color: '#666' }
+            axisLabel: { 
+                color: isDark ? '#94a3b8' : '#5e6c84',
+                fontWeight: 500
+            },
+            axisLine: { show: false },
+            axisTick: { show: false }
         },
         series: [
             {
                 name: 'Coste',
                 type: 'bar',
                 data: costValues,
+                barWidth: '60%',
                 itemStyle: {
-                    color: '#1a73e8' // Azul profesional sólido
+                    color: barGradient,
+                    borderRadius: [0, 4, 4, 0] // Bordes redondeados a la derecha
                 },
                 label: {
                     show: true,
                     position: 'right',
                     formatter: (params) => formatCurrency(params.value),
-                    color: '#333',
-                    fontWeight: 'bold'
-                }
+                    color: textColor,
+                    fontWeight: 600,
+                    offset: [5, 0]
+                },
+                animationDuration: 800,
+                animationEasing: 'cubicOut'
             }
         ],
         backgroundColor: 'transparent'
