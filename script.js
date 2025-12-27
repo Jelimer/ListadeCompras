@@ -480,7 +480,7 @@ let myChart = null;
 const initializeChart = () => {
     const chartDom = document.getElementById('chartContainer');
     if (chartDom) {
-        myChart = echarts.init(chartDom, 'dark');
+        myChart = echarts.init(chartDom); // Tema claro por defecto
     }
 };
 
@@ -515,18 +515,15 @@ const updateChart = (docs) => {
 
     const option = {
         title: {
-            text: 'Coste por Ubicación',
+            text: 'Gastos por Ubicación',
             left: 'center',
-            textStyle: { color: '#dcdcdc' }
+            textStyle: { color: '#333', fontSize: 16 }
         },
         tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'shadow' },
             formatter: (params) => {
                 const data = params[0];
-                if (typeof data.value !== 'number' || isNaN(data.value)) {
-                    return `${data.name}<br/><b>Datos no disponibles</b>`;
-                }
                 return `${data.name}<br/><b>${formatCurrency(data.value)}</b>`;
             }
         },
@@ -539,12 +536,12 @@ const updateChart = (docs) => {
         xAxis: {
             type: 'value',
             boundaryGap: [0, 0.01],
-            axisLabel: { color: '#dcdcdc' }
+            axisLabel: { color: '#666' }
         },
         yAxis: {
             type: 'category',
             data: locationNames,
-            axisLabel: { color: '#dcdcdc' }
+            axisLabel: { color: '#666' }
         },
         series: [
             {
@@ -552,16 +549,14 @@ const updateChart = (docs) => {
                 type: 'bar',
                 data: costValues,
                 itemStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        { offset: 0, color: '#0f3460' },
-                        { offset: 1, color: '#e94560' }
-                    ])
+                    color: '#1a73e8' // Azul profesional sólido
                 },
                 label: {
                     show: true,
                     position: 'right',
                     formatter: (params) => formatCurrency(params.value),
-                    color: '#dcdcdc'
+                    color: '#333',
+                    fontWeight: 'bold'
                 }
             }
         ],
