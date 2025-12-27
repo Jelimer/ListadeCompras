@@ -403,9 +403,23 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBudgetUI(grandTotal);
     };
 
+    // --- LÓGICA DE COLAPSO PERSISTENTE ---
+    let collapsedLocations = new Set(JSON.parse(localStorage.getItem('collapsedLocations')) || []);
+
+    const toggleLocationCollapse = (location, isCollapsed) => {
+        if (isCollapsed) {
+            collapsedLocations.add(location);
+        } else {
+            collapsedLocations.delete(location);
+        }
+        localStorage.setItem('collapsedLocations', JSON.stringify([...collapsedLocations]));
+    };
+
     const createGroupContainer = (location, items, isCompleted, subtotal) => {
         const groupContainer = document.createElement('div');
-        groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''}`;
+        const shouldCollapse = collapsedLocations.has(location);
+        
+        groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''} ${shouldCollapse ? 'collapsed' : ''}`;
 
         // Lógica de presupuesto local
         const savedLocBudget = locationBudgets[location] || '';
@@ -438,6 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
         header.addEventListener('click', (e) => {
             if (e.target.tagName !== 'INPUT') {
                 groupContainer.classList.toggle('collapsed');
+                toggleLocationCollapse(location, groupContainer.classList.contains('collapsed'));
             }
         });
 

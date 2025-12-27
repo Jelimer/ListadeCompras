@@ -143,13 +143,13 @@ h1 {
 }
 #copyListButton:hover { filter: brightness(1.1); }
 
-/* Layout Grid */
+/* Layout Flex (Más limpio y ordenado) */
 .input-section {
-    display: grid;
-    grid-template-columns: repeat(12, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: 15px;
     margin-bottom: 30px;
-    align-items: end;
+    align-items: center;
     background-color: var(--background-color);
     padding: 20px;
     border-radius: 8px;
@@ -157,35 +157,29 @@ h1 {
     transition: background-color 0.3s ease;
 }
 
-#search-container { 
-    grid-column: 1 / 13; 
-    margin-bottom: 10px;
-    display: flex; /* Alinear horizontalmente */
-    align-items: center;
-    gap: 15px;
-    flex-wrap: wrap; /* Permitir bajar si no hay espacio */
+/* FILA 1: Producto (Principal) + Cantidad + Precio */
+#item-container { flex: 4 1 300px; } /* Ocupa el mayor espacio */
+#quantity-container { flex: 1 1 80px; }
+#unitPrice-container { flex: 1 1 100px; }
+
+/* FILA 2: Detalles secundarios + Acción */
+#location-container { flex: 2 1 150px; }
+#category-container { flex: 2 1 150px; }
+#observations-container { flex: 3 1 200px; }
+#button-container { flex: 1 1 100px; }
+
+/* Eliminar márgenes viejos */
+#location-container, #observations-container { margin-top: 0; }
+
+/* Asegurar que los inputs llenen su contenedor flex */
+.input-section > div {
+    min-width: 0; /* Prevenir desbordes flex */
+}
+.input-section input, .input-section button {
+    width: 100%;
 }
 
-#searchInput {
-    flex-grow: 1; /* Ocupa el espacio disponible */
-    min-width: 200px;
-}
-
-#quick-add-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: flex-end; /* Alinear chips a la derecha */
-    flex-shrink: 0;
-}
-
-#item-container { grid-column: 1 / 5; }
-#category-container { grid-column: 5 / 8; }
-#quantity-container { grid-column: 8 / 10; }
-#unitPrice-container { grid-column: 10 / 12; }
-#button-container { grid-column: 12 / 13; }
-#location-container { grid-column: 1 / 7; margin-top: 10px;}
-#observations-container { grid-column: 7 / 13; margin-top: 10px;}
+/* ... (resto de estilos) ... */
 
 /* Grupos y Listas */
 .location-group {
