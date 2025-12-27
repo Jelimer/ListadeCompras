@@ -540,6 +540,18 @@ input[type="checkbox"] {
     flex-direction: column;
     gap: 8px;
     transition: transform 0.2s, box-shadow 0.2s;
+    cursor: grab; /* Manito para arrastrar */
+    user-select: none; /* Evitar selección de texto al arrastrar */
+}
+
+.summary-card:active {
+    cursor: grabbing;
+}
+
+.summary-card.sortable-ghost {
+    opacity: 0.4;
+    background-color: var(--border-color);
+    border: 2px dashed var(--text-color-muted);
 }
 
 .summary-card:hover {

@@ -193,8 +193,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // --- LÓGICA DE RESUMEN (ORDENABLE) ---
+    let savedLocationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
+
+    // Inicializar Sortable para el Dashboard
+    if (summaryDashboard) {
+        new Sortable(summaryDashboard, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: () => {
+                // Guardar el nuevo orden basado en el DOM
+                const newOrder = Array.from(summaryDashboard.children).map(card => card.dataset.location);
+                savedLocationOrder = newOrder;
+                localStorage.setItem('locationOrder', JSON.stringify(newOrder));
+            }
+        });
+    }
+
     const updateSummary = (items) => {
         if (!summaryDashboard) return;
+        
+        // No limpiamos inmediatamente si queremos preservar el drag, pero como renderItems
+        // se llama seguido, necesitamos redibujar los números.
         summaryDashboard.innerHTML = '';
 
         if (items.length === 0) return;
@@ -214,13 +234,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Ordenar alfabéticamente
-        const sortedLocations = Object.keys(summary).sort();
+        // Ordenar: Primero por orden personalizado, luego alfabéticamente
+        const sortedLocations = Object.keys(summary).sort((a, b) => {
+            const indexA = savedLocationOrder.indexOf(a);
+            const indexB = savedLocationOrder.indexOf(b);
+
+            // Si ambos están en la lista guardada, ordenar por su índice
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            
+            // Si solo A está, A va primero
+            if (indexA !== -1) return -1;
+            
+            // Si solo B está, B va primero
+            if (indexB !== -1) return 1;
+
+            // Si ninguno está, alfabético
+            return a.localeCompare(b);
+        });
 
         sortedLocations.forEach(loc => {
             const data = summary[loc];
             const card = document.createElement('div');
             card.className = 'summary-card';
+            card.dataset.location = loc; // Importante para el ordenamiento
             
             // Chequear si este filtro está activo
             const isActive = searchInput.value === loc;
@@ -243,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 renderItems();
             });
-            card.style.cursor = 'pointer';
             
             summaryDashboard.appendChild(card);
         });
