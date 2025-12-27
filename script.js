@@ -24,8 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const budgetProgressBar = document.getElementById('budgetProgressBar');
     const budgetStats = document.getElementById('budgetStats');
     const quickAddContainer = document.getElementById('quick-add-container');
+    const summaryDashboard = document.getElementById('summary-dashboard');
 
     // --- PRODUCTOS FRECUENTES (QUICK SEARCH) ---
+    const frequentItems = [
     const frequentItems = [
         { name: 'Leche', icon: '🥛' },
         { name: 'Pan', icon: '🍞' },
@@ -192,6 +194,52 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const updateSummary = (items) => {
+        if (!summaryDashboard) return;
+        summaryDashboard.innerHTML = '';
+
+        if (items.length === 0) return;
+
+        const summary = {};
+        
+        items.forEach(doc => {
+            const data = doc.data();
+            const loc = data.location?.trim() || 'Varios';
+            
+            if (!summary[loc]) summary[loc] = { pending: 0, done: 0 };
+            
+            if (data.completed) {
+                summary[loc].done++;
+            } else {
+                summary[loc].pending++;
+            }
+        });
+
+        // Ordenar alfabéticamente
+        const sortedLocations = Object.keys(summary).sort();
+
+        sortedLocations.forEach(loc => {
+            const data = summary[loc];
+            const card = document.createElement('div');
+            card.className = 'summary-card';
+            card.innerHTML = `
+                <h4>${loc}</h4>
+                <div class="summary-stats-row">
+                    <span class="stat-pending" title="Pendientes">⏳ ${data.pending}</span>
+                    <span class="stat-done" title="Completados">✅ ${data.done}</span>
+                </div>
+            `;
+            // Clic en la tarjeta filtra por ese lugar
+            card.addEventListener('click', () => {
+                searchInput.value = loc;
+                renderItems();
+            });
+            card.style.cursor = 'pointer';
+            
+            summaryDashboard.appendChild(card);
+        });
+    };
+
     // --- RENDERIZADO DE LA LISTA ---
     const renderItems = () => {
         const searchQuery = searchInput.value.toLowerCase();
@@ -214,6 +262,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
             });
         }
+        
+        // Actualizar resumen ANTES de filtrar por completados (para ver stats reales)
+        updateSummary(filteredDocs);
         
         // Aplicar filtro de ocultar completados
         if (hideCompleted) {
