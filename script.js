@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- PRODUCTOS FRECUENTES (QUICK SEARCH) ---
     const frequentItems = [
-    const frequentItems = [
         { name: 'Leche', icon: '🥛' },
         { name: 'Pan', icon: '🍞' },
         { name: 'Huevos', icon: '🥚' },
