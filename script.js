@@ -20,6 +20,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const hideCompletedSwitch = document.getElementById('hideCompletedSwitch');
     const copyListButton = document.getElementById('copyListButton');
     const themeToggle = document.getElementById('themeToggle');
+    const budgetInput = document.getElementById('budgetInput');
+    const budgetProgressBar = document.getElementById('budgetProgressBar');
+    const budgetStats = document.getElementById('budgetStats');
+
+    // --- LÓGICA DE PRESUPUESTO ---
+    const loadBudget = () => {
+        const savedBudget = localStorage.getItem('budget');
+        if (savedBudget) {
+            budgetInput.value = savedBudget;
+        }
+    };
+
+    const updateBudgetUI = (currentTotal) => {
+        const budget = parseFloat(budgetInput.value) || 0;
+        if (budget <= 0) {
+            budgetProgressBar.style.width = '0%';
+            budgetStats.textContent = 'Presupuesto no definido';
+            return;
+        }
+
+        const percentage = Math.min((currentTotal / budget) * 100, 100);
+        const remaining = budget - currentTotal;
+        
+        budgetProgressBar.style.width = `${percentage}%`;
+        
+        // Colores de estado
+        budgetProgressBar.className = 'progress-bar'; // Reset
+        if (percentage >= 100) {
+            budgetProgressBar.classList.add('danger');
+        } else if (percentage >= 80) {
+            budgetProgressBar.classList.add('warning');
+        }
+
+        budgetStats.textContent = `Restante: ${formatCurrency(remaining)}`;
+    };
+
+    budgetInput.addEventListener('input', () => {
+        localStorage.setItem('budget', budgetInput.value);
+        // Recalcular visualmente sin recargar items
+        // Necesitamos el total actual, lo más fácil es disparar renderItems de nuevo
+        // o guardar el total en una variable global. Por simplicidad, renderItems.
+        renderItems(); 
+    });
+
+    loadBudget();
 
     // --- LÓGICA DE TEMA (DARK/LIGHT) ---
     const toggleTheme = () => {
@@ -224,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         grandTotalContainer.innerHTML = `<h3>Total General: ${formatCurrency(grandTotal)}</h3>`;
+        updateBudgetUI(grandTotal);
     };
 
     const createGroupContainer = (location, items, isCompleted, subtotal) => {

@@ -299,3 +299,106 @@ input[type="checkbox"] {
 .form-check-label { color: var(--text-color); }
 
 .drag-handle { cursor: grab; color: var(--text-color-muted); margin-right: 8px; }
+
+/* --- RESPONSIVE DESIGN (MOBILE) --- */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+        width: 100%;
+    }
+    
+    .input-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    /* Reset grid columns for mobile */
+    #search-container, #item-container, #category-container,
+    #quantity-container, #unitPrice-container, #button-container,
+    #location-container, #observations-container {
+        grid-column: auto;
+        width: 100%;
+    }
+    
+    .shopping-item {
+        grid-template-columns: 30px 1fr 60px; /* Checkbox, Info, Acciones */
+        grid-template-areas: 
+            "check name actions"
+            "check details actions";
+        gap: 5px;
+        padding: 10px;
+    }
+    
+    .item-main { grid-area: name; font-weight: 600; }
+    input[type="checkbox"] { grid-area: check; align-self: center; }
+    .item-actions { grid-area: actions; align-self: center; }
+    
+    /* Ocultar columnas menos importantes en móvil o reestructurarlas */
+    .shopping-item.list-header { display: none; }
+    
+    .item-quantity::before { content: "Cant: "; }
+    .item-price::before { content: " $"; }
+    
+    /* Mostrar detalles en una línea secundaria */
+    .shopping-item > span:not(.item-main):not(.item-actions) {
+        display: inline-block;
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+    }
+    
+    /* Ocultar observaciones en lista móvil para ahorrar espacio */
+    .item-observations { display: none; } 
+    
+    /* Reorganizar visualmente quantity y price */
+    .item-quantity, .item-price, .item-total {
+        grid-area: details;
+    }
+    .item-quantity { grid-column: 2; }
+    .item-price { grid-column: 2; margin-left: 60px; }
+    .item-total { display: none; } /* Total individual no es crítico en móvil */
+}
+
+/* --- BUDGET BAR --- */
+.budget-section {
+    margin-top: 20px;
+    background: var(--surface-color);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.budget-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-container {
+    flex-grow: 1;
+    background-color: var(--border-color);
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--success-color);
+    width: 0%;
+    transition: width 0.5s ease, background-color 0.3s ease;
+}
+
+.progress-bar.warning { background-color: #f59e0b; } /* Naranja */
+.progress-bar.danger { background-color: var(--secondary-color); } /* Rojo */
+
+.budget-stats {
+    font-size: 0.9em;
+    color: var(--text-color-muted);
+    white-space: nowrap;
+}
