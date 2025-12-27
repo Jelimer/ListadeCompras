@@ -68,6 +68,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- FUNCIONES AUXILIARES DE UI ---
+    const updateLocationSuggestions = (items) => {
+        if (!locationSuggestions) return;
+        const locations = new Set(items.map(doc => doc.data().location).filter(l => l));
+        locationSuggestions.innerHTML = '';
+        locations.forEach(location => {
+            const option = document.createElement('option');
+            option.value = location;
+            locationSuggestions.appendChild(option);
+        });
+    };
+
     // --- RENDERIZADO DE LA LISTA ---
     const renderItems = () => {
         const searchQuery = searchInput.value.toLowerCase();
