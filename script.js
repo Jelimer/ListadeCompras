@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const budgetStats = document.getElementById('budgetStats');
     const quickAddContainer = document.getElementById('quick-add-container');
 
-    // --- PRODUCTOS FRECUENTES (QUICK ADD) ---
+    // --- PRODUCTOS FRECUENTES (QUICK SEARCH) ---
     const frequentItems = [
         { name: 'Leche', icon: '🥛' },
         { name: 'Pan', icon: '🍞' },
@@ -44,19 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const chip = document.createElement('button');
             chip.className = 'quick-add-chip';
             chip.innerHTML = `${item.icon} ${item.name}`;
-            chip.addEventListener('click', async () => {
-                const itemData = {
-                    name: item.name,
-                    quantity: '1',
-                    unitPrice: 0,
-                    location: '',
-                    observations: '',
-                    category: '',
-                    completed: false,
-                    order: await getNextOrder(''),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                await addItemToFirestore(itemData);
+            chip.addEventListener('click', () => {
+                // Ahora busca el producto en lugar de añadirlo
+                searchInput.value = item.name;
+                renderItems();
+                searchInput.focus();
             });
             quickAddContainer.appendChild(chip);
         });
@@ -64,7 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderQuickAdd();
 
-    // --- LÓGICA DE PRESUPUESTO ---
+    // --- LÓGICA DE PRESUPUESTO (GLOBAL Y LOCAL) ---
+    let locationBudgets = JSON.parse(localStorage.getItem('locationBudgets')) || {};
+
+    const saveLocationBudget = (location, amount) => {
+        locationBudgets[location] = amount;
+        localStorage.setItem('locationBudgets', JSON.stringify(locationBudgets));
+        renderItems(); // Re-render para actualizar barras
+    };
+
     const loadBudget = () => {
         const savedBudget = localStorage.getItem('budget');
         if (savedBudget) {
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const budget = parseFloat(budgetInput.value) || 0;
         if (budget <= 0) {
             budgetProgressBar.style.width = '0%';
-            budgetStats.textContent = 'Presupuesto no definido';
+            budgetStats.textContent = 'Global: Sin límite';
             return;
         }
 
@@ -93,14 +93,11 @@ document.addEventListener('DOMContentLoaded', () => {
             budgetProgressBar.classList.add('warning');
         }
 
-        budgetStats.textContent = `Restante: ${formatCurrency(remaining)}`;
+        budgetStats.textContent = `Global Restante: ${formatCurrency(remaining)}`;
     };
 
     budgetInput.addEventListener('input', () => {
         localStorage.setItem('budget', budgetInput.value);
-        // Recalcular visualmente sin recargar items
-        // Necesitamos el total actual, lo más fácil es disparar renderItems de nuevo
-        // o guardar el total en una variable global. Por simplicidad, renderItems.
         renderItems(); 
     });
 
@@ -315,10 +312,47 @@ document.addEventListener('DOMContentLoaded', () => {
         const groupContainer = document.createElement('div');
         groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''}`;
 
+        // Lógica de presupuesto local
+        const savedLocBudget = locationBudgets[location] || '';
+        const locBudgetVal = parseFloat(savedLocBudget) || 0;
+        let locPct = 0;
+        let barClass = '';
+        
+        if (locBudgetVal > 0) {
+            locPct = Math.min((subtotal / locBudgetVal) * 100, 100);
+            if (locPct >= 100) barClass = 'danger';
+            else if (locPct >= 80) barClass = 'warning';
+        }
+
         const header = document.createElement('div');
         header.className = 'group-header';
-        header.innerHTML = `<h2>${location}</h2><span class="group-subtotal">${formatCurrency(subtotal)}</span><span class="toggle-icon">▼</span>`;
-        header.addEventListener('click', () => groupContainer.classList.toggle('collapsed'));
+        
+        header.innerHTML = `
+            <div class="location-name-wrapper">
+                <span class="toggle-icon">▼</span>
+                <h2>${location}</h2>
+            </div>
+            <div class="location-meta">
+                <input type="number" class="budget-input-small" placeholder="Presupuesto" value="${savedLocBudget}" onclick="event.stopPropagation()">
+                <span class="group-subtotal">${formatCurrency(subtotal)}</span>
+            </div>
+            <div class="location-progress-mini ${barClass}" style="width: ${locPct}%"></div>
+        `;
+
+        // Evento para colapsar (solo si no clickean el input)
+        header.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                groupContainer.classList.toggle('collapsed');
+            }
+        });
+
+        // Evento del input de presupuesto local
+        const budgetInputEl = header.querySelector('.budget-input-small');
+        budgetInputEl.addEventListener('change', (e) => {
+            saveLocationBudget(location, e.target.value);
+        });
+        // Evitar que escribir dispare el colapso
+        budgetInputEl.addEventListener('click', (e) => e.stopPropagation());
 
         const list = document.createElement('ul');
         list.className = 'shopping-list';

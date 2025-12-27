@@ -186,7 +186,51 @@ h1 {
     align-items: center;
     color: var(--text-color);
     transition: background-color 0.3s ease;
+    flex-wrap: wrap; /* Permitir que baje si es móvil */
+    gap: 10px;
+    position: relative; /* Para la barra de progreso absoluta */
 }
+
+.location-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-grow: 1;
+}
+
+.location-meta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.budget-input-small {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 4px;
+    padding: 4px 8px;
+    width: 100px;
+    font-size: 0.9em;
+    text-align: right;
+}
+
+.budget-input-small:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.location-progress-mini {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 4px;
+    background-color: var(--success-color);
+    width: 0%;
+    transition: width 0.5s ease;
+}
+.location-progress-mini.warning { background-color: #f59e0b; }
+.location-progress-mini.danger { background-color: var(--secondary-color); }
 
 .group-header h2 {
     font-size: 1.1rem;
