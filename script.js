@@ -17,10 +17,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const categorySuggestions = document.getElementById('category-suggestions');
     const searchInput = document.getElementById('searchInput');
     const categoryInput = document.getElementById('categoryInput');
+    const hideCompletedSwitch = document.getElementById('hideCompletedSwitch');
+    const copyListButton = document.getElementById('copyListButton');
 
     // Variables de estado
     let editingItemId = null;
     let allItems = []; // Caché local para todos los items
+
+    // --- MAPA DE ICONOS ---
+    const categoryIcons = {
+        'fruta': '🍎', 'verdura': '🥬', 'carne': '🥩', 'pollo': '🍗',
+        'pescado': '🐟', 'pan': '🍞', 'leche': '🥛', 'queso': '🧀',
+        'huevo': '🥚', 'bebida': '🥤', 'agua': '💧', 'vino': '🍷',
+        'cerveza': '🍺', 'limpieza': '🧹', 'papel': '🧻', 'jabon': '🧼',
+        'arroz': '🍚', 'fideo': '🍝', 'pasta': '🍝', 'harina': '🥡',
+        'azucar': '🍬', 'sal': '🧂', 'aceite': '🌻', 'galleta': '🍪',
+        'cafe': '☕', 'te': '🍵', 'yerba': '🌿', 'yogur': '🥣'
+    };
+
+    const getCategoryIcon = (name, category) => {
+        const searchText = (name + ' ' + (category || '')).toLowerCase();
+        for (const [key, icon] of Object.entries(categoryIcons)) {
+            if (searchText.includes(key)) return icon;
+        }
+        return '🛒'; // Icono por defecto
+    };
 
     // --- FUNCIÓN UTILITARIA ---
     const formatCurrency = (number) => {
@@ -50,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- RENDERIZADO DE LA LISTA ---
     const renderItems = () => {
         const searchQuery = searchInput.value.toLowerCase();
+        const hideCompleted = hideCompletedSwitch.checked;
         let filteredDocs = allItems;
 
         if (searchQuery) {
@@ -68,6 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
             });
         }
+        
+        // Aplicar filtro de ocultar completados
+        if (hideCompleted) {
+            filteredDocs = filteredDocs.filter(doc => !doc.data().completed);
+        }
 
         updateChart(filteredDocs);
         updateLocationSuggestions(allItems);
@@ -80,6 +107,12 @@ document.addEventListener('DOMContentLoaded', () => {
             updateChart([]);
             return;
         }
+        // Mensaje si filtramos todo
+        if (filteredDocs.length === 0 && hideCompleted) {
+             shoppingListContainer.innerHTML = '<div class="empty-list-message">Todo comprado. ¡Buen trabajo! 🎉</div>';
+             return;
+        }
+
         let grandTotal = 0;
         const groupedItems = {};
 
@@ -190,12 +223,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const quantity = parseFloat(item.quantity) || 1;
         const unitPrice = parseFloat(item.unitPrice) || 0;
         const total = quantity * unitPrice;
+        const icon = getCategoryIcon(item.name, item.category);
 
         li.innerHTML = `
             <div class="item-main">
                 <span class="drag-handle">&#x2261;</span>
                 <input type="checkbox" ${item.completed ? 'checked' : ''}>
-                <span class="item-text">${item.name}</span>
+                <span class="item-text">${icon} ${item.name}</span>
             </div>
             <span class="item-quantity">${item.quantity || ''}</span>
             <span class="item-price">${formatCurrency(unitPrice)}</span>
@@ -222,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             unitPriceInput.value = item.unitPrice || '';
             locationInput.value = item.location || '';
             observationsInput.value = item.observations || '';
+            if(categoryInput) categoryInput.value = item.category || '';
             addItemButton.textContent = 'Actualizar';
             itemInput.focus();
         });
@@ -256,6 +291,64 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- MANEJADORES DE EVENTOS ---
+    
+    // Switch de ocultar completados
+    hideCompletedSwitch.addEventListener('change', renderItems);
+
+    // Botón de Copiar a WhatsApp
+    copyListButton.addEventListener('click', () => {
+        const activeItems = allItems.map(doc => doc.data()).filter(item => !item.completed);
+        
+        if (activeItems.length === 0) {
+             Swal.fire({
+                title: 'Lista vacía',
+                text: 'No hay productos pendientes para copiar.',
+                icon: 'info',
+                background: 'var(--surface-color)',
+                color: 'var(--text-color)'
+            });
+            return;
+        }
+
+        let clipboardText = "🛒 *Lista de Compras* 🛒\n\n";
+        
+        // Agrupar por ubicación para el texto
+        const grouped = {};
+        activeItems.forEach(item => {
+            const loc = item.location?.trim() || 'Varios';
+            if (!grouped[loc]) grouped[loc] = [];
+            grouped[loc].push(item);
+        });
+
+        for (const [location, items] of Object.entries(grouped)) {
+            clipboardText += `*📍 ${location}*\n`;
+            items.forEach(item => {
+                const qty = item.quantity > 1 ? `(${item.quantity}) ` : '';
+                clipboardText += `- ${qty}${item.name}`;
+                if (item.observations) clipboardText += ` _[${item.observations}]_`;
+                clipboardText += "\n";
+            });
+            clipboardText += "\n";
+        }
+
+        clipboardText += `Generado el ${new Date().toLocaleDateString()}`;
+
+        navigator.clipboard.writeText(clipboardText).then(() => {
+            Swal.fire({
+                title: '¡Copiado!',
+                text: 'La lista se ha copiado al portapapeles lista para WhatsApp.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false,
+                background: 'var(--surface-color)',
+                color: 'var(--text-color)'
+            });
+        }).catch(err => {
+            console.error('Error al copiar: ', err);
+            Swal.fire('Error', 'No se pudo copiar al portapapeles', 'error');
+        });
+    });
+
     addItemButton.addEventListener('click', async () => {
         const itemName = itemInput.value.trim();
         if (!itemName) return;
@@ -266,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             unitPrice: parseFloat(unitPriceInput.value) || 0,
             location: locationInput.value.trim(),
             observations: observationsInput.value.trim(),
+            category: categoryInput ? categoryInput.value.trim() : ''
         };
 
         if (editingItemId) {
@@ -279,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await addItemToFirestore(itemData);
         }
 
-        [itemInput, unitPriceInput, locationInput, observationsInput].forEach(i => i.value = '');
+        [itemInput, unitPriceInput, locationInput, observationsInput, categoryInput].forEach(i => { if(i) i.value = ''; });
         quantityInput.value = '1';
     });
 
