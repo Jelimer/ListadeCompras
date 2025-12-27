@@ -23,6 +23,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const budgetInput = document.getElementById('budgetInput');
     const budgetProgressBar = document.getElementById('budgetProgressBar');
     const budgetStats = document.getElementById('budgetStats');
+    const quickAddContainer = document.getElementById('quick-add-container');
+
+    // --- PRODUCTOS FRECUENTES (QUICK ADD) ---
+    const frequentItems = [
+        { name: 'Leche', icon: '🥛' },
+        { name: 'Pan', icon: '🍞' },
+        { name: 'Huevos', icon: '🥚' },
+        { name: 'Agua', icon: '💧' },
+        { name: 'Yerba', icon: '🌿' },
+        { name: 'Papel Hig.', icon: '🧻' },
+        { name: 'Aceite', icon: '🌻' },
+        { name: 'Pollo', icon: '🍗' }
+    ];
+
+    const renderQuickAdd = () => {
+        if (!quickAddContainer) return;
+        quickAddContainer.innerHTML = '';
+        frequentItems.forEach(item => {
+            const chip = document.createElement('button');
+            chip.className = 'quick-add-chip';
+            chip.innerHTML = `${item.icon} ${item.name}`;
+            chip.addEventListener('click', async () => {
+                const itemData = {
+                    name: item.name,
+                    quantity: '1',
+                    unitPrice: 0,
+                    location: '',
+                    observations: '',
+                    category: '',
+                    completed: false,
+                    order: await getNextOrder(''),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await addItemToFirestore(itemData);
+            });
+            quickAddContainer.appendChild(chip);
+        });
+    };
+
+    renderQuickAdd();
 
     // --- LÓGICA DE PRESUPUESTO ---
     const loadBudget = () => {
