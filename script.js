@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     updateTheme(localStorage.getItem('theme') || 'light');
 
-    // --- GRÁFICO COMBINADO (Cantidades Unitarias) ---
+    // --- GRÁFICO COMBINADO (Cantidades con Espaciado) ---
     const updateChart = (stackedData, categories) => {
         const canvas = document.getElementById('categoryChart');
         if (!canvas) return;
@@ -57,7 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
             label: cat,
             data: locations.map(loc => stackedData[loc][cat] || 0),
             backgroundColor: catColors[cat],
-            borderRadius: 4
+            borderRadius: 6,
+            barPercentage: 0.6, // Separación entre barras de diferentes lugares
+            categoryPercentage: 0.8 // Ancho de la categoría dentro de la escala
         }));
 
         if (myChart) myChart.destroy();
@@ -72,16 +74,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: true, position: 'bottom', labels: { color: isDark ? '#f8fafc' : '#0f172a', boxWidth: 10, font: { size: 10 } } },
+                    legend: { display: true, position: 'bottom', labels: { color: isDark ? '#f8fafc' : '#0f172a', boxWidth: 10, font: { size: 10, weight: 'bold' } } },
                     tooltip: { enabled: true, mode: 'index', intersect: false }
                 },
                 scales: {
                     x: { 
                         stacked: true, 
-                        grid: { display: false }, 
+                        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, 
                         ticks: { 
                             color: isDark ? '#94a3b8' : '#64748b',
-                            stepSize: 1, // Solo números enteros
+                            stepSize: 1,
                             precision: 0
                         } 
                     },
@@ -128,7 +130,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!data.completed) {
                 totalGeneral += subtotal;
                 if (!stackedData[loc]) stackedData[loc] = {};
-                // ACUMULAR CANTIDADES (UNIDADES) PARA EL GRÁFICO
                 stackedData[loc][cat] = (stackedData[loc][cat] || 0) + quantity;
                 distinctCategories.add(cat);
             }
@@ -166,7 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="shopping-list"></div>
             `;
 
-            groupDiv.querySelector('.group-header').addEventListener('click', () => {
+            // EVENTO DE COLAPSO REFORZADO
+            groupDiv.querySelector('.group-header').addEventListener('click', (e) => {
                 groupDiv.classList.toggle('collapsed');
                 if (groupDiv.classList.contains('collapsed')) {
                     collapsedGroups.add(loc);
@@ -205,7 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        div.querySelector('.item-checkbox').addEventListener('change', () => {
+        div.querySelector('.item-checkbox').addEventListener('change', (e) => {
+            e.stopPropagation();
             itemsCollection.doc(item.id).update({ completed: !item.completed });
         });
 

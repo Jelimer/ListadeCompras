@@ -27,7 +27,7 @@ body {
     font-family: 'Plus Jakarta Sans', sans-serif;
     background-color: var(--bg-body);
     color: var(--text-main);
-    padding: 15px;
+    padding: 20px;
     display: flex;
     justify-content: center;
     transition: all 0.3s ease;
@@ -44,10 +44,9 @@ body {
 
 @keyframes move { from { transform: translate(0,0); } to { transform: translate(60px, 60px); } }
 
-/* --- Container Ultra-Extra Wide --- */
 .container {
     width: 99%;
-    max-width: 1800px; /* Ancho máximo aumentado a 1800px */
+    max-width: 1800px;
     background: var(--card-bg);
     border-radius: 24px;
     padding: 35px;
@@ -100,7 +99,7 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 420px; /* Sidebar un poco más ancho */
+    grid-template-columns: 1fr 420px;
     gap: 35px;
     align-items: start;
 }
@@ -125,7 +124,7 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--primary); }
 
 .chart-box {
-    height: 380px;
+    height: 400px;
     display: flex;
     flex-direction: column;
 }
@@ -149,19 +148,36 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 
 .group-header {
     background: var(--bg-body);
-    padding: 12px 20px;
+    padding: 15px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
+    transition: background 0.2s;
 }
 
-.group-title { display: flex; align-items: center; gap: 12px; cursor: grab; }
+.group-header:hover {
+    background: var(--border);
+}
+
+.group-title { display: flex; align-items: center; gap: 12px; }
 .group-title h2 { font-size: 1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+}
+
+.location-group.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.location-group.collapsed .shopping-list {
+    display: none;
+}
 
 .shopping-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); /* Tarjetas amplias */
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 15px;
     padding: 20px;
 }
@@ -213,6 +229,8 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
     font-weight: 800;
     margin: 30px 0;
 }
+
+.icon-button { background: var(--card-bg); border: 1px solid var(--border); width: 48px; height: 48px; border-radius: 14px; color: var(--text-main); cursor: pointer; }
 
 @media (max-width: 1200px) {
     .dashboard-grid { grid-template-columns: 1fr; }
