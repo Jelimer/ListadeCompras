@@ -75,7 +75,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
 
         const option = {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            tooltip: { 
+                trigger: 'item',
+                backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                borderColor: varPrimary,
+                borderWidth: 1,
+                textStyle: { color: isDark ? '#f1f5f9' : '#1e293b', fontFamily: 'Plus Jakarta Sans' },
+                formatter: (params) => {
+                    const loc = params.name; // Lugar (Eje Y)
+                    const cat = params.seriesName; // Categoría (Color)
+                    
+                    // Filtrar productos pendientes para este lugar y categoría
+                    const products = allItems
+                        .map(d => ({ id: d.id, ...d.data() }))
+                        .filter(item => item.location === loc && item.category === cat && !item.completed)
+                        .map(item => `• ${item.name}`)
+                        .join('<br/>');
+
+                    const header = `<div style="font-weight:800; margin-bottom:5px; color:${params.color}">${loc} - ${cat}</div>`;
+                    const subheader = `<div style="font-size:0.8rem; margin-bottom:8px; opacity:0.7">${params.value} unidades pendientes</div>`;
+                    const list = products ? `<div style="font-size:0.85rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:5px;">${products}</div>` : '<i>Sin pendientes</i>';
+                    
+                    return `<div style="padding:5px;">${header}${subheader}${list}</div>`;
+                }
+            },
             legend: { 
                 bottom: '0%', 
                 textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold', fontSize: 10 },
