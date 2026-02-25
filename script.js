@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const db = firebase.firestore();
     const itemsCollection = db.collection('shoppingItems');
 
-    // Referencias
     const elements = {
         itemInput: document.getElementById('itemInput'),
         quantityInput: document.getElementById('quantityInput'),
@@ -29,53 +28,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allItems = [];
     let editingItemId = null;
+    let collapsedGroups = new Set();
 
-    // --- TEMA ---
     const updateTheme = (theme) => {
         document.documentElement.setAttribute('data-theme', theme);
         elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
         lucide.createIcons();
     };
     
-    let currentTheme = localStorage.getItem('theme') || 'light';
-    updateTheme(currentTheme);
+    updateTheme(localStorage.getItem('theme') || 'light');
 
     elements.themeToggle.addEventListener('click', () => {
-        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('theme', currentTheme);
-        updateTheme(currentTheme);
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        updateTheme(newTheme);
     });
 
-    // --- QUICK ADD ---
-    const frequentItems = [
-        { name: 'Leche', icon: '🥛' }, { name: 'Pan', icon: '🍞' },
-        { name: 'Huevos', icon: '🥚' }, { name: 'Aceite', icon: '🌻' },
-        { name: 'Pollo', icon: '🍗' }, { name: 'Yerba', icon: '🌿' }
-    ];
-
-    frequentItems.forEach(item => {
-        const chip = document.createElement('button');
-        chip.className = 'quick-add-chip';
-        chip.innerHTML = `${item.icon} ${item.name}`;
-        chip.addEventListener('click', () => {
-            elements.searchInput.value = item.name;
-            renderItems();
-        });
-        elements.quickAddContainer.appendChild(chip);
-    });
-
-    // --- LÓGICA RENDERIZADO ---
     const renderItems = () => {
         const query = elements.searchInput.value.toLowerCase();
         const hideCompleted = elements.hideCompletedSwitch.checked;
         
         let filtered = allItems.filter(doc => {
             const data = doc.data();
-            const match = data.name?.toLowerCase().includes(query) || 
-                          data.location?.toLowerCase().includes(query) ||
-                          data.category?.toLowerCase().includes(query);
-            return match && (!hideCompleted || !data.completed);
+            return (data.name?.toLowerCase().includes(query) || 
+                    data.location?.toLowerCase().includes(query) ||
+                    data.category?.toLowerCase().includes(query)) && 
+                   (!hideCompleted || !data.completed);
         });
+
+        // Poblar sugerencias de lugares con todos los lugares conocidos
+        const allLocations = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
+        elements.locationSuggestions.innerHTML = allLocations.map(l => `<option value="${l}">`).join('');
 
         elements.shoppingListContainer.innerHTML = '';
         if (filtered.length === 0) {
@@ -88,30 +71,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
         filtered.forEach(doc => {
             const data = { id: doc.id, ...doc.data() };
-            const loc = data.location || 'Otros';
+            const loc = data.location || 'General';
             if (!grouped[loc]) grouped[loc] = [];
             grouped[loc].push(data);
-            
-            const subtotal = (parseFloat(data.unitPrice) || 0) * (parseFloat(data.quantity) || 1);
-            if (!data.completed) totalGeneral += subtotal;
+            if (!data.completed) totalGeneral += (data.unitPrice || 0) * (data.quantity || 1);
         });
 
-        // Actualizar Estadísticas
         elements.grandTotalValue.textContent = `$${totalGeneral.toFixed(2)}`;
         elements.grandTotalContainer.textContent = `Total Pendiente: $${totalGeneral.toFixed(2)}`;
         updateBudgetProgress(totalGeneral);
 
         Object.keys(grouped).sort().forEach(loc => {
+            // ORDENAMIENTO DENTRO DEL GRUPO: Pendientes primero, luego Alfabético
+            const sortedItems = grouped[loc].sort((a, b) => {
+                if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                return a.name.localeCompare(b.name);
+            });
+
             const groupDiv = document.createElement('div');
-            groupDiv.className = 'location-group';
+            groupDiv.className = `location-group ${collapsedGroups.has(loc) ? 'collapsed' : ''}`;
             groupDiv.innerHTML = `
-                <div class="group-header"><h2>${loc}</h2></div>
+                <div class="group-header">
+                    <div class="group-title-wrapper">
+                        <i data-lucide="chevron-down" class="collapse-icon"></i>
+                        <h2>${loc}</h2>
+                    </div>
+                    <span class="badge" style="font-weight: 700; color: var(--text-muted);">${sortedItems.length} items</span>
+                </div>
                 <div class="shopping-list"></div>
             `;
-            const list = groupDiv.querySelector('.shopping-list');
-            grouped[loc].forEach(item => {
-                list.appendChild(createItemCard(item));
+
+            groupDiv.querySelector('.group-header').addEventListener('click', () => {
+                groupDiv.classList.toggle('collapsed');
+                if (groupDiv.classList.contains('collapsed')) collapsedGroups.add(loc);
+                else collapsedGroups.delete(loc);
             });
+
+            const list = groupDiv.querySelector('.shopping-list');
+            sortedItems.forEach(item => list.appendChild(createItemCard(item)));
             elements.shoppingListContainer.appendChild(groupDiv);
         });
 
@@ -122,12 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.createElement('div');
         card.className = `shopping-item ${item.completed ? 'completed' : ''}`;
         const total = (item.unitPrice || 0) * (item.quantity || 1);
+        
+        // Imagen con IA/Buscador (Unsplash)
+        const imgUrl = `https://source.unsplash.com/100x100/?${encodeURIComponent(item.name)},grocery`;
 
         card.innerHTML = `
+            <img src="${imgUrl}" class="product-img" onerror="this.src='https://via.placeholder.com/50?text=🛒'">
             <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''}>
             <div class="item-content">
                 <span class="item-name">${item.name}</span>
-                <span class="item-meta">${item.quantity} un. • ${item.category || 'Sin categoría'}</span>
+                <span class="item-meta">${item.quantity} un. • ${item.category || 'General'}</span>
             </div>
             <div class="item-price-tag">$${total.toFixed(2)}</div>
             <div class="item-actions">
@@ -140,7 +141,8 @@ document.addEventListener('DOMContentLoaded', () => {
             itemsCollection.doc(item.id).update({ completed: e.target.checked });
         });
 
-        card.querySelector('.edit').addEventListener('click', () => {
+        card.querySelector('.edit').addEventListener('click', (e) => {
+            e.stopPropagation();
             editingItemId = item.id;
             elements.itemInput.value = item.name;
             elements.quantityInput.value = item.quantity;
@@ -152,7 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
-        card.querySelector('.delete').addEventListener('click', () => {
+        card.querySelector('.delete').addEventListener('click', (e) => {
+            e.stopPropagation();
             if(confirm(`¿Eliminar ${item.name}?`)) itemsCollection.doc(item.id).delete();
         });
 
@@ -165,21 +168,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const pct = Math.min((total / budget) * 100, 100);
             elements.budgetProgressBar.style.width = `${pct}%`;
             elements.budgetStats.textContent = `Restante: $${(budget - total).toFixed(2)}`;
-            elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'linear-gradient(to right, var(--primary), var(--secondary))';
-        } else {
-            elements.budgetProgressBar.style.width = '0%';
-            elements.budgetStats.textContent = 'Sin presupuesto fijado';
+            elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'var(--primary)';
         }
     };
 
-    // --- EVENTOS ---
     elements.addItemButton.addEventListener('click', async () => {
         const data = {
             name: elements.itemInput.value.trim(),
             quantity: elements.quantityInput.value || 1,
             unitPrice: parseFloat(elements.unitPriceInput.value) || 0,
             location: elements.locationInput.value.trim() || 'General',
-            category: elements.categoryInput.value.trim(),
+            category: elements.categoryInput.value.trim() || 'General',
             observations: elements.observationsInput.value.trim(),
             completed: false,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -208,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.resetListButton.addEventListener('click', async () => {
         const snapshot = await itemsCollection.where('completed', '==', true).get();
         if (snapshot.empty) return;
-        
         if (confirm('¿Limpiar los productos comprados?')) {
             const batch = db.batch();
             snapshot.docs.forEach(doc => batch.delete(doc.ref));
@@ -218,20 +216,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.copyListButton.addEventListener('click', () => {
-        let text = "🛒 *MI LISTA DE COMPRAS*\n\n";
+        let text = "🛒 *LISTA DE COMPRAS*\n\n";
         const pending = allItems.filter(d => !d.data().completed);
         pending.forEach(d => {
             const data = d.data();
-            text += `• *${data.name}* (${data.quantity}) - _${data.location}_\n`;
+            text += `• *${data.name}* (${data.quantity})\n`;
         });
         navigator.clipboard.writeText(text);
-        alert('Copiado para WhatsApp!');
+        alert('¡Copiado!');
     });
 
     elements.searchInput.addEventListener('input', renderItems);
     elements.hideCompletedSwitch.addEventListener('change', renderItems);
 
-    // Real-time
     itemsCollection.orderBy('timestamp', 'desc').onSnapshot(snapshot => {
         allItems = snapshot.docs;
         renderItems();

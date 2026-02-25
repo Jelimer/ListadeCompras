@@ -249,6 +249,26 @@ input:focus {
     padding: 10px 5px;
     border-bottom: 2px solid var(--border);
     margin-bottom: 20px;
+    cursor: pointer;
+}
+
+.group-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+    color: var(--primary);
+}
+
+.location-group.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.location-group.collapsed .shopping-list {
+    display: none;
 }
 
 .group-header h2 { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px; }
@@ -262,13 +282,23 @@ input:focus {
 .shopping-item {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    padding: 20px;
+    padding: 12px 18px;
     border-radius: 20px;
     display: flex;
     align-items: center;
     gap: 15px;
     transition: all 0.2s;
     position: relative;
+}
+
+.product-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: var(--bg-body);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
 }
 
 .shopping-item:hover {
