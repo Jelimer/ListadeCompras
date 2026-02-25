@@ -27,85 +27,85 @@ document.addEventListener('DOMContentLoaded', () => {
     let editingItemId = null;
     let locationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
     let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups')) || []);
-    let myChart = null;
+    let chartInstance = null;
 
     const updateTheme = (theme) => {
         document.documentElement.setAttribute('data-theme', theme);
         elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
         lucide.createIcons();
-        if(myChart) renderItems(); 
+        if(chartInstance) renderItems(); 
     };
     updateTheme(localStorage.getItem('theme') || 'light');
 
-    // --- GRÁFICO COMBINADO (Cantidades con Espaciado) ---
+    // --- GRÁFICO CON ECHARTS (Separación perfecta) ---
     const updateChart = (stackedData, categories) => {
-        const canvas = document.getElementById('categoryChart');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+        const chartDom = document.getElementById('categoryChart');
+        if (!chartDom) return;
         
-        const locations = Object.keys(stackedData);
+        if (!chartInstance) {
+            chartInstance = echarts.init(chartDom);
+        }
+
+        const locations = Object.keys(stackedData).sort();
         if (locations.length === 0) {
-            if (myChart) myChart.destroy();
+            chartInstance.clear();
             return;
         }
 
-        const colorPalette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4', '#f43f5e'];
-        const catColors = {};
-        categories.forEach((cat, i) => catColors[cat] = colorPalette[i % colorPalette.length]);
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const colorPalette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
 
-        const datasets = categories.map(cat => ({
-            label: cat,
+        const series = categories.map((cat, i) => ({
+            name: cat,
+            type: 'bar',
+            stack: 'total',
+            emphasis: { focus: 'series' },
             data: locations.map(loc => stackedData[loc][cat] || 0),
-            backgroundColor: catColors[cat],
-            borderRadius: 6,
-            barPercentage: 0.4, // Menos porcentaje de ocupación = más espacio entre lugares
-            categoryPercentage: 0.6 // Menos porcentaje de categoría = más aire visual
+            itemStyle: { borderRadius: 4 },
+            barWidth: '50%', // Controla el grosor de la barra para dejar espacio vertical
+            color: colorPalette[i % colorPalette.length]
         }));
 
-        if (myChart) myChart.destroy();
+        const option = {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { 
+                bottom: '0%', 
+                textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold' },
+                itemWidth: 10,
+                itemHeight: 10
+            },
+            grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
+            xAxis: { 
+                type: 'value', 
+                splitLine: { lineStyle: { type: 'dashed', opacity: 0.1 } },
+                axisLabel: { color: isDark ? '#94a3b8' : '#64748b' }
+            },
+            yAxis: { 
+                type: 'category', 
+                data: locations,
+                axisLabel: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold' },
+                axisLine: { show: false },
+                axisTick: { show: false }
+            },
+            series: series
+        };
 
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-
-        myChart = new Chart(ctx, {
-            type: 'bar',
-            data: { labels: locations, datasets: datasets },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: true, position: 'bottom', labels: { color: isDark ? '#f8fafc' : '#0f172a', boxWidth: 10, font: { size: 10, weight: 'bold' } } },
-                    tooltip: { enabled: true, mode: 'index', intersect: false }
-                },
-                scales: {
-                    x: { 
-                        stacked: true, 
-                        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, 
-                        ticks: { 
-                            color: isDark ? '#94a3b8' : '#64748b',
-                            stepSize: 1,
-                            precision: 0
-                        } 
-                    },
-                    y: { stacked: true, grid: { display: false }, ticks: { color: isDark ? '#f8fafc' : '#0f172a', font: { weight: 'bold' } } }
-                }
-            }
-        });
+        chartInstance.setOption(option);
     };
 
     const renderItems = () => {
         const query = elements.searchInput.value.toLowerCase();
         const hideCompleted = elements.hideCompletedSwitch.checked;
         
-        const locationsList = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
-        const categoriesList = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
-        elements.locationSuggestions.innerHTML = locationsList.map(l => `<option value="${l}">`).join('');
-        elements.categorySuggestions.innerHTML = categoriesList.map(c => `<option value="${c}">`).join('');
+        const locs = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
+        const cats = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
+        elements.locationSuggestions.innerHTML = locs.map(l => `<option value="${l}">`).join('');
+        elements.categorySuggestions.innerHTML = cats.map(c => `<option value="${c}">`).join('');
 
         let filtered = allItems.filter(doc => {
             const data = doc.data();
-            const textMatch = (data.name + (data.location || '') + (data.category || '')).toLowerCase().includes(query);
-            return textMatch && (!hideCompleted || !data.completed);
+            return (data.name + (data.location || '') + (data.category || '')).toLowerCase().includes(query) && 
+                   (!hideCompleted || !data.completed);
         });
 
         const scrollPos = window.scrollY;
@@ -120,17 +120,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = { id: doc.id, ...doc.data() };
             const loc = data.location || 'General';
             const cat = data.category || 'Varios';
+            const qty = parseFloat(data.quantity) || 1;
             
             if (!grouped[loc]) grouped[loc] = [];
             grouped[loc].push(data);
             
-            const quantity = parseFloat(data.quantity) || 1;
-            const subtotal = (parseFloat(data.unitPrice) || 0) * quantity;
-            
             if (!data.completed) {
-                totalGeneral += subtotal;
+                totalGeneral += (parseFloat(data.unitPrice) || 0) * qty;
                 if (!stackedData[loc]) stackedData[loc] = {};
-                stackedData[loc][cat] = (stackedData[loc][cat] || 0) + quantity;
+                stackedData[loc][cat] = (stackedData[loc][cat] || 0) + qty;
                 distinctCategories.add(cat);
             }
         });
@@ -152,8 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const groupDiv = document.createElement('div');
-            const isCollapsed = collapsedGroups.has(loc);
-            groupDiv.className = `location-group ${isCollapsed ? 'collapsed' : ''}`;
+            groupDiv.className = `location-group ${collapsedGroups.has(loc) ? 'collapsed' : ''}`;
             groupDiv.dataset.location = loc;
             groupDiv.innerHTML = `
                 <div class="group-header">
@@ -167,14 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="shopping-list"></div>
             `;
 
-            // EVENTO DE COLAPSO REFORZADO
-            groupDiv.querySelector('.group-header').addEventListener('click', (e) => {
+            groupDiv.querySelector('.group-header').addEventListener('click', () => {
                 groupDiv.classList.toggle('collapsed');
-                if (groupDiv.classList.contains('collapsed')) {
-                    collapsedGroups.add(loc);
-                } else {
-                    collapsedGroups.delete(loc);
-                }
+                if (groupDiv.classList.contains('collapsed')) collapsedGroups.add(loc);
+                else collapsedGroups.delete(loc);
                 localStorage.setItem('collapsedGroups', JSON.stringify(Array.from(collapsedGroups)));
             });
 
@@ -207,8 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        div.querySelector('.item-checkbox').addEventListener('change', (e) => {
-            e.stopPropagation();
+        div.querySelector('.item-checkbox').addEventListener('change', () => {
             itemsCollection.doc(item.id).update({ completed: !item.completed });
         });
 
@@ -239,9 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.budgetProgressBar.style.width = `${pct}%`;
             elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'var(--primary)';
             elements.budgetStats.textContent = `Restante: $${(budget - total).toFixed(2)}`;
-        } else {
-            elements.budgetProgressBar.style.width = '0%';
-            elements.budgetStats.textContent = 'Sin límite';
         }
     };
 
@@ -289,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     new Sortable(elements.shoppingListContainer, {
         animation: 150,
-        handle: '.group-title',
+        handle: '.group-header',
         onEnd: () => {
             const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
                 .map(g => g.dataset.location);
@@ -309,5 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
     itemsCollection.orderBy('timestamp', 'desc').onSnapshot(snap => {
         allItems = snap.docs;
         renderItems();
+    });
+
+    window.addEventListener('resize', () => {
+        if(chartInstance) chartInstance.resize();
     });
 });
