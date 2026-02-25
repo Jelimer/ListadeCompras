@@ -3,129 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Shopping | Pro</title>
+    <title>Smart Shopping | PRO</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Chart.js para el gráfico de categorías -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="background-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-    </div>
-
     <div class="container">
         <header>
             <div class="brand">
                 <h1>Smart Shopping</h1>
-                <p style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">Tu asistente de compras profesional</p>
+                <p style="font-weight: 600; color: var(--text-muted);">Gestión avanzada de suministros</p>
             </div>
-            <div class="header-actions">
+            <div class="header-actions" style="display: flex; gap: 15px;">
                 <button id="themeToggle" class="icon-button" title="Cambiar Tema">
                     <i data-lucide="moon"></i>
                 </button>
             </div>
         </header>
 
-        <!-- Buscador -->
-        <section class="toolbar-section">
-            <div class="input-wrapper" style="flex: 1;">
-                <i data-lucide="search" class="input-icon"></i>
-                <input type="text" id="searchInput" placeholder="Filtrar por nombre, lugar o categoría...">
-            </div>
-        </section>
-
-        <!-- Formulario Pro -->
+        <!-- Formulario Superior -->
         <section class="input-section">
-            <div class="input-grid">
-                <div class="input-wrapper">
-                    <i data-lucide="shopping-bag" class="input-icon"></i>
-                    <input type="text" id="itemInput" placeholder="¿Qué llevamos hoy?">
-                </div>
-                <div class="input-wrapper">
-                    <i data-lucide="hash" class="input-icon"></i>
-                    <input type="number" id="quantityInput" placeholder="Cant." value="1">
-                </div>
-                <div class="input-wrapper">
-                    <i data-lucide="dollar-sign" class="input-icon"></i>
-                    <input type="number" id="unitPriceInput" placeholder="Precio Unit.">
-                </div>
-                <div class="input-wrapper">
-                    <i data-lucide="tag" class="input-icon"></i>
-                    <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions">
-                    <datalist id="category-suggestions"></datalist>
-                </div>
+            <div class="input-wrapper">
+                <i data-lucide="package" class="input-icon"></i>
+                <input type="text" id="itemInput" placeholder="Producto">
             </div>
-            <div class="bottom-row">
-                <div class="input-wrapper">
-                    <i data-lucide="map-pin" class="input-icon"></i>
-                    <input type="text" id="locationInput" placeholder="Establecimiento / Supermercado" list="location-suggestions">
-                    <datalist id="location-suggestions"></datalist>
-                </div>
-                <div class="input-wrapper">
-                    <i data-lucide="edit-2" class="input-icon"></i>
-                    <input type="text" id="observationsInput" placeholder="Notas adicionales">
-                </div>
-                <button id="addItemButton" class="btn btn-primary">
-                    <i data-lucide="plus-circle"></i>
-                    <span>Añadir a la lista</span>
-                </button>
+            <div class="input-wrapper" style="max-width: 120px;">
+                <i data-lucide="hash" class="input-icon"></i>
+                <input type="number" id="quantityInput" placeholder="Cant." value="1">
             </div>
+            <div class="input-wrapper" style="max-width: 150px;">
+                <i data-lucide="dollar-sign" class="input-icon"></i>
+                <input type="number" id="unitPriceInput" placeholder="Precio Unit.">
+            </div>
+            <div class="input-wrapper">
+                <i data-lucide="map-pin" class="input-icon"></i>
+                <input type="text" id="locationInput" placeholder="Lugar / Super" list="location-suggestions">
+                <datalist id="location-suggestions"></datalist>
+            </div>
+            <div class="input-wrapper">
+                <i data-lucide="tag" class="input-icon"></i>
+                <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions">
+                <datalist id="category-suggestions"></datalist>
+            </div>
+            <button id="addItemButton" class="btn btn-primary">
+                <i data-lucide="plus-circle"></i>
+                <span>Añadir</span>
+            </button>
         </section>
 
-        <!-- Dashboard Central -->
-        <div class="main-dashboard">
-            <!-- Estadísticas -->
-            <section class="stats-container">
+        <!-- Dashboard Grid Principal -->
+        <div class="dashboard-grid">
+            <!-- Columna Izquierda: Lista -->
+            <div class="main-content">
+                <div class="toolbar-section" style="margin-bottom: 25px; display: flex; gap: 20px; align-items: center;">
+                    <div class="input-wrapper" style="flex: 1;">
+                        <i data-lucide="search" class="input-icon"></i>
+                        <input type="text" id="searchInput" placeholder="Buscar en toda la lista...">
+                    </div>
+                    <div class="form-check" style="display: flex; align-items: center; gap: 8px; font-weight: 700; white-space: nowrap;">
+                        <input type="checkbox" id="hideCompletedSwitch">
+                        <label for="hideCompletedSwitch">Ocultar Comprados</label>
+                    </div>
+                </div>
+
+                <div id="shoppingListContainer">
+                    <!-- Los grupos se inyectan aquí -->
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Estadísticas y Gráfico -->
+            <aside class="stats-panel">
+                <div class="stat-card">
+                    <span class="stat-label">Presupuesto</span>
+                    <input type="number" id="budgetInput" class="budget-minimal-input" style="border: none; background: transparent; width: 100%; font-size: 1.8rem; font-weight: 800; color: var(--warning);" placeholder="0.00">
+                </div>
+                
                 <div class="stat-card">
                     <span class="stat-label">Total Pendiente</span>
                     <span id="grandTotalValue" class="stat-value">$0.00</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Presupuesto</span>
-                    <input type="number" id="budgetInput" class="budget-minimal-input" placeholder="0.00">
-                </div>
-                <div class="stat-card progress-card">
-                    <span class="stat-label">Progreso Gastos</span>
                     <div class="progress-container">
                         <div id="budgetProgressBar" class="progress-bar"></div>
                     </div>
-                    <span id="budgetStats" class="stat-meta"></span>
+                    <span id="budgetStats" style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted);"></span>
                 </div>
-            </section>
 
-            <!-- Gráfico de Categorías -->
-            <section class="chart-container glass">
-                <canvas id="categoryChart"></canvas>
-            </section>
+                <div class="stat-card chart-box">
+                    <span class="stat-label">Gasto por Categoría</span>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button id="resetListButton" class="btn btn-secondary" style="width: 100%;">
+                        <i data-lucide="trash-2"></i>
+                        Limpiar Comprados
+                    </button>
+                </div>
+            </aside>
         </div>
-
-        <div class="toolbar-section">
-            <div class="form-check">
-                <input type="checkbox" id="hideCompletedSwitch">
-                <label for="hideCompletedSwitch">Ocultar productos ya comprados</label>
-            </div>
-        </div>
-
-        <!-- Lista de Compras -->
-        <main id="shoppingListContainer">
-            <!-- Grupos inyectados -->
-        </main>
-
-        <div id="grandTotalContainer" class="grand-total">
-            Total Estimado: $0.00
-        </div>
-
-        <footer>
-            <button id="resetListButton" class="btn btn-secondary">
-                <i data-lucide="trash-2"></i>
-                Limpiar Carrito
-            </button>
-        </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
