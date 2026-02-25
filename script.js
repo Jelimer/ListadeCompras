@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tooltip: { 
                 trigger: 'item',
                 backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                borderColor: varPrimary,
+                borderColor: isDark ? '#334155' : '#e2e8f0',
                 borderWidth: 1,
                 textStyle: { color: isDark ? '#f1f5f9' : '#1e293b', fontFamily: 'Plus Jakarta Sans' },
                 formatter: (params) => {
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Filtrar productos pendientes para este lugar y categoría
                     const products = allItems
                         .map(d => ({ id: d.id, ...d.data() }))
-                        .filter(item => item.location === loc && item.category === cat && !item.completed)
+                        .filter(item => (item.location || 'General') === loc && (item.category || 'Varios') === cat && !item.completed)
                         .map(item => `• ${item.name}`)
                         .join('<br/>');
 
