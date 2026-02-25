@@ -1,735 +1,239 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const itemsCollection = db.collection('shoppingItems');
 
-    // Referencias del DOM
-    const itemInput = document.getElementById('itemInput');
-    const quantityInput = document.getElementById('quantityInput');
-    const unitPriceInput = document.getElementById('unitPriceInput');
-    const locationInput = document.getElementById('locationInput');
-    const observationsInput = document.getElementById('observationsInput');
-    const addItemButton = document.getElementById('addItemButton');
-    const resetListButton = document.getElementById('resetListButton');
-    const shoppingListContainer = document.getElementById('shoppingListContainer');
-    const locationSuggestions = document.getElementById('location-suggestions');
-    const categorySuggestions = document.getElementById('category-suggestions');
-    const searchInput = document.getElementById('searchInput');
-    const categoryInput = document.getElementById('categoryInput');
-    const hideCompletedSwitch = document.getElementById('hideCompletedSwitch');
-    const copyListButton = document.getElementById('copyListButton');
-    const themeToggle = document.getElementById('themeToggle');
-    const budgetInput = document.getElementById('budgetInput');
-    const budgetProgressBar = document.getElementById('budgetProgressBar');
-    const budgetStats = document.getElementById('budgetStats');
-    const quickAddContainer = document.getElementById('quick-add-container');
-    const summaryDashboard = document.getElementById('summary-dashboard');
+    // Referencias
+    const elements = {
+        itemInput: document.getElementById('itemInput'),
+        quantityInput: document.getElementById('quantityInput'),
+        unitPriceInput: document.getElementById('unitPriceInput'),
+        locationInput: document.getElementById('locationInput'),
+        observationsInput: document.getElementById('observationsInput'),
+        categoryInput: document.getElementById('categoryInput'),
+        addItemButton: document.getElementById('addItemButton'),
+        resetListButton: document.getElementById('resetListButton'),
+        shoppingListContainer: document.getElementById('shoppingListContainer'),
+        locationSuggestions: document.getElementById('location-suggestions'),
+        searchInput: document.getElementById('searchInput'),
+        hideCompletedSwitch: document.getElementById('hideCompletedSwitch'),
+        copyListButton: document.getElementById('copyListButton'),
+        themeToggle: document.getElementById('themeToggle'),
+        budgetInput: document.getElementById('budgetInput'),
+        budgetProgressBar: document.getElementById('budgetProgressBar'),
+        budgetStats: document.getElementById('budgetStats'),
+        quickAddContainer: document.getElementById('quick-add-container'),
+        grandTotalValue: document.getElementById('grandTotalValue'),
+        grandTotalContainer: document.getElementById('grandTotalContainer')
+    };
 
-    // --- PRODUCTOS FRECUENTES (QUICK SEARCH) ---
+    let allItems = [];
+    let editingItemId = null;
+
+    // --- TEMA ---
+    const updateTheme = (theme) => {
+        document.documentElement.setAttribute('data-theme', theme);
+        elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+        lucide.createIcons();
+    };
+    
+    let currentTheme = localStorage.getItem('theme') || 'light';
+    updateTheme(currentTheme);
+
+    elements.themeToggle.addEventListener('click', () => {
+        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', currentTheme);
+        updateTheme(currentTheme);
+    });
+
+    // --- QUICK ADD ---
     const frequentItems = [
-        { name: 'Leche', icon: '🥛' },
-        { name: 'Pan', icon: '🍞' },
-        { name: 'Huevos', icon: '🥚' },
-        { name: 'Agua', icon: '💧' },
-        { name: 'Yerba', icon: '🌿' },
-        { name: 'Papel Hig.', icon: '🧻' },
-        { name: 'Aceite', icon: '🌻' },
-        { name: 'Pollo', icon: '🍗' }
+        { name: 'Leche', icon: '🥛' }, { name: 'Pan', icon: '🍞' },
+        { name: 'Huevos', icon: '🥚' }, { name: 'Aceite', icon: '🌻' },
+        { name: 'Pollo', icon: '🍗' }, { name: 'Yerba', icon: '🌿' }
     ];
 
-    const renderQuickAdd = () => {
-        if (!quickAddContainer) return;
-        quickAddContainer.innerHTML = '';
-        frequentItems.forEach(item => {
-            const chip = document.createElement('button');
-            chip.className = 'quick-add-chip';
-            chip.innerHTML = `${item.icon} ${item.name}`;
-            chip.addEventListener('click', () => {
-                // Ahora busca el producto en lugar de añadirlo
-                searchInput.value = item.name;
-                renderItems();
-                searchInput.focus();
-            });
-            quickAddContainer.appendChild(chip);
+    frequentItems.forEach(item => {
+        const chip = document.createElement('button');
+        chip.className = 'quick-add-chip';
+        chip.innerHTML = `${item.icon} ${item.name}`;
+        chip.addEventListener('click', () => {
+            elements.searchInput.value = item.name;
+            renderItems();
         });
-    };
-
-    renderQuickAdd();
-
-    // --- LÓGICA DE PRESUPUESTO (GLOBAL Y LOCAL) ---
-    let locationBudgets = JSON.parse(localStorage.getItem('locationBudgets')) || {};
-
-    const saveLocationBudget = (location, amount) => {
-        locationBudgets[location] = amount;
-        localStorage.setItem('locationBudgets', JSON.stringify(locationBudgets));
-        renderItems(); // Re-render para actualizar barras
-    };
-
-    const loadBudget = () => {
-        const savedBudget = localStorage.getItem('budget');
-        if (savedBudget) {
-            budgetInput.value = savedBudget;
-        }
-    };
-
-    const updateBudgetUI = (currentTotal) => {
-        const budget = parseFloat(budgetInput.value) || 0;
-        if (budget <= 0) {
-            budgetProgressBar.style.width = '0%';
-            budgetStats.textContent = 'Global: Sin límite';
-            return;
-        }
-
-        const percentage = Math.min((currentTotal / budget) * 100, 100);
-        const remaining = budget - currentTotal;
-        
-        budgetProgressBar.style.width = `${percentage}%`;
-        
-        // Colores de estado
-        budgetProgressBar.className = 'progress-bar'; // Reset
-        if (percentage >= 100) {
-            budgetProgressBar.classList.add('danger');
-        } else if (percentage >= 80) {
-            budgetProgressBar.classList.add('warning');
-        }
-
-        budgetStats.textContent = `Global Restante: ${formatCurrency(remaining)}`;
-    };
-
-    budgetInput.addEventListener('input', () => {
-        localStorage.setItem('budget', budgetInput.value);
-        renderItems(); 
+        elements.quickAddContainer.appendChild(chip);
     });
 
-    loadBudget();
-
-    // --- LÓGICA DE TEMA (DARK/LIGHT) ---
-    const toggleTheme = () => {
-        document.body.classList.toggle('dark-mode');
-        const isDark = document.body.classList.contains('dark-mode');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        updateThemeIcon(isDark);
-        // Forzar actualización del gráfico para cambiar colores
-        if (myChart) {
-            // Pequeño hack: reiniciar chart para aplicar nuevos estilos base si fuera necesario,
-            // pero con setOption basta para colores.
-            renderItems(); 
-        }
-    };
-
-    const updateThemeIcon = (isDark) => {
-        themeToggle.innerHTML = isDark 
-            ? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>' // Sun
-            : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'; // Moon
-    };
-
-    // Cargar preferencia guardada
-    if (localStorage.getItem('theme') === 'dark') {
-        document.body.classList.add('dark-mode');
-        updateThemeIcon(true);
-    }
-
-    themeToggle.addEventListener('click', toggleTheme);
-
-
-    // Variables de estado
-    let editingItemId = null;
-    let allItems = []; // Caché local para todos los items
-
-    // --- MAPA DE ICONOS ---
-    const categoryIcons = {
-        'fruta': '🍎', 'verdura': '🥬', 'carne': '🥩', 'pollo': '🍗',
-        'pescado': '🐟', 'pan': '🍞', 'leche': '🥛', 'queso': '🧀',
-        'huevo': '🥚', 'bebida': '🥤', 'agua': '💧', 'vino': '🍷',
-        'cerveza': '🍺', 'limpieza': '🧹', 'papel': '🧻', 'jabon': '🧼',
-        'arroz': '🍚', 'fideo': '🍝', 'pasta': '🍝', 'harina': '🥡',
-        'azucar': '🍬', 'sal': '🧂', 'aceite': '🌻', 'galleta': '🍪',
-        'cafe': '☕', 'te': '🍵', 'yerba': '🌿', 'yogur': '🥣'
-    };
-
-    const getCategoryIcon = (name, category) => {
-        const searchText = (name + ' ' + (category || '')).toLowerCase();
-        for (const [key, icon] of Object.entries(categoryIcons)) {
-            if (searchText.includes(key)) return icon;
-        }
-        return '🛒'; // Icono por defecto
-    };
-
-    // --- FUNCIÓN UTILITARIA ---
-    const formatCurrency = (number) => {
-        // Formatea el número como moneda argentina (ARS), que usa '.' para miles y ',' para decimales.
-        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(number);
-    };
-
-    // --- FUNCIONES DE FIRESTORE ---
-    const addItemToFirestore = async (item) => {
-        try { await itemsCollection.add(item); } catch (error) {
-            console.error("Error al añadir item: ", error);
-        }
-    };
-
-    const updateItemInFirestore = async (id, updates) => {
-        try { await itemsCollection.doc(id).update(updates); } catch (error) {
-            console.error("Error al actualizar item: ", error);
-        }
-    };
-
-    const deleteItemFromFirestore = async (id) => {
-        try { await itemsCollection.doc(id).delete(); } catch (error) {
-            console.error("Error al eliminar item: ", error);
-        }
-    };
-
-    // --- FUNCIONES AUXILIARES DE UI ---
-    const updateLocationSuggestions = (items) => {
-        if (!locationSuggestions) return;
-        const locations = new Set(items.map(doc => doc.data().location).filter(l => l));
-        locationSuggestions.innerHTML = '';
-        locations.forEach(location => {
-            const option = document.createElement('option');
-            option.value = location;
-            locationSuggestions.appendChild(option);
-        });
-    };
-
-    // --- LÓGICA DE RESUMEN (ORDENABLE) ---
-    let savedLocationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
-
-    // Inicializar Sortable para el Dashboard
-    if (summaryDashboard) {
-        new Sortable(summaryDashboard, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onEnd: () => {
-                // Guardar el nuevo orden basado en el DOM
-                const newOrder = Array.from(summaryDashboard.children).map(card => card.dataset.location);
-                savedLocationOrder = newOrder;
-                localStorage.setItem('locationOrder', JSON.stringify(newOrder));
-            }
-        });
-    }
-
-    const updateSummary = (items) => {
-        if (!summaryDashboard) return;
-        
-        // No limpiamos inmediatamente si queremos preservar el drag, pero como renderItems
-        // se llama seguido, necesitamos redibujar los números.
-        summaryDashboard.innerHTML = '';
-
-        if (items.length === 0) return;
-
-        const summary = {};
-        
-        items.forEach(doc => {
-            const data = doc.data();
-            const loc = data.location?.trim() || 'Varios';
-            
-            if (!summary[loc]) summary[loc] = { pending: 0, done: 0 };
-            
-            if (data.completed) {
-                summary[loc].done++;
-            } else {
-                summary[loc].pending++;
-            }
-        });
-
-        // Ordenar: Primero por orden personalizado, luego alfabéticamente
-        const sortedLocations = Object.keys(summary).sort((a, b) => {
-            const indexA = savedLocationOrder.indexOf(a);
-            const indexB = savedLocationOrder.indexOf(b);
-
-            // Si ambos están en la lista guardada, ordenar por su índice
-            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            
-            // Si solo A está, A va primero
-            if (indexA !== -1) return -1;
-            
-            // Si solo B está, B va primero
-            if (indexB !== -1) return 1;
-
-            // Si ninguno está, alfabético
-            return a.localeCompare(b);
-        });
-
-        sortedLocations.forEach(loc => {
-            const data = summary[loc];
-            const card = document.createElement('div');
-            card.className = 'summary-card';
-            card.dataset.location = loc; // Importante para el ordenamiento
-            
-            // Chequear si este filtro está activo
-            const isActive = searchInput.value === loc;
-            if (isActive) card.classList.add('active');
-
-            card.innerHTML = `
-                <h4>${loc}</h4>
-                <div class="summary-stats-row">
-                    <span class="stat-pending" title="Pendientes">⏳ ${data.pending}</span>
-                    <span class="stat-done" title="Completados">✅ ${data.done}</span>
-                </div>
-            `;
-            
-            // Clic: Alternar filtro
-            card.addEventListener('click', () => {
-                if (searchInput.value === loc) {
-                    searchInput.value = ''; // Deseleccionar
-                } else {
-                    searchInput.value = loc; // Seleccionar
-                }
-                renderItems();
-            });
-            
-            summaryDashboard.appendChild(card);
-        });
-    };
-
-    // --- RENDERIZADO DE LA LISTA ---
+    // --- LÓGICA RENDERIZADO ---
     const renderItems = () => {
-        const searchQuery = searchInput.value.toLowerCase();
-        const hideCompleted = hideCompletedSwitch.checked;
-        let filteredDocs = allItems;
-
-        if (searchQuery) {
-            filteredDocs = allItems.filter(doc => {
-                const item = doc.data();
-                const name = item.name || '';
-                const location = item.location || '';
-                const observations = item.observations || '';
-                const category = item.category || '';
-
-                return (
-                    name.toLowerCase().includes(searchQuery) ||
-                    location.toLowerCase().includes(searchQuery) ||
-                    observations.toLowerCase().includes(searchQuery) ||
-                    category.toLowerCase().includes(searchQuery)
-                );
-            });
-        }
+        const query = elements.searchInput.value.toLowerCase();
+        const hideCompleted = elements.hideCompletedSwitch.checked;
         
-        // Actualizar resumen ANTES de filtrar por completados (para ver stats reales)
-        updateSummary(filteredDocs);
-        
-        // Aplicar filtro de ocultar completados
-        if (hideCompleted) {
-            filteredDocs = filteredDocs.filter(doc => !doc.data().completed);
-        }
-
-        updateLocationSuggestions(allItems);
-        shoppingListContainer.innerHTML = '';
-        const grandTotalContainer = document.getElementById('grandTotalContainer');
-        grandTotalContainer.innerHTML = '';
-
-        if (allItems.length === 0) {
-            shoppingListContainer.innerHTML = '<div class="empty-list-message">Tu lista de compras está vacía. ¡Añade tu primer producto!</div>';
-            updateChart([]);
-            return;
-        }
-        // Mensaje si filtramos todo
-        if (filteredDocs.length === 0 && hideCompleted) {
-             shoppingListContainer.innerHTML = '<div class="empty-list-message">Todo comprado. ¡Buen trabajo! 🎉</div>';
-             return;
-        }
-
-        let grandTotal = 0;
-        const groupedItems = {};
-
-        filteredDocs.forEach(doc => {
-            const item = { id: doc.id, ...doc.data() };
-            const location = item.location?.trim() || 'Varios';
-            if (!groupedItems[location]) groupedItems[location] = [];
-            groupedItems[location].push(item);
+        let filtered = allItems.filter(doc => {
+            const data = doc.data();
+            const match = data.name?.toLowerCase().includes(query) || 
+                          data.location?.toLowerCase().includes(query) ||
+                          data.category?.toLowerCase().includes(query);
+            return match && (!hideCompleted || !data.completed);
         });
 
-        const activeGroups = [];
-        const completedGroups = [];
-
-        for (const location in groupedItems) {
-            const items = groupedItems[location];
-            const allCompleted = items.every(item => item.completed);
-            if (allCompleted) {
-                completedGroups.push({ location, items });
-            } else {
-                activeGroups.push({ location, items });
-            }
-        }
-
-        const sortFn = (a, b) => {
-            if (a.location === 'Varios') return 1;
-            if (b.location === 'Varios') return -1;
-            return a.location.localeCompare(b.location);
-        };
-
-        activeGroups.sort(sortFn);
-        completedGroups.sort(sortFn);
-
-        const sortedGroups = [...activeGroups, ...completedGroups];
-
-        sortedGroups.forEach(({ location, items }) => {
-            if (items.length === 0) return;
-
-            const subtotal = items.reduce((acc, item) => {
-                const quantity = parseFloat(item.quantity) || 0;
-                const price = parseFloat(item.unitPrice) || 0;
-                if (!item.completed) {
-                    return acc + (quantity * price);
-                }
-                return acc;
-            }, 0);
-            grandTotal += subtotal;
-
-            const allCompleted = items.every(item => item.completed);
-            const groupContainer = createGroupContainer(location, items, allCompleted, subtotal);
-            shoppingListContainer.appendChild(groupContainer);
-
-            const listElement = groupContainer.querySelector('.shopping-list');
-            new Sortable(listElement, {
-                animation: 150,
-                handle: '.drag-handle',
-                ghostClass: 'sortable-ghost',
-                filter: '.list-header',
-                onEnd: async (evt) => {
-                    const itemElements = Array.from(evt.target.children).filter(el => !el.classList.contains('list-header'));
-                    const batch = db.batch();
-                    itemElements.forEach((itemEl, index) => {
-                        batch.update(itemsCollection.doc(itemEl.dataset.id), { order: index });
-                    });
-                    try { await batch.commit(); } catch (error) { console.error("Error al reordenar: ", error); }
-                }
-            });
-        });
-
-        grandTotalContainer.innerHTML = `<h3>Total General: ${formatCurrency(grandTotal)}</h3>`;
-        updateBudgetUI(grandTotal);
-    };
-
-    // --- LÓGICA DE COLAPSO PERSISTENTE ---
-    let collapsedLocations = new Set(JSON.parse(localStorage.getItem('collapsedLocations')) || []);
-
-    const toggleLocationCollapse = (location, isCollapsed) => {
-        if (isCollapsed) {
-            collapsedLocations.add(location);
-        } else {
-            collapsedLocations.delete(location);
-        }
-        localStorage.setItem('collapsedLocations', JSON.stringify([...collapsedLocations]));
-    };
-
-    const createGroupContainer = (location, items, isCompleted, subtotal) => {
-        const groupContainer = document.createElement('div');
-        const shouldCollapse = collapsedLocations.has(location);
-        
-        groupContainer.className = `location-group ${isCompleted ? 'group-completed' : ''} ${shouldCollapse ? 'collapsed' : ''}`;
-
-        // Lógica de presupuesto local
-        const savedLocBudget = locationBudgets[location] || '';
-        const locBudgetVal = parseFloat(savedLocBudget) || 0;
-        let locPct = 0;
-        let barClass = '';
-        
-        if (locBudgetVal > 0) {
-            locPct = Math.min((subtotal / locBudgetVal) * 100, 100);
-            if (locPct >= 100) barClass = 'danger';
-            else if (locPct >= 80) barClass = 'warning';
-        }
-
-        const header = document.createElement('div');
-        header.className = 'group-header';
-        
-        header.innerHTML = `
-            <div class="location-name-wrapper">
-                <span class="toggle-icon">▼</span>
-                <h2>${location}</h2>
-            </div>
-            <div class="location-meta">
-                <input type="number" class="budget-input-small" placeholder="Presupuesto" value="${savedLocBudget}" onclick="event.stopPropagation()">
-                <span class="group-subtotal">${formatCurrency(subtotal)}</span>
-            </div>
-            <div class="location-progress-mini ${barClass}" style="width: ${locPct}%"></div>
-        `;
-
-        // Evento para colapsar (solo si no clickean el input)
-        header.addEventListener('click', (e) => {
-            if (e.target.tagName !== 'INPUT') {
-                groupContainer.classList.toggle('collapsed');
-                toggleLocationCollapse(location, groupContainer.classList.contains('collapsed'));
-            }
-        });
-
-        // Evento del input de presupuesto local
-        const budgetInputEl = header.querySelector('.budget-input-small');
-        budgetInputEl.addEventListener('change', (e) => {
-            saveLocationBudget(location, e.target.value);
-        });
-        // Evitar que escribir dispare el colapso
-        budgetInputEl.addEventListener('click', (e) => e.stopPropagation());
-
-        const list = document.createElement('ul');
-        list.className = 'shopping-list';
-
-        const listHeader = document.createElement('li');
-        listHeader.className = 'shopping-item list-header';
-        listHeader.innerHTML = `
-            <span class="item-main">Producto</span>
-            <span class="item-quantity">Cantidad</span>
-            <span class="item-price">Precio Unit.</span>
-            <span class="item-total">Total</span>
-            <span class="item-observations">Observaciones</span>
-            <span class="item-actions">Acciones</span>
-        `;
-        list.appendChild(listHeader);
-
-        items.forEach(item => list.appendChild(createListItem(item)));
-
-        groupContainer.appendChild(header);
-        groupContainer.appendChild(list);
-        return groupContainer;
-    };
-
-    const createListItem = (item) => {
-        const li = document.createElement('li');
-        li.className = `shopping-item ${item.completed ? 'completed' : ''}`;
-        li.dataset.id = item.id;
-
-        const quantity = parseFloat(item.quantity) || 1;
-        const unitPrice = parseFloat(item.unitPrice) || 0;
-        const total = quantity * unitPrice;
-        const icon = getCategoryIcon(item.name, item.category);
-
-        li.innerHTML = `
-            <div class="item-main">
-                <span class="drag-handle">&#x2261;</span>
-                <input type="checkbox" ${item.completed ? 'checked' : ''}>
-                <span class="item-text">${icon} ${item.name}</span>
-            </div>
-            <span class="item-quantity">${item.quantity || ''}</span>
-            <span class="item-price">${formatCurrency(unitPrice)}</span>
-            <span class="item-total">${formatCurrency(total)}</span>
-            <span class="item-observations">${item.observations || ''}</span>
-            <div class="item-actions">
-                <button class="edit-button" title="Editar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                </button>
-                <button class="delete-button" title="Eliminar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                </button>
-            </div>
-        `;
-
-        li.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
-            updateItemInFirestore(item.id, { completed: e.target.checked });
-        });
-
-        li.querySelector('.edit-button').addEventListener('click', () => {
-            editingItemId = item.id;
-            itemInput.value = item.name;
-            quantityInput.value = item.quantity || '1';
-            unitPriceInput.value = item.unitPrice || '';
-            locationInput.value = item.location || '';
-            observationsInput.value = item.observations || '';
-            if(categoryInput) categoryInput.value = item.category || '';
-            addItemButton.textContent = 'Actualizar';
-            itemInput.focus();
-        });
-
-        li.querySelector('.delete-button').addEventListener('click', () => {
-            Swal.fire({
-                title: '¿Estás seguro?',
-                text: `¿Realmente quieres eliminar "${item.name}"?`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: 'var(--secondary-color)',
-                cancelButtonColor: 'var(--primary-color)',
-                confirmButtonText: 'Sí, eliminar!',
-                cancelButtonText: 'Cancelar',
-                background: 'var(--surface-color)',
-                color: 'var(--text-color)'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    deleteItemFromFirestore(item.id);
-                    Swal.fire({
-                        title: '¡Eliminado!',
-                        text: `"${item.name}" ha sido eliminado.`,
-                        icon: 'success',
-                        background: 'var(--surface-color)',
-                        color: 'var(--text-color)'
-                    });
-                }
-            });
-        });
-
-        return li;
-    };
-
-    // --- MANEJADORES DE EVENTOS ---
-    
-    // Switch de ocultar completados
-    hideCompletedSwitch.addEventListener('change', renderItems);
-
-    // Botón de Copiar a WhatsApp
-    copyListButton.addEventListener('click', () => {
-        const activeItems = allItems.map(doc => doc.data()).filter(item => !item.completed);
-        
-        if (activeItems.length === 0) {
-             Swal.fire({
-                title: 'Lista vacía',
-                text: 'No hay productos pendientes para copiar.',
-                icon: 'info',
-                background: 'var(--surface-color)',
-                color: 'var(--text-color)'
-            });
+        elements.shoppingListContainer.innerHTML = '';
+        if (filtered.length === 0) {
+            elements.shoppingListContainer.innerHTML = '<div class="empty-list-message">No se encontraron productos.</div>';
             return;
         }
 
-        let clipboardText = "🛒 *Lista de Compras* 🛒\n\n";
-        
-        // Agrupar por ubicación para el texto
         const grouped = {};
-        activeItems.forEach(item => {
-            const loc = item.location?.trim() || 'Varios';
+        let totalGeneral = 0;
+
+        filtered.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() };
+            const loc = data.location || 'Otros';
             if (!grouped[loc]) grouped[loc] = [];
-            grouped[loc].push(item);
+            grouped[loc].push(data);
+            
+            const subtotal = (parseFloat(data.unitPrice) || 0) * (parseFloat(data.quantity) || 1);
+            if (!data.completed) totalGeneral += subtotal;
         });
 
-        for (const [location, items] of Object.entries(grouped)) {
-            clipboardText += `*📍 ${location}*\n`;
-            items.forEach(item => {
-                const qty = item.quantity > 1 ? `(${item.quantity}) ` : '';
-                clipboardText += `- ${qty}${item.name}`;
-                if (item.observations) clipboardText += ` _[${item.observations}]_`;
-                clipboardText += "\n";
+        // Actualizar Estadísticas
+        elements.grandTotalValue.textContent = `$${totalGeneral.toFixed(2)}`;
+        elements.grandTotalContainer.textContent = `Total Pendiente: $${totalGeneral.toFixed(2)}`;
+        updateBudgetProgress(totalGeneral);
+
+        Object.keys(grouped).sort().forEach(loc => {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'location-group';
+            groupDiv.innerHTML = `
+                <div class="group-header"><h2>${loc}</h2></div>
+                <div class="shopping-list"></div>
+            `;
+            const list = groupDiv.querySelector('.shopping-list');
+            grouped[loc].forEach(item => {
+                list.appendChild(createItemCard(item));
             });
-            clipboardText += "\n";
+            elements.shoppingListContainer.appendChild(groupDiv);
+        });
+
+        lucide.createIcons();
+    };
+
+    const createItemCard = (item) => {
+        const card = document.createElement('div');
+        card.className = `shopping-item ${item.completed ? 'completed' : ''}`;
+        const total = (item.unitPrice || 0) * (item.quantity || 1);
+
+        card.innerHTML = `
+            <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''}>
+            <div class="item-content">
+                <span class="item-name">${item.name}</span>
+                <span class="item-meta">${item.quantity} un. • ${item.category || 'Sin categoría'}</span>
+            </div>
+            <div class="item-price-tag">$${total.toFixed(2)}</div>
+            <div class="item-actions">
+                <button class="btn-icon edit"><i data-lucide="edit-3"></i></button>
+                <button class="btn-icon delete"><i data-lucide="trash-2"></i></button>
+            </div>
+        `;
+
+        card.querySelector('.item-checkbox').addEventListener('change', (e) => {
+            itemsCollection.doc(item.id).update({ completed: e.target.checked });
+        });
+
+        card.querySelector('.edit').addEventListener('click', () => {
+            editingItemId = item.id;
+            elements.itemInput.value = item.name;
+            elements.quantityInput.value = item.quantity;
+            elements.unitPriceInput.value = item.unitPrice;
+            elements.locationInput.value = item.location;
+            elements.categoryInput.value = item.category;
+            elements.observationsInput.value = item.observations;
+            elements.addItemButton.querySelector('span').textContent = 'Actualizar';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        card.querySelector('.delete').addEventListener('click', () => {
+            if(confirm(`¿Eliminar ${item.name}?`)) itemsCollection.doc(item.id).delete();
+        });
+
+        return card;
+    };
+
+    const updateBudgetProgress = (total) => {
+        const budget = parseFloat(elements.budgetInput.value) || 0;
+        if (budget > 0) {
+            const pct = Math.min((total / budget) * 100, 100);
+            elements.budgetProgressBar.style.width = `${pct}%`;
+            elements.budgetStats.textContent = `Restante: $${(budget - total).toFixed(2)}`;
+            elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'linear-gradient(to right, var(--primary), var(--secondary))';
+        } else {
+            elements.budgetProgressBar.style.width = '0%';
+            elements.budgetStats.textContent = 'Sin presupuesto fijado';
         }
+    };
 
-        clipboardText += `Generado el ${new Date().toLocaleDateString()}`;
-
-        navigator.clipboard.writeText(clipboardText).then(() => {
-            Swal.fire({
-                title: '¡Copiado!',
-                text: 'La lista se ha copiado al portapapeles lista para WhatsApp.',
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false,
-                background: 'var(--surface-color)',
-                color: 'var(--text-color)'
-            });
-        }).catch(err => {
-            console.error('Error al copiar: ', err);
-            Swal.fire('Error', 'No se pudo copiar al portapapeles', 'error');
-        });
-    });
-
-    addItemButton.addEventListener('click', async () => {
-        const itemName = itemInput.value.trim();
-        if (!itemName) return;
-
-        const itemData = {
-            name: itemName,
-            quantity: quantityInput.value.trim() || '1',
-            unitPrice: parseFloat(unitPriceInput.value) || 0,
-            location: locationInput.value.trim(),
-            observations: observationsInput.value.trim(),
-            category: categoryInput ? categoryInput.value.trim() : ''
+    // --- EVENTOS ---
+    elements.addItemButton.addEventListener('click', async () => {
+        const data = {
+            name: elements.itemInput.value.trim(),
+            quantity: elements.quantityInput.value || 1,
+            unitPrice: parseFloat(elements.unitPriceInput.value) || 0,
+            location: elements.locationInput.value.trim() || 'General',
+            category: elements.categoryInput.value.trim(),
+            observations: elements.observationsInput.value.trim(),
+            completed: false,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
         };
+
+        if (!data.name) return;
 
         if (editingItemId) {
-            await updateItemInFirestore(editingItemId, itemData);
+            await itemsCollection.doc(editingItemId).update(data);
             editingItemId = null;
-            addItemButton.textContent = 'Añadir';
+            elements.addItemButton.querySelector('span').textContent = 'Añadir a la lista';
         } else {
-            itemData.completed = false;
-            itemData.order = await getNextOrder(itemData.location);
-            itemData.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-            await addItemToFirestore(itemData);
+            await itemsCollection.add(data);
         }
 
-        [itemInput, unitPriceInput, locationInput, observationsInput, categoryInput].forEach(i => { if(i) i.value = ''; });
-        quantityInput.value = '1';
+        [elements.itemInput, elements.unitPriceInput, elements.locationInput, elements.categoryInput, elements.observationsInput].forEach(i => i.value = '');
+        elements.quantityInput.value = 1;
     });
 
-    const getNextOrder = async (location) => {
-        const locationStr = location?.trim() || '';
-        const snapshot = await itemsCollection.where('location', '==', locationStr).get();
-        if (snapshot.empty) {
-            return 0;
-        }
-        let maxOrder = -1;
-        snapshot.docs.forEach(doc => {
-            const order = doc.data().order;
-            if (order > maxOrder) {
-                maxOrder = order;
-            }
-        });
-        return maxOrder + 1;
-    };
+    elements.budgetInput.addEventListener('input', () => {
+        localStorage.setItem('budget', elements.budgetInput.value);
+        renderItems();
+    });
+    elements.budgetInput.value = localStorage.getItem('budget') || '';
 
-    resetListButton.addEventListener('click', async () => {
+    elements.resetListButton.addEventListener('click', async () => {
         const snapshot = await itemsCollection.where('completed', '==', true).get();
-        if (snapshot.empty) {
-            Swal.fire({
-                title: 'Nada que reiniciar',
-                text: 'No hay artículos completados para reiniciar.',
-                icon: 'info',
-                confirmButtonText: 'OK',
-                background: 'var(--surface-color)',
-                color: 'var(--text-color)'
-            });
-            return;
+        if (snapshot.empty) return;
+        
+        if (confirm('¿Limpiar los productos comprados?')) {
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         }
-
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Esto marcará todos los artículos completados como no completados.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: 'var(--secondary-color)',
-            cancelButtonColor: 'var(--primary-color)',
-            confirmButtonText: 'Sí, reiniciar!',
-            cancelButtonText: 'Cancelar',
-            background: 'var(--surface-color)',
-            color: 'var(--text-color)'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                const batch = db.batch();
-                snapshot.docs.forEach(doc => {
-                    batch.update(itemsCollection.doc(doc.id), { completed: false });
-                });
-                try {
-                    await batch.commit();
-                    Swal.fire({
-                        title: '¡Reiniciado!',
-                        text: 'La lista ha sido reiniciada.',
-                        icon: 'success',
-                        background: 'var(--surface-color)',
-                        color: 'var(--text-color)'
-                    });
-                } catch (error) {
-                    console.error("Error al reiniciar items: ", error);
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'No se pudo reiniciar la lista.',
-                        icon: 'error',
-                        background: 'var(--surface-color)',
-                        color: 'var(--text-color)'
-                    });
-                }
-            }
-        });
     });
 
-    [itemInput, quantityInput, unitPriceInput, locationInput, observationsInput, categoryInput].forEach(input => {
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addItemButton.click();
+    elements.copyListButton.addEventListener('click', () => {
+        let text = "🛒 *MI LISTA DE COMPRAS*\n\n";
+        const pending = allItems.filter(d => !d.data().completed);
+        pending.forEach(d => {
+            const data = d.data();
+            text += `• *${data.name}* (${data.quantity}) - _${data.location}_\n`;
         });
+        navigator.clipboard.writeText(text);
+        alert('Copiado para WhatsApp!');
     });
 
-    // Listener de Firestore en tiempo real
-    itemsCollection.orderBy('completed').orderBy('order').onSnapshot(snapshot => {
+    elements.searchInput.addEventListener('input', renderItems);
+    elements.hideCompletedSwitch.addEventListener('change', renderItems);
+
+    // Real-time
+    itemsCollection.orderBy('timestamp', 'desc').onSnapshot(snapshot => {
         allItems = snapshot.docs;
         renderItems();
     });
-
-    // Listener para el buscador en tiempo real
-    searchInput.addEventListener('input', renderItems);
 });

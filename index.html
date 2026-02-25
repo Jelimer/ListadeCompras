@@ -3,25 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Shopping | Lista de Compras</title>
+    <title>Smart Shopping | Pro</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
     <div class="background-blobs">
         <div class="blob blob-1"></div>
         <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
     </div>
 
     <div class="container">
-        <header class="header-row">
+        <header>
             <div class="brand">
                 <h1>Smart Shopping</h1>
+                <p style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">Tu asistente de compras profesional</p>
             </div>
             <div class="header-actions">
                 <button id="themeToggle" class="icon-button" title="Cambiar Tema">
@@ -30,94 +29,103 @@
             </div>
         </header>
 
-        <div class="toolbar-section">
-            <div class="input-wrapper" style="flex: 1;">
+        <!-- Buscador y Quick Add -->
+        <section class="toolbar-section">
+            <div class="input-wrapper" style="flex: 2; min-width: 300px;">
                 <i data-lucide="search" class="input-icon"></i>
-                <input type="text" id="searchInput" placeholder="Buscar en la lista...">
+                <input type="text" id="searchInput" placeholder="Filtrar por nombre, lugar o categoría...">
             </div>
             <button id="copyListButton" class="btn btn-success">
-                <i data-lucide="share-2"></i>
-                <span>WhatsApp</span>
-            </button>
-        </div>
-
-        <div id="quick-add-container" class="toolbar-section">
-            <!-- Chips de agregado rápido -->
-        </div>
-
-        <section class="input-section glass">
-            <div class="input-wrapper">
-                <i data-lucide="package" class="input-icon"></i>
-                <input type="text" id="itemInput" placeholder="¿Qué necesitas comprar?">
-            </div>
-            <div class="input-wrapper">
-                <i data-lucide="hash" class="input-icon"></i>
-                <input type="number" id="quantityInput" placeholder="Cantidad" value="1" min="1">
-            </div>
-            <div class="input-wrapper">
-                <i data-lucide="dollar-sign" class="input-icon"></i>
-                <input type="number" id="unitPriceInput" placeholder="Precio Unitario" step="0.01">
-            </div>
-            <div class="input-wrapper">
-                <i data-lucide="map-pin" class="input-icon"></i>
-                <input type="text" id="locationInput" placeholder="Lugar de compra" list="location-suggestions">
-                <datalist id="location-suggestions"></datalist>
-            </div>
-            <div class="input-wrapper">
-                <i data-lucide="tag" class="input-icon"></i>
-                <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions">
-                <datalist id="category-suggestions"></datalist>
-            </div>
-            <div class="input-wrapper">
-                <i data-lucide="edit-3" class="input-icon"></i>
-                <input type="text" id="observationsInput" placeholder="Observaciones">
-            </div>
-            <button id="addItemButton" class="btn btn-primary">
-                <i data-lucide="plus"></i>
-                <span>Añadir Producto</span>
+                <i data-lucide="whatsapp"></i>
+                <span>Enviar WhatsApp</span>
             </button>
         </section>
 
-        <section class="budget-section">
-            <div class="budget-header">
-                <div class="budget-input-group">
-                    <label>Presupuesto:</label>
-                    <input type="number" id="budgetInput" placeholder="0.00">
-                </div>
-                <div class="form-switch">
-                    <input type="checkbox" id="hideCompletedSwitch">
-                    <label for="hideCompletedSwitch">Ocultar listos</label>
-                </div>
-            </div>
-            <div class="progress-container">
-                <div id="budgetProgressBar" class="progress-bar"></div>
-            </div>
-            <div id="budgetStats" class="budget-stats">Restante: $0.00</div>
-        </section>
-
-        <div id="summary-dashboard" class="summary-dashboard">
-            <!-- Totales por categorías se inyectan aquí -->
+        <div id="quick-add-container">
+            <!-- Chips dinámicos -->
         </div>
 
+        <!-- Formulario Pro -->
+        <section class="input-section">
+            <div class="input-grid">
+                <div class="input-wrapper">
+                    <i data-lucide="shopping-bag" class="input-icon"></i>
+                    <input type="text" id="itemInput" placeholder="¿Qué llevamos hoy?">
+                </div>
+                <div class="input-wrapper">
+                    <i data-lucide="hash" class="input-icon"></i>
+                    <input type="number" id="quantityInput" placeholder="Cant." value="1">
+                </div>
+                <div class="input-wrapper">
+                    <i data-lucide="dollar-sign" class="input-icon"></i>
+                    <input type="number" id="unitPriceInput" placeholder="Precio Unit.">
+                </div>
+                <div class="input-wrapper">
+                    <i data-lucide="tag" class="input-icon"></i>
+                    <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions">
+                    <datalist id="category-suggestions"></datalist>
+                </div>
+            </div>
+            <div class="bottom-row">
+                <div class="input-wrapper">
+                    <i data-lucide="map-pin" class="input-icon"></i>
+                    <input type="text" id="locationInput" placeholder="Establecimiento / Supermercado" list="location-suggestions">
+                    <datalist id="location-suggestions"></datalist>
+                </div>
+                <div class="input-wrapper">
+                    <i data-lucide="edit-2" class="input-icon"></i>
+                    <input type="text" id="observationsInput" placeholder="Notas adicionales">
+                </div>
+                <button id="addItemButton" class="btn btn-primary">
+                    <i data-lucide="plus-circle"></i>
+                    <span>Añadir a la lista</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Dashboard de Estadísticas -->
+        <section class="summary-dashboard">
+            <div class="stat-card">
+                <span class="stat-label">Total Estimado</span>
+                <span id="grandTotalValue" class="stat-value">$0.00</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Presupuesto</span>
+                <input type="number" id="budgetInput" style="border: none; background: transparent; padding: 0; font-size: 1.2rem; font-weight: 800; color: var(--warning);" placeholder="0.00">
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Progreso</span>
+                <div class="progress-container" style="margin-top: 10px;">
+                    <div id="budgetProgressBar" class="progress-bar"></div>
+                </div>
+                <span id="budgetStats" style="font-size: 0.75rem; font-weight: 700;"></span>
+            </div>
+        </section>
+
+        <div class="toolbar-section">
+            <div class="form-check" style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                <input type="checkbox" id="hideCompletedSwitch" style="width: 20px; height: 20px;">
+                <label for="hideCompletedSwitch">Ocultar productos en el carrito</label>
+            </div>
+        </div>
+
+        <!-- Lista de Compras -->
         <main id="shoppingListContainer">
-            <!-- Los items agrupados se inyectan aquí -->
+            <!-- Items inyectados -->
         </main>
 
         <div id="grandTotalContainer" class="grand-total">
             Total Estimado: $0.00
         </div>
 
-        <footer>
-            <div class="footer-actions">
-                <button id="resetListButton" class="btn btn-secondary">
-                    <i data-lucide="refresh-cw"></i>
-                    Reiniciar Lista
-                </button>
-            </div>
+        <footer style="text-align: center; margin-top: 40px; padding-bottom: 20px;">
+            <button id="resetListButton" class="btn btn-secondary" style="margin: 0 auto;">
+                <i data-lucide="trash-2"></i>
+                Limpiar lista completada
+            </button>
         </footer>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
