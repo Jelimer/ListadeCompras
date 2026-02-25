@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     updateTheme(localStorage.getItem('theme') || 'light');
 
-    // --- GRÁFICO COMBINADO (Lugar + Categoría) ---
+    // --- GRÁFICO COMBINADO (Cantidades Unitarias) ---
     const updateChart = (stackedData, categories) => {
         const canvas = document.getElementById('categoryChart');
         if (!canvas) return;
@@ -49,12 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Colores por categoría para que sean consistentes
         const colorPalette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4', '#f43f5e'];
         const catColors = {};
         categories.forEach((cat, i) => catColors[cat] = colorPalette[i % colorPalette.length]);
 
-        // Crear datasets para cada categoría
         const datasets = categories.map(cat => ({
             label: cat,
             data: locations.map(loc => stackedData[loc][cat] || 0),
@@ -78,7 +76,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     tooltip: { enabled: true, mode: 'index', intersect: false }
                 },
                 scales: {
-                    x: { stacked: true, grid: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
+                    x: { 
+                        stacked: true, 
+                        grid: { display: false }, 
+                        ticks: { 
+                            color: isDark ? '#94a3b8' : '#64748b',
+                            stepSize: 1, // Solo números enteros
+                            precision: 0
+                        } 
+                    },
                     y: { stacked: true, grid: { display: false }, ticks: { color: isDark ? '#f8fafc' : '#0f172a', font: { weight: 'bold' } } }
                 }
             }
@@ -104,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.shoppingListContainer.innerHTML = '';
         
         const grouped = {};
-        const stackedData = {}; // Para el gráfico: { Lugar: { Cat1: total, Cat2: total } }
+        const stackedData = {}; 
         const distinctCategories = new Set();
         let totalGeneral = 0;
 
@@ -116,11 +122,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!grouped[loc]) grouped[loc] = [];
             grouped[loc].push(data);
             
-            const subtotal = (parseFloat(data.unitPrice) || 0) * (parseFloat(data.quantity) || 1);
+            const quantity = parseFloat(data.quantity) || 1;
+            const subtotal = (parseFloat(data.unitPrice) || 0) * quantity;
+            
             if (!data.completed) {
                 totalGeneral += subtotal;
                 if (!stackedData[loc]) stackedData[loc] = {};
-                stackedData[loc][cat] = (stackedData[loc][cat] || 0) + subtotal;
+                // ACUMULAR CANTIDADES (UNIDADES) PARA EL GRÁFICO
+                stackedData[loc][cat] = (stackedData[loc][cat] || 0) + quantity;
                 distinctCategories.add(cat);
             }
         });
@@ -238,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!name) return;
         const data = {
             name,
-            quantity: elements.quantityInput.value || 1,
+            quantity: parseFloat(elements.quantityInput.value) || 1,
             unitPrice: parseFloat(elements.unitPriceInput.value) || 0,
             location: elements.locationInput.value.trim() || 'General',
             category: elements.categoryInput.value.trim() || 'General',
