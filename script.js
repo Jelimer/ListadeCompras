@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allItems = [];
     let editingItemId = null;
     let locationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
+    let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups')) || []);
     let myChart = null;
 
     const updateTheme = (theme) => {
@@ -36,49 +37,49 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     updateTheme(localStorage.getItem('theme') || 'light');
 
-    // --- GRÁFICO POR CANTIDADES (EJE X UNITARIO) ---
-    const updateChart = (counts) => {
+    // --- GRÁFICO COMBINADO (Lugar + Categoría) ---
+    const updateChart = (stackedData, categories) => {
         const canvas = document.getElementById('categoryChart');
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        const labels = Object.keys(counts);
-        const values = Object.values(counts);
+        
+        const locations = Object.keys(stackedData);
+        if (locations.length === 0) {
+            if (myChart) myChart.destroy();
+            return;
+        }
+
+        // Colores por categoría para que sean consistentes
+        const colorPalette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4', '#f43f5e'];
+        const catColors = {};
+        categories.forEach((cat, i) => catColors[cat] = colorPalette[i % colorPalette.length]);
+
+        // Crear datasets para cada categoría
+        const datasets = categories.map(cat => ({
+            label: cat,
+            data: locations.map(loc => stackedData[loc][cat] || 0),
+            backgroundColor: catColors[cat],
+            borderRadius: 4
+        }));
 
         if (myChart) myChart.destroy();
-        if (labels.length === 0) return;
 
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
         myChart = new Chart(ctx, {
             type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Cantidad de Productos',
-                    data: values,
-                    backgroundColor: '#4f46e5',
-                    borderRadius: 6,
-                    barThickness: 15
-                }]
-            },
+            data: { labels: locations, datasets: datasets },
             options: {
-                indexAxis: 'y', // Barras horizontales
+                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: true }
+                    legend: { display: true, position: 'bottom', labels: { color: isDark ? '#f8fafc' : '#0f172a', boxWidth: 10, font: { size: 10 } } },
+                    tooltip: { enabled: true, mode: 'index', intersect: false }
                 },
                 scales: {
-                    x: { 
-                        beginAtZero: true,
-                        ticks: { stepSize: 1, color: isDark ? '#94a3b8' : '#64748b' },
-                        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
-                    },
-                    y: { 
-                        ticks: { color: isDark ? '#f8fafc' : '#0f172a', font: { weight: '700' } },
-                        grid: { display: false }
-                    }
+                    x: { stacked: true, grid: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
+                    y: { stacked: true, grid: { display: false }, ticks: { color: isDark ? '#f8fafc' : '#0f172a', font: { weight: 'bold' } } }
                 }
             }
         });
@@ -88,11 +89,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = elements.searchInput.value.toLowerCase();
         const hideCompleted = elements.hideCompletedSwitch.checked;
         
-        // Sugerencias 100% Independientes
-        const locations = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
-        const categories = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
-        elements.locationSuggestions.innerHTML = locations.map(l => `<option value="${l}">`).join('');
-        elements.categorySuggestions.innerHTML = categories.map(c => `<option value="${c}">`).join('');
+        const locationsList = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
+        const categoriesList = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
+        elements.locationSuggestions.innerHTML = locationsList.map(l => `<option value="${l}">`).join('');
+        elements.categorySuggestions.innerHTML = categoriesList.map(c => `<option value="${c}">`).join('');
 
         let filtered = allItems.filter(doc => {
             const data = doc.data();
@@ -100,12 +100,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return textMatch && (!hideCompleted || !data.completed);
         });
 
-        // Guardar la posición del scroll antes de limpiar
         const scrollPos = window.scrollY;
         elements.shoppingListContainer.innerHTML = '';
         
         const grouped = {};
-        const categoryCounts = {}; // Contar cantidades unitarias
+        const stackedData = {}; // Para el gráfico: { Lugar: { Cat1: total, Cat2: total } }
+        const distinctCategories = new Set();
         let totalGeneral = 0;
 
         filtered.forEach(doc => {
@@ -116,15 +116,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!grouped[loc]) grouped[loc] = [];
             grouped[loc].push(data);
             
+            const subtotal = (parseFloat(data.unitPrice) || 0) * (parseFloat(data.quantity) || 1);
             if (!data.completed) {
-                totalGeneral += (parseFloat(data.unitPrice) || 0) * (parseFloat(data.quantity) || 1);
-                categoryCounts[cat] = (categoryCounts[cat] || 0) + 1; // Contamos 1 producto más en esta categoría
+                totalGeneral += subtotal;
+                if (!stackedData[loc]) stackedData[loc] = {};
+                stackedData[loc][cat] = (stackedData[loc][cat] || 0) + subtotal;
+                distinctCategories.add(cat);
             }
         });
 
         elements.grandTotalValue.textContent = `$${totalGeneral.toFixed(2)}`;
         updateBudgetUI(totalGeneral);
-        updateChart(categoryCounts);
+        updateChart(stackedData, Array.from(distinctCategories).sort());
 
         const sortedLocs = Object.keys(grouped).sort((a, b) => {
             let ia = locationOrder.indexOf(a), ib = locationOrder.indexOf(b);
@@ -139,25 +142,37 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const groupDiv = document.createElement('div');
-            groupDiv.className = 'location-group';
+            const isCollapsed = collapsedGroups.has(loc);
+            groupDiv.className = `location-group ${isCollapsed ? 'collapsed' : ''}`;
             groupDiv.dataset.location = loc;
             groupDiv.innerHTML = `
                 <div class="group-header">
                     <div class="group-title">
                         <i data-lucide="grip-vertical" style="opacity:0.4"></i>
+                        <i data-lucide="chevron-down" class="collapse-icon"></i>
                         <h2>${loc}</h2>
                     </div>
                     <span style="font-weight:800; opacity:0.5; font-size:0.8rem">${items.length} items</span>
                 </div>
                 <div class="shopping-list"></div>
             `;
+
+            groupDiv.querySelector('.group-header').addEventListener('click', () => {
+                groupDiv.classList.toggle('collapsed');
+                if (groupDiv.classList.contains('collapsed')) {
+                    collapsedGroups.add(loc);
+                } else {
+                    collapsedGroups.delete(loc);
+                }
+                localStorage.setItem('collapsedGroups', JSON.stringify(Array.from(collapsedGroups)));
+            });
+
             const list = groupDiv.querySelector('.shopping-list');
             items.forEach(item => list.appendChild(createCard(item)));
             elements.shoppingListContainer.appendChild(groupDiv);
         });
         
         lucide.createIcons();
-        // Restaurar scroll sin saltos
         window.scrollTo(0, scrollPos);
     };
 
@@ -182,11 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         div.querySelector('.item-checkbox').addEventListener('change', () => {
-            // Actualización silenciosa para evitar saltos
             itemsCollection.doc(item.id).update({ completed: !item.completed });
         });
 
-        div.querySelector('.edit-btn').addEventListener('click', () => {
+        div.querySelector('.edit-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
             editingItemId = item.id;
             elements.itemInput.value = item.name;
             elements.quantityInput.value = item.quantity;
@@ -197,7 +212,8 @@ document.addEventListener('DOMContentLoaded', () => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
-        div.querySelector('.del-btn').addEventListener('click', () => {
+        div.querySelector('.del-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
             if(confirm(`¿Eliminar ${item.name}?`)) itemsCollection.doc(item.id).delete();
         });
 
@@ -261,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     new Sortable(elements.shoppingListContainer, {
         animation: 150,
-        handle: '.group-header',
+        handle: '.group-title',
         onEnd: () => {
             const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
                 .map(g => g.dataset.location);
