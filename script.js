@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     updateTheme(localStorage.getItem('theme') || 'light');
 
-    // --- GRÁFICO CON ECHARTS (Separación perfecta) ---
+    // --- GRÁFICO CON ECHARTS (Separación perfecta y etiquetas) ---
     const updateChart = (stackedData, categories) => {
         const chartDom = document.getElementById('categoryChart');
         if (!chartDom) return;
@@ -59,10 +59,18 @@ document.addEventListener('DOMContentLoaded', () => {
             name: cat,
             type: 'bar',
             stack: 'total',
+            label: {
+                show: true,
+                position: 'inside',
+                formatter: (params) => params.value > 0 ? params.value : '',
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 'bold'
+            },
             emphasis: { focus: 'series' },
             data: locations.map(loc => stackedData[loc][cat] || 0),
             itemStyle: { borderRadius: 4 },
-            barWidth: '50%', // Controla el grosor de la barra para dejar espacio vertical
+            barMaxWidth: 35, // Grosor máximo de barra para garantizar separación
             color: colorPalette[i % colorPalette.length]
         }));
 
@@ -70,27 +78,34 @@ document.addEventListener('DOMContentLoaded', () => {
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
             legend: { 
                 bottom: '0%', 
-                textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold' },
-                itemWidth: 10,
-                itemHeight: 10
+                textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold', fontSize: 10 },
+                itemWidth: 8,
+                itemHeight: 8,
+                pageIconColor: isDark ? '#fff' : '#000'
             },
-            grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
+            grid: { left: '3%', right: '8%', bottom: '15%', top: '5%', containLabel: true },
             xAxis: { 
                 type: 'value', 
+                minInterval: 1, // Solo enteros
                 splitLine: { lineStyle: { type: 'dashed', opacity: 0.1 } },
                 axisLabel: { color: isDark ? '#94a3b8' : '#64748b' }
             },
             yAxis: { 
                 type: 'category', 
                 data: locations,
-                axisLabel: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold' },
+                axisLabel: { 
+                    color: isDark ? '#f8fafc' : '#0f172a', 
+                    fontWeight: 'bold',
+                    width: 100,
+                    overflow: 'break'
+                },
                 axisLine: { show: false },
                 axisTick: { show: false }
             },
             series: series
         };
 
-        chartInstance.setOption(option);
+        chartInstance.setOption(option, true); // True para limpiar configuraciones anteriores
     };
 
     const renderItems = () => {
