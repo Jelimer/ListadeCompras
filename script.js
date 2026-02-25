@@ -58,8 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
             data: locations.map(loc => stackedData[loc][cat] || 0),
             backgroundColor: catColors[cat],
             borderRadius: 6,
-            barPercentage: 0.6, // Separación entre barras de diferentes lugares
-            categoryPercentage: 0.8 // Ancho de la categoría dentro de la escala
+            barPercentage: 0.4, // Menos porcentaje de ocupación = más espacio entre lugares
+            categoryPercentage: 0.6 // Menos porcentaje de categoría = más aire visual
         }));
 
         if (myChart) myChart.destroy();
