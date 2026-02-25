@@ -44,10 +44,9 @@ body {
 
 @keyframes move { from { transform: translate(0,0); } to { transform: translate(50px, 50px); } }
 
-/* --- Container Ultra Wide --- */
 .container {
     width: 98%;
-    max-width: 1600px; /* Ancho máximo aumentado */
+    max-width: 1600px;
     background: var(--card-bg);
     border-radius: 24px;
     padding: 40px;
@@ -71,7 +70,6 @@ h1 {
     color: var(--primary);
 }
 
-/* --- Formulario de Entrada Pro --- */
 .input-section {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -99,15 +97,13 @@ input {
 
 input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
 
-/* --- Dashboard Grid --- */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 400px; /* Sidebar optimizado */
+    grid-template-columns: 1fr 400px;
     gap: 40px;
     align-items: start;
 }
 
-/* --- Stats Cards --- */
 .stats-panel {
     display: flex;
     flex-direction: column;
@@ -127,17 +123,22 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 .stat-label { font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; display: block; }
 .stat-value { font-size: 1.8rem; font-weight: 800; color: var(--primary); }
 
+/* FIXED CHART BOX */
 .chart-box {
-    min-height: 350px;
+    height: 400px; /* Altura fija para evitar estiramientos */
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    overflow: hidden;
+}
+
+#categoryChart {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .progress-container { height: 10px; background: var(--bg-body); border-radius: 5px; overflow: hidden; margin: 10px 0; }
 .progress-bar { height: 100%; background: var(--primary); width: 0%; transition: width 0.5s; }
 
-/* --- Lista de Compras --- */
 .location-group {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -155,23 +156,18 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
     cursor: pointer;
 }
 
-.group-title {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
+.group-title { display: flex; align-items: center; gap: 15px; }
 .group-title h2 { font-size: 1.1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
 
 .shopping-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* Tarjetas más anchas */
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 20px;
     padding: 25px;
 }
 
 .shopping-item {
-    background: var(--bg-body);
+    background: var(--card-bg);
     border: 1px solid var(--border);
     padding: 15px;
     border-radius: 16px;
@@ -188,24 +184,34 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
     height: 65px;
     border-radius: 12px;
     object-fit: cover;
-    background: white;
+    background: #fff;
     border: 1px solid var(--border);
 }
 
 .item-info { flex: 1; }
-.item-name { font-weight: 700; font-size: 1.05rem; display: block; }
+.item-name { font-weight: 700; font-size: 1rem; display: block; }
 .item-sub { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
-
 .item-price { font-weight: 800; color: var(--primary); font-size: 1.1rem; }
 
 .btn { padding: 12px 24px; border-radius: 12px; font-weight: 700; cursor: pointer; border: none; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
 .btn-primary { background: var(--primary); color: white; }
-.btn-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; background: var(--card-bg); color: var(--text-muted); }
+.btn-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; background: var(--bg-body); color: var(--text-muted); }
 .btn-icon:hover { color: var(--primary); background: var(--primary-soft); }
 
 .item-checkbox { width: 24px; height: 24px; border-radius: 6px; cursor: pointer; accent-color: var(--primary); }
 .shopping-item.completed { opacity: 0.5; }
 .shopping-item.completed .item-name { text-decoration: line-through; }
+
+.grand-total {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    padding: 25px;
+    border-radius: 24px;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin: 40px 0;
+}
 
 @media (max-width: 1100px) {
     .dashboard-grid { grid-template-columns: 1fr; }

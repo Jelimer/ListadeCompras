@@ -28,63 +28,58 @@ document.addEventListener('DOMContentLoaded', () => {
     let locationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
     let myChart = null;
 
-    // --- TEMA ---
     const updateTheme = (theme) => {
         document.documentElement.setAttribute('data-theme', theme);
         elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
         lucide.createIcons();
-        if(myChart) {
-            myChart.options.plugins.legend.labels.color = theme === 'dark' ? '#f8fafc' : '#0f172a';
-            myChart.update();
-        }
+        if(myChart) renderItems(); // Redibujar gráfico para colores
     };
     updateTheme(localStorage.getItem('theme') || 'light');
 
-    elements.themeToggle.addEventListener('click', () => {
-        const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-        localStorage.setItem('theme', newTheme);
-        updateTheme(newTheme);
-    });
-
-    // --- GRÁFICO ---
+    // --- GRÁFICO DE BARRAS (Más prolijo para sidebars) ---
     const updateChart = (data) => {
         const canvas = document.getElementById('categoryChart');
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        
         const labels = Object.keys(data);
         const values = Object.values(data);
 
         if (myChart) myChart.destroy();
-
         if (labels.length === 0) return;
 
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
         myChart = new Chart(ctx, {
-            type: 'doughnut',
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
+                    label: 'Gasto $',
                     data: values,
-                    backgroundColor: ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'],
-                    borderWidth: 0,
-                    hoverOffset: 20
+                    backgroundColor: '#4f46e5',
+                    borderRadius: 8,
+                    barThickness: 20
                 }]
             },
             options: {
+                indexAxis: 'y', // Barras horizontales
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { 
-                        display: true, 
-                        position: 'bottom',
-                        labels: {
-                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f8fafc' : '#0f172a',
-                            padding: 20,
-                            font: { family: 'Plus Jakarta Sans', weight: '700', size: 11 }
-                        }
-                    },
-                    tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', padding: 12 }
+                    legend: { display: false },
+                    tooltip: { enabled: true }
                 },
-                cutout: '75%'
+                scales: {
+                    x: { 
+                        grid: { display: false },
+                        ticks: { color: isDark ? '#94a3b8' : '#64748b' }
+                    },
+                    y: { 
+                        grid: { display: false },
+                        ticks: { color: isDark ? '#f8fafc' : '#0f172a', font: { weight: 'bold' } }
+                    }
+                }
             }
         });
     };
@@ -96,12 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sugerencias 100% independientes
         const locations = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
         const categories = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
+        
         elements.locationSuggestions.innerHTML = locations.map(l => `<option value="${l}">`).join('');
         elements.categorySuggestions.innerHTML = categories.map(c => `<option value="${c}">`).join('');
 
         let filtered = allItems.filter(doc => {
             const data = doc.data();
-            const textMatch = (data.name + data.location + data.category).toLowerCase().includes(query);
+            const textMatch = (data.name + (data.location || '') + (data.category || '')).toLowerCase().includes(query);
             return textMatch && (!hideCompleted || !data.completed);
         });
 
@@ -136,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sortedLocs.forEach(loc => {
-            // ORDEN ALFABÉTICO + COMPRADOS AL FINAL
             const items = grouped[loc].sort((a, b) => {
                 if (a.completed !== b.completed) return a.completed ? 1 : -1;
                 return a.name.localeCompare(b.name);
@@ -166,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div');
         div.className = `shopping-item ${item.completed ? 'completed' : ''}`;
         
-        // Imagen mejorada via LoremFlickr
+        // Imagen via LoremFlickr
         const imgUrl = `https://loremflickr.com/200/200/${encodeURIComponent(item.name.split(' ')[0])},market/all`;
 
         div.innerHTML = `
@@ -211,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pct = Math.min((total / budget) * 100, 100);
             elements.budgetProgressBar.style.width = `${pct}%`;
             elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'var(--primary)';
-            elements.budgetStats.textContent = `Disp: $${(budget - total).toFixed(2)}`;
+            elements.budgetStats.textContent = `Disponible: $${(budget - total).toFixed(2)}`;
         } else {
             elements.budgetProgressBar.style.width = '0%';
             elements.budgetStats.textContent = 'Sin límite';
@@ -260,11 +255,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Reordenar Lugares
+    // Sortable
     new Sortable(elements.shoppingListContainer, {
         animation: 150,
         handle: '.group-header',
-        ghostClass: 'sortable-ghost',
         onEnd: () => {
             const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
                 .map(g => g.dataset.location);
@@ -275,6 +269,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.searchInput.addEventListener('input', renderItems);
     elements.hideCompletedSwitch.addEventListener('change', renderItems);
+
+    elements.themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        updateTheme(currentTheme === 'light' ? 'dark' : 'light');
+    });
 
     itemsCollection.orderBy('timestamp', 'desc').onSnapshot(snap => {
         allItems = snap.docs;
