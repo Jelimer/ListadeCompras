@@ -28,13 +28,35 @@ document.addEventListener('DOMContentLoaded', () => {
     let locationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
     let myChart = null;
 
-    // --- GRÁFICO LIMPIO ---
+    // --- TEMA ---
+    const updateTheme = (theme) => {
+        document.documentElement.setAttribute('data-theme', theme);
+        elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+        lucide.createIcons();
+        if(myChart) {
+            myChart.options.plugins.legend.labels.color = theme === 'dark' ? '#f8fafc' : '#0f172a';
+            myChart.update();
+        }
+    };
+    updateTheme(localStorage.getItem('theme') || 'light');
+
+    elements.themeToggle.addEventListener('click', () => {
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        updateTheme(newTheme);
+    });
+
+    // --- GRÁFICO ---
     const updateChart = (data) => {
-        const ctx = document.getElementById('categoryChart').getContext('2d');
+        const canvas = document.getElementById('categoryChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
         const labels = Object.keys(data);
         const values = Object.values(data);
 
         if (myChart) myChart.destroy();
+
+        if (labels.length === 0) return;
 
         myChart = new Chart(ctx, {
             type: 'doughnut',
@@ -43,40 +65,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     data: values,
                     backgroundColor: ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'],
-                    hoverOffset: 15,
-                    borderWidth: 0
+                    borderWidth: 0,
+                    hoverOffset: 20
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10, weight: 'bold' } } },
-                    tooltip: { enabled: true }
+                    legend: { 
+                        display: true, 
+                        position: 'bottom',
+                        labels: {
+                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f8fafc' : '#0f172a',
+                            padding: 20,
+                            font: { family: 'Plus Jakarta Sans', weight: '700', size: 11 }
+                        }
+                    },
+                    tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', padding: 12 }
                 },
-                cutout: '70%'
+                cutout: '75%'
             }
         });
     };
-
-    // --- REORDENAR LUGARES ---
-    new Sortable(elements.shoppingListContainer, {
-        animation: 150,
-        handle: '.group-header',
-        ghostClass: 'sortable-ghost',
-        onEnd: () => {
-            const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
-                .map(g => g.dataset.location);
-            locationOrder = newOrder;
-            localStorage.setItem('locationOrder', JSON.stringify(newOrder));
-        }
-    });
 
     const renderItems = () => {
         const query = elements.searchInput.value.toLowerCase();
         const hideCompleted = elements.hideCompletedSwitch.checked;
         
-        // Sugerencias separadas
+        // Sugerencias 100% independientes
         const locations = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
         const categories = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
         elements.locationSuggestions.innerHTML = locations.map(l => `<option value="${l}">`).join('');
@@ -84,8 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let filtered = allItems.filter(doc => {
             const data = doc.data();
-            const match = (data.name + data.location + data.category).toLowerCase().includes(query);
-            return match && (!hideCompleted || !data.completed);
+            const textMatch = (data.name + data.location + data.category).toLowerCase().includes(query);
+            return textMatch && (!hideCompleted || !data.completed);
         });
 
         elements.shoppingListContainer.innerHTML = '';
@@ -96,13 +113,15 @@ document.addEventListener('DOMContentLoaded', () => {
         filtered.forEach(doc => {
             const data = { id: doc.id, ...doc.data() };
             const loc = data.location || 'General';
+            const cat = data.category || 'Varios';
+            
             if (!grouped[loc]) grouped[loc] = [];
             grouped[loc].push(data);
             
-            const subtotal = (data.unitPrice || 0) * (data.quantity || 1);
+            const subtotal = (parseFloat(data.unitPrice) || 0) * (parseFloat(data.quantity) || 1);
             if (!data.completed) {
                 totalGeneral += subtotal;
-                categoryTotals[data.category || 'General'] = (categoryTotals[data.category || 'General'] || 0) + subtotal;
+                categoryTotals[cat] = (categoryTotals[cat] || 0) + subtotal;
             }
         });
 
@@ -110,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBudgetUI(totalGeneral);
         updateChart(categoryTotals);
 
-        // Ordenar Lugares
         const sortedLocs = Object.keys(grouped).sort((a, b) => {
             let ia = locationOrder.indexOf(a), ib = locationOrder.indexOf(b);
             if (ia === -1 && ib === -1) return a.localeCompare(b);
@@ -118,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sortedLocs.forEach(loc => {
-            // ORDEN ALFABÉTICO + COMPLETADOS AL FINAL
+            // ORDEN ALFABÉTICO + COMPRADOS AL FINAL
             const items = grouped[loc].sort((a, b) => {
                 if (a.completed !== b.completed) return a.completed ? 1 : -1;
                 return a.name.localeCompare(b.name);
@@ -130,10 +148,10 @@ document.addEventListener('DOMContentLoaded', () => {
             groupDiv.innerHTML = `
                 <div class="group-header">
                     <div class="group-title">
-                        <i data-lucide="more-vertical" style="opacity:0.3"></i>
+                        <i data-lucide="grip-vertical" style="opacity:0.4"></i>
                         <h2>${loc}</h2>
                     </div>
-                    <span class="stat-meta">${items.length} productos</span>
+                    <span style="font-weight:800; opacity:0.5">${items.length} prod.</span>
                 </div>
                 <div class="shopping-list"></div>
             `;
@@ -148,11 +166,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div');
         div.className = `shopping-item ${item.completed ? 'completed' : ''}`;
         
-        // Mejor búsqueda de imágenes (Google-like result via Unsplash Source)
-        const imgUrl = `https://loremflickr.com/200/200/${encodeURIComponent(item.name.split(' ')[0])},food/all`;
+        // Imagen mejorada via LoremFlickr
+        const imgUrl = `https://loremflickr.com/200/200/${encodeURIComponent(item.name.split(' ')[0])},market/all`;
 
         div.innerHTML = `
-            <img src="${imgUrl}" class="product-img" onerror="this.src='https://via.placeholder.com/65?text=🛒'">
+            <img src="${imgUrl}" class="product-img" loading="lazy" onerror="this.src='https://via.placeholder.com/65?text=🛒'">
             <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''}>
             <div class="item-info">
                 <span class="item-name">${item.name}</span>
@@ -160,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="item-price">$${((item.unitPrice || 0) * (item.quantity || 1)).toFixed(2)}</div>
             <div class="item-actions">
-                <button class="btn-icon edit-btn"><i data-lucide="pencil"></i></button>
+                <button class="btn-icon edit-btn"><i data-lucide="edit-3"></i></button>
                 <button class="btn-icon del-btn"><i data-lucide="trash-2"></i></button>
             </div>
         `;
@@ -193,17 +211,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const pct = Math.min((total / budget) * 100, 100);
             elements.budgetProgressBar.style.width = `${pct}%`;
             elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'var(--primary)';
-            elements.budgetStats.textContent = `Disponible: $${(budget - total).toFixed(2)}`;
+            elements.budgetStats.textContent = `Disp: $${(budget - total).toFixed(2)}`;
         } else {
             elements.budgetProgressBar.style.width = '0%';
-            elements.budgetStats.textContent = 'Sin presupuesto';
+            elements.budgetStats.textContent = 'Sin límite';
         }
     };
 
     elements.addItemButton.addEventListener('click', async () => {
-        if (!elements.itemInput.value.trim()) return;
+        const name = elements.itemInput.value.trim();
+        if (!name) return;
         const data = {
-            name: elements.itemInput.value.trim(),
+            name,
             quantity: elements.quantityInput.value || 1,
             unitPrice: parseFloat(elements.unitPriceInput.value) || 0,
             location: elements.locationInput.value.trim() || 'General',
@@ -241,17 +260,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Reordenar Lugares
+    new Sortable(elements.shoppingListContainer, {
+        animation: 150,
+        handle: '.group-header',
+        ghostClass: 'sortable-ghost',
+        onEnd: () => {
+            const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
+                .map(g => g.dataset.location);
+            locationOrder = newOrder;
+            localStorage.setItem('locationOrder', JSON.stringify(newOrder));
+        }
+    });
+
     elements.searchInput.addEventListener('input', renderItems);
     elements.hideCompletedSwitch.addEventListener('change', renderItems);
-
-    // Dark Mode
-    elements.themeToggle.addEventListener('click', () => {
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const newTheme = isDark ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-        lucide.createIcons();
-    });
 
     itemsCollection.orderBy('timestamp', 'desc').onSnapshot(snap => {
         allItems = snap.docs;

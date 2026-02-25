@@ -33,10 +33,21 @@ body {
     transition: all 0.3s ease;
 }
 
+.background-blobs {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: -1; filter: blur(100px); opacity: 0.4;
+}
+.blob { position: absolute; border-radius: 50%; animation: move 20s infinite alternate; }
+.blob-1 { width: 600px; height: 600px; background: var(--primary); top: -10%; left: -5%; }
+.blob-2 { width: 500px; height: 500px; background: var(--secondary); bottom: -10%; right: -5%; }
+
+@keyframes move { from { transform: translate(0,0); } to { transform: translate(50px, 50px); } }
+
 /* --- Container Ultra Wide --- */
 .container {
-    width: 100%;
-    max-width: 1400px; /* Ancho máximo solicitado */
+    width: 98%;
+    max-width: 1600px; /* Ancho máximo aumentado */
     background: var(--card-bg);
     border-radius: 24px;
     padding: 40px;
@@ -54,7 +65,7 @@ header {
 }
 
 h1 {
-    font-size: 2.2rem;
+    font-size: 2.5rem;
     font-weight: 800;
     letter-spacing: -1.5px;
     color: var(--primary);
@@ -91,8 +102,8 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 /* --- Dashboard Grid --- */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 350px; /* Lista a la izquierda (grande), Stats a la derecha */
-    gap: 30px;
+    grid-template-columns: 1fr 400px; /* Sidebar optimizado */
+    gap: 40px;
     align-items: start;
 }
 
@@ -117,9 +128,14 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 .stat-value { font-size: 1.8rem; font-weight: 800; color: var(--primary); }
 
 .chart-box {
-    height: 300px;
-    padding: 15px;
+    min-height: 350px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
+
+.progress-container { height: 10px; background: var(--bg-body); border-radius: 5px; overflow: hidden; margin: 10px 0; }
+.progress-bar { height: 100%; background: var(--primary); width: 0%; transition: width 0.5s; }
 
 /* --- Lista de Compras --- */
 .location-group {
@@ -149,7 +165,7 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 
 .shopping-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* Tarjetas más anchas */
     gap: 20px;
     padding: 25px;
 }
@@ -177,51 +193,17 @@ input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px
 }
 
 .item-info { flex: 1; }
-.item-name { font-weight: 700; font-size: 1rem; display: block; }
+.item-name { font-weight: 700; font-size: 1.05rem; display: block; }
 .item-sub { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
 
 .item-price { font-weight: 800; color: var(--primary); font-size: 1.1rem; }
 
-/* Botones */
-.btn {
-    padding: 12px 24px;
-    border-radius: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    border: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: 0.3s;
-}
-
+.btn { padding: 12px 24px; border-radius: 12px; font-weight: 700; cursor: pointer; border: none; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
 .btn-primary { background: var(--primary); color: white; }
-.btn-primary:hover { background: #4338ca; }
-
-.btn-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border: none;
-    background: var(--card-bg);
-    color: var(--text-muted);
-}
-
+.btn-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; background: var(--card-bg); color: var(--text-muted); }
 .btn-icon:hover { color: var(--primary); background: var(--primary-soft); }
 
-/* --- Checkbox Custom --- */
-.item-checkbox {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    cursor: pointer;
-    accent-color: var(--primary);
-}
-
+.item-checkbox { width: 24px; height: 24px; border-radius: 6px; cursor: pointer; accent-color: var(--primary); }
 .shopping-item.completed { opacity: 0.5; }
 .shopping-item.completed .item-name { text-decoration: line-through; }
 
