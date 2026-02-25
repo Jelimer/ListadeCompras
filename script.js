@@ -29,13 +29,26 @@ document.addEventListener('DOMContentLoaded', () => {
     let allItems = [];
     let editingItemId = null;
     let collapsedGroups = new Set();
+    let locationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
+
+    // Inicializar Sortable para los grupos (lugares)
+    new Sortable(elements.shoppingListContainer, {
+        animation: 150,
+        handle: '.group-title-wrapper',
+        ghostClass: 'sortable-ghost',
+        onEnd: () => {
+            const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
+                .map(group => group.dataset.location);
+            locationOrder = newOrder;
+            localStorage.setItem('locationOrder', JSON.stringify(newOrder));
+        }
+    });
 
     const updateTheme = (theme) => {
         document.documentElement.setAttribute('data-theme', theme);
         elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
         lucide.createIcons();
     };
-    
     updateTheme(localStorage.getItem('theme') || 'light');
 
     elements.themeToggle.addEventListener('click', () => {
@@ -56,7 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
                    (!hideCompleted || !data.completed);
         });
 
-        // Poblar sugerencias de lugares con todos los lugares conocidos
         const allLocations = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
         elements.locationSuggestions.innerHTML = allLocations.map(l => `<option value="${l}">`).join('');
 
@@ -81,8 +93,17 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.grandTotalContainer.textContent = `Total Pendiente: $${totalGeneral.toFixed(2)}`;
         updateBudgetProgress(totalGeneral);
 
-        Object.keys(grouped).sort().forEach(loc => {
-            // ORDENAMIENTO DENTRO DEL GRUPO: Pendientes primero, luego Alfabético
+        // Ordenar grupos según el orden guardado (Drag & Drop)
+        const sortedLocations = Object.keys(grouped).sort((a, b) => {
+            const indexA = locationOrder.indexOf(a);
+            const indexB = locationOrder.indexOf(b);
+            if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+        });
+
+        sortedLocations.forEach(loc => {
             const sortedItems = grouped[loc].sort((a, b) => {
                 if (a.completed !== b.completed) return a.completed ? 1 : -1;
                 return a.name.localeCompare(b.name);
@@ -90,9 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const groupDiv = document.createElement('div');
             groupDiv.className = `location-group ${collapsedGroups.has(loc) ? 'collapsed' : ''}`;
+            groupDiv.dataset.location = loc;
             groupDiv.innerHTML = `
                 <div class="group-header">
-                    <div class="group-title-wrapper">
+                    <div class="group-title-wrapper" title="Arrastra para reordenar">
+                        <i data-lucide="grip-vertical" style="color: var(--text-muted); width: 16px;"></i>
                         <i data-lucide="chevron-down" class="collapse-icon"></i>
                         <h2>${loc}</h2>
                     </div>
@@ -101,7 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="shopping-list"></div>
             `;
 
-            groupDiv.querySelector('.group-header').addEventListener('click', () => {
+            groupDiv.querySelector('.group-title-wrapper').addEventListener('click', (e) => {
+                // Evitar colapso si se está arrastrando (Sortable maneja esto)
+                if (e.defaultPrevented) return;
                 groupDiv.classList.toggle('collapsed');
                 if (groupDiv.classList.contains('collapsed')) collapsedGroups.add(loc);
                 else collapsedGroups.delete(loc);
@@ -120,11 +145,11 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = `shopping-item ${item.completed ? 'completed' : ''}`;
         const total = (item.unitPrice || 0) * (item.quantity || 1);
         
-        // Imagen con IA/Buscador (Unsplash)
-        const imgUrl = `https://source.unsplash.com/100x100/?${encodeURIComponent(item.name)},grocery`;
+        // Imagen estable (LoremFlickr)
+        const imgUrl = `https://loremflickr.com/150/150/${encodeURIComponent(item.name.split(' ')[0])},grocery/all`;
 
         card.innerHTML = `
-            <img src="${imgUrl}" class="product-img" onerror="this.src='https://via.placeholder.com/50?text=🛒'">
+            <img src="${imgUrl}" class="product-img" loading="lazy" onerror="this.src='https://via.placeholder.com/60?text=🛒'">
             <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''}>
             <div class="item-content">
                 <span class="item-name">${item.name}</span>
@@ -173,8 +198,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     elements.addItemButton.addEventListener('click', async () => {
+        const name = elements.itemInput.value.trim();
+        if (!name) return;
+
         const data = {
-            name: elements.itemInput.value.trim(),
+            name,
             quantity: elements.quantityInput.value || 1,
             unitPrice: parseFloat(elements.unitPriceInput.value) || 0,
             location: elements.locationInput.value.trim() || 'General',
@@ -183,8 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
             completed: false,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         };
-
-        if (!data.name) return;
 
         if (editingItemId) {
             await itemsCollection.doc(editingItemId).update(data);
@@ -216,14 +242,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.copyListButton.addEventListener('click', () => {
-        let text = "🛒 *LISTA DE COMPRAS*\n\n";
-        const pending = allItems.filter(d => !d.data().completed);
-        pending.forEach(d => {
-            const data = d.data();
-            text += `• *${data.name}* (${data.quantity})\n`;
+        let text = "🛒 *LISTA DE COMPRAS* 🛒\n\n";
+        const grouped = {};
+        
+        allItems.forEach(doc => {
+            const d = doc.data();
+            if (!d.completed) {
+                const loc = d.location || 'General';
+                if (!grouped[loc]) grouped[loc] = [];
+                grouped[loc].push(d);
+            }
         });
-        navigator.clipboard.writeText(text);
-        alert('¡Copiado!');
+
+        for (const loc in grouped) {
+            text += `*📍 ${loc.toUpperCase()}*\n`;
+            grouped[loc].forEach(item => {
+                text += `• ${item.name} (${item.quantity} un.)\n`;
+            });
+            text += "\n";
+        }
+
+        const encodedText = encodeURIComponent(text);
+        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
     });
 
     elements.searchInput.addEventListener('input', renderItems);
