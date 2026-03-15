@@ -1,11 +1,9 @@
-// This is a dummy firebase config file to allow the app to load.
-// These values are not real and will not connect to a database.
 const firebaseConfig = {
-    apiKey: "dummy-api-key",
-    authDomain: "dummy-project.firebaseapp.com",
-    projectId: "dummy-project",
-    storageBucket: "dummy-project.appspot.com",
-    messagingSenderId: "dummy-sender-id",
-    appId: "dummy-app-id",
-    measurementId: "dummy-measurement-id"
+    apiKey: "AIzaSyB-FqW5XJ3bBm4CPxXKNBfHiLLWt8wE_nY",
+    authDomain: "listadecomprasapp-734cf.firebaseapp.com",
+    projectId: "listadecomprasapp-734cf",
+    storageBucket: "listadecomprasapp-734cf.appspot.com",
+    messagingSenderId: "816059785698",
+    appId: "1:816059785698:web:c7b9559f25ce5a273559bb",
+    measurementId: "G-EDHEG28Y4T"
 };
