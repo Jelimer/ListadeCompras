@@ -1,115 +1,149 @@
 /**
  * script.js
  * Orquestador Principal y Controlador de UI para Lista de Compra | PRO.
- * Arquitectura desacoplada en capas: Storage, Reactive Store, Analytics, Chart, Export/Import y Feedback.
- * 100% Offline-First, Accesible (WCAG AA/AAA) y Resiliente.
+ * Integración bidireccional en tiempo real con Firebase Firestore + Resiliencia Offline-First.
  */
 document.addEventListener('DOMContentLoaded', async () => {
   'use strict';
 
   // --- 1. Referencias al DOM ---
   const elements = {
-    // Formulario de Ingesta
     itemInput: document.getElementById('itemInput'),
     quantityInput: document.getElementById('quantityInput'),
     unitPriceInput: document.getElementById('unitPriceInput'),
     locationInput: document.getElementById('locationInput'),
     categoryInput: document.getElementById('categoryInput'),
     addItemButton: document.getElementById('addItemButton'),
-
-    // Sugerencias Datalist
     locationSuggestions: document.getElementById('location-suggestions'),
     categorySuggestions: document.getElementById('category-suggestions'),
-
-    // Filtros y Búsqueda
     searchInput: document.getElementById('searchInput'),
     hideCompletedSwitch: document.getElementById('hideCompletedSwitch'),
-
-    // Acciones de Cabecera
     themeToggle: document.getElementById('themeToggle'),
     exportButton: document.getElementById('exportButton'),
     importButton: document.getElementById('importButton'),
     importFileInput: document.getElementById('importFileInput'),
-
-    // Panel de Estadísticas y Presupuesto
     budgetInput: document.getElementById('budgetInput'),
     budgetProgressBar: document.getElementById('budgetProgressBar'),
     budgetStats: document.getElementById('budgetStats'),
     grandTotalValue: document.getElementById('grandTotalValue'),
     resetListButton: document.getElementById('resetListButton'),
-
-    // Contenedor Principal de la Lista
     shoppingListContainer: document.getElementById('shoppingListContainer')
   };
 
-  // --- 2. Acceso a Módulos UMD ---
-  const StorageModule = window.ShoppingStorage || {};
-  const StateModule = window.ShoppingState || {};
-  const ValidationModule = window.ShoppingValidation || {};
+  // --- 2. Acceso a Módulos Auxiliares ---
+  const ValidationModule = window.ShoppingValidation || window.ValidationModule || {};
   const AvatarsModule = window.ShoppingAvatars || {};
-  const AnalyticsModule = window.ShoppingAnalytics || {};
+  const AnalyticsModule = window.ShoppingAnalytics || window.AnalyticsService || {};
   const ChartModule = window.ShoppingChart || {};
-  const ExportImportModule = window.ShoppingExportImport || {};
-  const FeedbackModule = window.ShoppingFeedback || {};
+  const ExportImportModule = window.ShoppingExportImport || window.ExportImportService || {};
+  const FeedbackModule = window.ShoppingFeedback || window.UIFeedback || {};
+  const StoreClass = window.Store || (window.ShoppingStore && window.ShoppingStore.Store) || (window.ShoppingState && window.ShoppingState.Store);
 
-  // --- 3. Inicialización de Almacenamiento y Store ---
-  let storageService = null;
-  if (typeof StorageModule.createDefaultStorageService === 'function') {
-    storageService = StorageModule.createDefaultStorageService();
+  // --- 3. Inicialización y Detección de Firebase Firestore ---
+  let db = null;
+  let itemsCollection = null;
+  let isFirebaseActive = false;
+
+  try {
+    if (typeof firebase !== 'undefined' && window.firebaseConfig) {
+      const cfg = window.firebaseConfig;
+      const hasRealConfig = cfg && cfg.apiKey && !cfg.apiKey.includes('dummy') && cfg.projectId && !cfg.projectId.includes('dummy');
+
+      if (hasRealConfig) {
+        const app = (firebase.apps && firebase.apps.length > 0) ? firebase.apps[0] : firebase.initializeApp(cfg);
+        db = app.firestore();
+        itemsCollection = db.collection('shoppingItems');
+        isFirebaseActive = true;
+        console.log('[App] Conexión activa con Firebase Firestore.');
+      }
+    }
+  } catch (err) {
+    console.warn('[App] Error al inicializar Firebase SDK:', err.message);
+    isFirebaseActive = false;
   }
 
-  // Carga inicial de datos desde persistencia local o Firebase
+  // --- 4. Inicialización del Store Local Reactivo ---
   let initialItems = [];
-  let initialBudget = 0;
-  let initialTheme = 'light';
+  try {
+    initialItems = JSON.parse(localStorage.getItem('shopping_items') || '[]');
+  } catch (_) {
+    initialItems = [];
+  }
+  const initialBudget = parseFloat(localStorage.getItem('budget')) || 0;
+  const initialTheme = localStorage.getItem('theme') || 'light';
   let initialLocationOrder = [];
   let initialCollapsed = [];
+  try {
+    initialLocationOrder = JSON.parse(localStorage.getItem('locationOrder') || '[]');
+    initialCollapsed = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
+  } catch (_) {}
 
-  if (storageService) {
-    try {
-      initialItems = await storageService.loadItems();
-    } catch (e) {
-      console.warn('[App] No se pudieron cargar items de storage, iniciando vacío:', e);
-      initialItems = [];
-    }
-    initialBudget = storageService.loadBudget() || 0;
-    initialTheme = storageService.loadTheme() || 'light';
-    initialLocationOrder = storageService.loadLocationOrder() || [];
-    initialCollapsed = storageService.loadCollapsedGroups() || [];
-  } else {
-    try {
-      initialItems = JSON.parse(localStorage.getItem('shopping_items') || '[]');
-      initialBudget = parseFloat(localStorage.getItem('budget')) || 0;
-      initialTheme = localStorage.getItem('theme') || 'light';
-      initialLocationOrder = JSON.parse(localStorage.getItem('locationOrder') || '[]');
-      initialCollapsed = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
-    } catch (e) {
-      initialItems = [];
-    }
+  const store = StoreClass 
+    ? new StoreClass({
+        items: initialItems,
+        budget: initialBudget,
+        theme: initialTheme,
+        filters: { search: '', hideCompleted: false },
+        uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed }
+      })
+    : {
+        state: { items: initialItems, budget: initialBudget, filters: { search: '', hideCompleted: false }, uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed } },
+        getState() { return this.state; },
+        on() {},
+        hydrate(data) { Object.assign(this.state, data); },
+        setFilter(f) { Object.assign(this.state.filters, f); },
+        setBudget(b) { this.state.budget = b; }
+      };
+
+  // --- 5. Sincronización en Tiempo Real con Firebase Firestore ---
+  if (isFirebaseActive && itemsCollection) {
+    itemsCollection.orderBy('timestamp', 'desc').onSnapshot(
+      snapshot => {
+        if (!snapshot || !snapshot.docs) return;
+        const remoteItems = snapshot.docs.map(doc => {
+          const d = doc.data() || {};
+          let ts = Date.now();
+          if (d.timestamp) {
+            ts = typeof d.timestamp.toMillis === 'function' ? d.timestamp.toMillis() : (Number(d.timestamp) || Date.now());
+          }
+          return {
+            id: doc.id,
+            name: d.name || 'Sin nombre',
+            quantity: parseFloat(d.quantity) || 1,
+            unitPrice: parseFloat(d.unitPrice) || 0,
+            category: d.category || 'General',
+            location: d.location || 'General',
+            completed: Boolean(d.completed),
+            timestamp: ts
+          };
+        });
+
+        // Actualizar Store local y persistir copia de respaldo
+        if (typeof store.hydrate === 'function') {
+          store.hydrate(remoteItems);
+        } else {
+          store.state.items = remoteItems;
+        }
+        try {
+          localStorage.setItem('shopping_items', JSON.stringify(remoteItems));
+        } catch (_) {}
+
+        renderUI();
+      },
+      err => {
+        console.warn('[App] Error en listener Firestore:', err.message);
+      }
+    );
   }
 
-  const store = new (StateModule.Store || class MockStore {
-    constructor(init) { this.state = init; }
-    getState() { return this.state; }
-  })({
-    items: initialItems,
-    budget: initialBudget,
-    theme: initialTheme,
-    filters: { search: '', hideCompleted: false },
-    uiPreferences: {
-      locationOrder: initialLocationOrder,
-      collapsedGroups: initialCollapsed
-    }
-  }, storageService);
-
-  // --- 4. Controlador de Apache ECharts ---
+  // --- 6. Controlador de Apache ECharts ---
   const chartDom = document.getElementById('categoryChart');
   let chartController = null;
   if (chartDom && ChartModule.ChartController) {
     chartController = new ChartModule.ChartController(chartDom, { echarts: window.echarts });
   }
 
-  // --- 5. Gestión del Tema (Claro / Oscuro) ---
+  // --- 7. Gestión del Tema (Claro / Oscuro) ---
   const applyTheme = (theme) => {
     document.documentElement.setAttribute('data-theme', theme);
     if (elements.themeToggle) {
@@ -126,7 +160,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderUI();
   };
 
-  // Detectar y aplicar preferencia de tema inicial
   const savedTheme = localStorage.getItem('theme') || initialTheme || 'light';
   applyTheme(savedTheme);
 
@@ -139,13 +172,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // --- 6. Renderizado de la Interfaz de Usuario (UI) ---
+  // --- 8. Renderizado de la Interfaz de Usuario ---
   const renderUI = () => {
     const state = store.getState();
     const items = state.items || [];
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-    // A. Analíticas Financieras (precisión en centavos)
+    // A. Analíticas Financieras
     let metrics = { totalPending: 0, totalSpent: 0, totalOverall: 0, budgetRemaining: 0, budgetPercentage: 0 };
     if (AnalyticsModule.calculateMetrics) {
       metrics = AnalyticsModule.calculateMetrics(items, state.budget);
@@ -177,7 +210,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (elements.budgetStats) {
       if (state.budget > 0) {
-        const sign = metrics.budgetRemaining < 0 ? '-' : '';
         const absRem = Math.abs(metrics.budgetRemaining).toFixed(2);
         elements.budgetStats.textContent = metrics.budgetRemaining >= 0 
           ? `Disponible: $${absRem} (${metrics.budgetPercentage}% consumido)`
@@ -198,7 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       chartController.render(breakdown, items, isDark);
     }
 
-    // D. Actualizar sugerencias de autocompletado
+    // D. Sugerencias de Autocompletado
     const distinctLocs = [...new Set(items.map(it => (it.location || '').trim()).filter(Boolean))].sort();
     const distinctCats = [...new Set(items.map(it => (it.category || '').trim()).filter(Boolean))].sort();
 
@@ -209,7 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.categorySuggestions.innerHTML = distinctCats.map(c => `<option value="${c}">`).join('');
     }
 
-    // E. Renderizado de la Lista Agrupada por Ubicación
+    // E. Lista de Productos
     renderShoppingList(state);
   };
 
@@ -220,10 +252,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof store.getGroupedItems === 'function') {
       grouped = store.getGroupedItems();
     } else {
+      const query = (state.filters?.search || '').toLowerCase();
+      const hideCompleted = Boolean(state.filters?.hideCompleted);
+
       (state.items || []).forEach(it => {
-        const loc = (it.location || 'General').trim() || 'General';
-        if (!grouped[loc]) grouped[loc] = [];
-        grouped[loc].push(it);
+        const matchSearch = !query || ((it.name || '') + (it.location || '') + (it.category || '')).toLowerCase().includes(query);
+        const matchHide = !hideCompleted || !it.completed;
+        if (matchSearch && matchHide) {
+          const loc = (it.location || 'General').trim() || 'General';
+          if (!grouped[loc]) grouped[loc] = [];
+          grouped[loc].push(it);
+        }
       });
     }
 
@@ -266,13 +305,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         <span class="group-count-badge">${itemsInGroup.length} ${itemsInGroup.length === 1 ? 'ítem' : 'ítems'}</span>
       `;
 
-      header.addEventListener('click', () => {
-        store.toggleGroupCollapse(loc);
-      });
+      const toggleCollapse = () => {
+        if (typeof store.toggleGroupCollapse === 'function') {
+          store.toggleGroupCollapse(loc);
+        } else {
+          groupDiv.classList.toggle('collapsed');
+        }
+      };
+
+      header.addEventListener('click', toggleCollapse);
       header.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          store.toggleGroupCollapse(loc);
+          toggleCollapse();
         }
       });
 
@@ -298,7 +343,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const totalItemPrice = (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1);
 
-    // Avatar local offline SVG/Lucide
     let avatarMarkup = '';
     if (AvatarsModule.getAvatarMarkup) {
       avatarMarkup = AvatarsModule.getAvatarMarkup(item.category, item.name);
@@ -328,29 +372,61 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `;
 
-    // Checkbox toggle
+    // Marcar/Desmarcar como comprado
     const chk = card.querySelector('.item-checkbox');
-    chk.addEventListener('change', () => {
-      store.toggleCompleted(item.id);
+    chk.addEventListener('change', async () => {
+      const nextCompleted = !item.completed;
+      if (isFirebaseActive && itemsCollection) {
+        try {
+          await itemsCollection.doc(item.id).update({ completed: nextCompleted });
+        } catch (e) {
+          console.warn('[App] Error al actualizar estado en Firebase:', e);
+        }
+      } else {
+        if (typeof store.toggleCompleted === 'function') store.toggleCompleted(item.id);
+        else { item.completed = nextCompleted; renderUI(); }
+      }
     });
 
-    // Botón Editar
+    // Iniciar edición
     const editBtn = card.querySelector('.edit-btn');
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       startEditingItem(item);
     });
 
-    // Botón Eliminar con Deshacer
+    // Eliminar con Toast de Deshacer
     const delBtn = card.querySelector('.del-btn');
-    delBtn.addEventListener('click', (e) => {
+    delBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const removedName = item.name;
-      store.deleteItem(item.id);
+      const removedSnapshot = { ...item };
+
+      if (isFirebaseActive && itemsCollection) {
+        try {
+          await itemsCollection.doc(item.id).delete();
+        } catch (err) {
+          console.warn('[App] Error al eliminar de Firebase:', err);
+        }
+      } else {
+        if (typeof store.deleteItem === 'function') store.deleteItem(item.id);
+        else {
+          store.state.items = (store.state.items || []).filter(i => i.id !== item.id);
+          renderUI();
+        }
+      }
 
       if (FeedbackModule.showUndoToast) {
-        FeedbackModule.showUndoToast(`"${removedName}" eliminado`, () => {
-          store.undoLastAction();
+        FeedbackModule.showUndoToast(`"${removedSnapshot.name}" eliminado`, async () => {
+          if (isFirebaseActive && itemsCollection) {
+            try {
+              await itemsCollection.doc(removedSnapshot.id).set(removedSnapshot);
+            } catch (err) {
+              console.warn('[App] Error al restaurar en Firebase:', err);
+            }
+          } else {
+            if (typeof store.undoLastAction === 'function') store.undoLastAction();
+            else { store.state.items.push(removedSnapshot); renderUI(); }
+          }
         });
       }
     });
@@ -358,7 +434,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return card;
   };
 
-  // --- 7. Modo Edición ---
+  // --- 9. Modo Edición ---
   let currentEditingId = null;
 
   const startEditingItem = (item) => {
@@ -395,8 +471,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (elements.categoryInput) elements.categoryInput.value = '';
   };
 
-  // --- 8. Manejo de Ingesta (Añadir / Guardar) ---
-  const handleFormSubmit = () => {
+  // --- 10. Formulario de Añadir / Guardar ---
+  const handleFormSubmit = async () => {
     const rawData = {
       name: elements.itemInput.value,
       quantity: elements.quantityInput.value,
@@ -409,30 +485,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (ValidationModule.validateItem) {
       validationRes = ValidationModule.validateItem(rawData);
     } else {
-      validationRes = { isValid: !!rawData.name.trim(), cleanData: rawData };
+      const valid = Boolean(rawData.name && rawData.name.trim());
+      validationRes = { isValid: valid, cleanData: rawData, errors: valid ? [] : ['El nombre es obligatorio'] };
     }
 
     if (!validationRes.isValid) {
       const errMsg = (validationRes.errors && validationRes.errors[0]) || 'Por favor verifica los datos ingresados.';
-      if (FeedbackModule.showToast) {
-        FeedbackModule.showToast(errMsg, 'error');
-      } else {
-        alert(errMsg);
-      }
+      if (FeedbackModule.showToast) FeedbackModule.showToast(errMsg, 'error');
+      else alert(errMsg);
       elements.itemInput.focus();
       return;
     }
 
     const clean = validationRes.cleanData;
 
-    if (currentEditingId) {
-      store.updateItem(currentEditingId, clean);
-      cancelEditing();
-      if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado correctamente', 'success');
+    if (isFirebaseActive && itemsCollection) {
+      try {
+        const firestoreData = {
+          name: clean.name,
+          quantity: clean.quantity,
+          unitPrice: clean.unitPrice,
+          location: clean.location,
+          category: clean.category,
+          completed: false,
+          timestamp: (firebase.firestore && firebase.firestore.FieldValue) 
+            ? firebase.firestore.FieldValue.serverTimestamp() 
+            : Date.now()
+        };
+
+        if (currentEditingId) {
+          await itemsCollection.doc(currentEditingId).update(firestoreData);
+          cancelEditing();
+          if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado en Firebase', 'success');
+        } else {
+          await itemsCollection.add(firestoreData);
+          clearInputs();
+          if (elements.itemInput) elements.itemInput.focus();
+        }
+      } catch (err) {
+        console.warn('[App] Error al escribir en Firebase:', err);
+        if (FeedbackModule.showToast) FeedbackModule.showToast('Error de conexión a Firebase', 'error');
+      }
     } else {
-      store.addItem(clean);
-      clearInputs();
-      if (elements.itemInput) elements.itemInput.focus();
+      if (currentEditingId) {
+        if (typeof store.updateItem === 'function') store.updateItem(currentEditingId, clean);
+        cancelEditing();
+        if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado correctamente', 'success');
+      } else {
+        if (typeof store.addItem === 'function') store.addItem(clean);
+        clearInputs();
+        if (elements.itemInput) elements.itemInput.focus();
+      }
+      renderUI();
     }
   };
 
@@ -440,7 +544,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     elements.addItemButton.addEventListener('click', handleFormSubmit);
   }
 
-  // --- 9. Atajos de Teclado (F19) ---
+  // --- 11. Atajos de Teclado ---
   [elements.itemInput, elements.quantityInput, elements.unitPriceInput, elements.locationInput, elements.categoryInput].forEach(inp => {
     if (!inp) return;
     inp.addEventListener('keydown', (e) => {
@@ -456,56 +560,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // --- 10. Filtros Reactivos (Búsqueda y Ocultar Comprados) ---
+  // --- 12. Filtros y Búsqueda ---
   if (elements.searchInput) {
     elements.searchInput.addEventListener('input', (e) => {
       store.setFilter({ search: e.target.value });
+      renderUI();
     });
   }
 
   if (elements.hideCompletedSwitch) {
     elements.hideCompletedSwitch.addEventListener('change', (e) => {
       store.setFilter({ hideCompleted: e.target.checked });
+      renderUI();
     });
   }
 
-  // --- 11. Presupuesto Reactivo ---
+  // --- 13. Presupuesto Reactivo ---
   if (elements.budgetInput) {
     elements.budgetInput.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value) || 0;
       store.setBudget(val);
+      localStorage.setItem('budget', String(val));
+      renderUI();
     });
   }
 
-  // --- 12. Limpiar Comprados con Confirmación y Deshacer ---
+  // --- 14. Limpiar Comprados ---
   if (elements.resetListButton) {
     elements.resetListButton.addEventListener('click', async () => {
       const state = store.getState();
-      const completedCount = (state.items || []).filter(it => it.completed).length;
+      const completedItems = (state.items || []).filter(it => it.completed);
 
-      if (completedCount === 0) {
-        if (FeedbackModule.showToast) {
-          FeedbackModule.showToast('No hay productos comprados para limpiar', 'info');
-        }
+      if (completedItems.length === 0) {
+        if (FeedbackModule.showToast) FeedbackModule.showToast('No hay productos comprados para limpiar', 'info');
         return;
       }
 
-      const confirmed = await FeedbackModule.confirmClearCompleted(completedCount);
-      if (confirmed) {
-        store.clearCompleted();
-        if (window.confetti) {
-          window.confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        }
-        if (FeedbackModule.showUndoToast) {
-          FeedbackModule.showUndoToast(`Se limpiaron ${completedCount} productos comprados`, () => {
-            store.undoLastAction();
+      const confirmed = await FeedbackModule.confirmClearCompleted(completedItems.length);
+      if (!confirmed) return;
+
+      if (isFirebaseActive && db && itemsCollection) {
+        try {
+          const batch = db.batch();
+          completedItems.forEach(it => {
+            batch.delete(itemsCollection.doc(it.id));
           });
+          await batch.commit();
+        } catch (err) {
+          console.warn('[App] Error al limpiar en Firebase:', err);
         }
+      } else {
+        if (typeof store.clearCompleted === 'function') store.clearCompleted();
+        renderUI();
+      }
+
+      if (window.confetti) {
+        window.confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      }
+
+      if (FeedbackModule.showUndoToast) {
+        FeedbackModule.showUndoToast(`Se limpiaron ${completedItems.length} productos comprados`, async () => {
+          if (isFirebaseActive && db && itemsCollection) {
+            try {
+              const batch = db.batch();
+              completedItems.forEach(it => {
+                batch.set(itemsCollection.doc(it.id), it);
+              });
+              await batch.commit();
+            } catch (err) {
+              console.warn('[App] Error al deshacer en Firebase:', err);
+            }
+          } else {
+            if (typeof store.undoLastAction === 'function') store.undoLastAction();
+            renderUI();
+          }
+        });
       }
     });
   }
 
-  // --- 13. Exportación e Importación de Listas ---
+  // --- 15. Exportación e Importación ---
   if (elements.exportButton) {
     elements.exportButton.addEventListener('click', async () => {
       const state = store.getState();
@@ -521,7 +655,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         const res = await Swal.fire({
           title: 'Exportar Lista',
-          text: 'Selecciona el formato de exportación:',
+          text: 'Selecciona el formato de descarga:',
           icon: 'question',
           showCancelButton: true,
           showDenyButton: true,
@@ -583,18 +717,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mode = await FeedbackModule.confirmImportMode(result.items.length);
         if (mode === 'cancel') return;
 
-        if (mode === 'overwrite') {
-          store.hydrate(result.items);
-          if (result.budget > 0) store.setBudget(result.budget);
-        } else {
-          // Merge
-          result.items.forEach(it => {
-            store.addItem(it);
-          });
-          if (result.budget > 0) {
-            const currentBudget = store.getState().budget || 0;
-            if (currentBudget === 0) store.setBudget(result.budget);
+        if (isFirebaseActive && db && itemsCollection) {
+          try {
+            const batch = db.batch();
+            if (mode === 'overwrite') {
+              const existing = await itemsCollection.get();
+              existing.docs.forEach(doc => batch.delete(doc.ref));
+            }
+            result.items.forEach(it => {
+              const docId = it.id || (db.collection('shoppingItems').doc().id);
+              batch.set(itemsCollection.doc(docId), {
+                ...it,
+                timestamp: it.timestamp || Date.now()
+              });
+            });
+            await batch.commit();
+          } catch (err) {
+            console.warn('[App] Error al importar en Firebase:', err);
           }
+        } else {
+          if (mode === 'overwrite') {
+            store.hydrate(result.items);
+          } else {
+            result.items.forEach(it => store.addItem(it));
+          }
+          renderUI();
         }
 
         if (FeedbackModule.showToast) {
@@ -606,7 +753,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // --- 14. Drag & Drop Reordenamiento con SortableJS ---
+  // --- 16. Reordenamiento Drag & Drop con SortableJS ---
   if (window.Sortable && elements.shoppingListContainer) {
     new window.Sortable(elements.shoppingListContainer, {
       animation: 150,
@@ -614,15 +761,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       onEnd: () => {
         const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
           .map(g => g.dataset.location);
-        store.reorderLocations(newOrder);
+        if (typeof store.reorderLocations === 'function') store.reorderLocations(newOrder);
+        localStorage.setItem('locationOrder', JSON.stringify(newOrder));
       }
     });
   }
 
-  // --- 15. Suscripción a Cambios del Store ---
-  store.on('state:changed', () => {
-    renderUI();
-  });
+  // --- 17. Suscripción a Cambios del Store ---
+  if (typeof store.on === 'function') {
+    store.on('state:changed', () => {
+      renderUI();
+    });
+  }
 
   // Primer renderizado
   renderUI();

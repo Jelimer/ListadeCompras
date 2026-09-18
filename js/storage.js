@@ -12,7 +12,9 @@
   } else if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
-    root.StorageService = factory();
+    const exports = factory();
+    root.StorageService = exports;
+    root.ShoppingStorage = exports;
   }
 }(typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : this), function () {
   'use strict';
