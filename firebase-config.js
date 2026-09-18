@@ -1,6 +1,5 @@
-// This is a dummy firebase config file to allow the app to load.
-// These values are not real and will not connect to a database.
-const firebaseConfig = {
+// Configuración de Firebase generada dinámicamente en build
+var firebaseConfig = {
     apiKey: "dummy-api-key",
     authDomain: "dummy-project.firebaseapp.com",
     projectId: "dummy-project",
@@ -9,3 +8,13 @@ const firebaseConfig = {
     appId: "dummy-app-id",
     measurementId: "dummy-measurement-id"
 };
+
+if (typeof window !== 'undefined') {
+    window.firebaseConfig = firebaseConfig;
+}
+if (typeof globalThis !== 'undefined') {
+    globalThis.firebaseConfig = firebaseConfig;
+}
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = firebaseConfig;
+}

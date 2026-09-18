@@ -46,26 +46,117 @@
     return copy;
   }
 
+  /**
+   * Normalizador de texto para búsquedas insensibles a mayúsculas y acentos
+   */
+  function normalizeSearchText(str) {
+    return (str === null || str === undefined ? '' : str)
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  /**
+   * Sanitiza y normaliza un producto para garantizar el contrato ShoppingItem
+   */
+  function sanitizeProduct(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const clean = deepClone(raw);
+    if (!clean.id || typeof clean.id !== 'string') {
+      clean.id = clean.id ? String(clean.id) : generateId();
+    }
+    const nameStr = (typeof clean.name === 'string') ? clean.name.trim() : (clean.name !== null && clean.name !== undefined ? String(clean.name).trim() : '');
+    clean.name = nameStr || 'Sin nombre';
+
+    const locStr = (typeof clean.location === 'string') ? clean.location.trim() : (clean.location !== null && clean.location !== undefined ? String(clean.location).trim() : '');
+    clean.location = locStr || 'General';
+
+    const catStr = (typeof clean.category === 'string') ? clean.category.trim() : (clean.category !== null && clean.category !== undefined ? String(clean.category).trim() : '');
+    clean.category = catStr || 'General';
+
+    let rawQty = clean.quantity;
+    if (typeof rawQty === 'string') rawQty = rawQty.trim().replace(',', '.');
+    let q = Number(rawQty);
+    let parsedQty = (!isNaN(q) && isFinite(q) && q > 0) ? Math.round((q + Number.EPSILON) * 1000) / 1000 : 1;
+    clean.quantity = parsedQty > 0 ? parsedQty : 1;
+
+    let rawPrice = clean.unitPrice;
+    if (typeof rawPrice === 'string') rawPrice = rawPrice.trim().replace(',', '.');
+    let p = Number(rawPrice);
+    clean.unitPrice = (!isNaN(p) && isFinite(p) && p >= 0) ? Math.round((p + Number.EPSILON) * 100) / 100 : 0;
+
+    clean.completed = Boolean(clean.completed);
+    clean.timestamp = (typeof clean.timestamp === 'number' && clean.timestamp > 0) ? clean.timestamp : Date.now();
+    clean.updatedAt = (typeof clean.updatedAt === 'number' && clean.updatedAt > 0) ? clean.updatedAt : clean.timestamp;
+
+    return clean;
+  }
+
   class Store {
     /**
-     * @param {Object} initialState - Estado inicial de arranque
+     * @param {Object|Array} initialState - Estado inicial de arranque o array directo de productos
      * @param {Object|null} storageService - Servicio opcional de persistencia inyectado
      */
     constructor(initialState = {}, storageService = null) {
       this.storageService = storageService;
 
+      let initialItems = [];
+      let rawFilter = {};
+      let initialBudget = 0;
+      let initialLocationOrder = [];
+      let initialCollapsed = [];
+      let initialEditingItemId = null;
+
+      if (Array.isArray(initialState)) {
+        initialItems = initialState;
+      } else if (initialState && typeof initialState === 'object') {
+        if (Array.isArray(initialState.items)) {
+          initialItems = initialState.items;
+        }
+        rawFilter = initialState.filter || initialState.filters || {};
+        if (typeof initialState.budget === 'number' && isFinite(initialState.budget) && initialState.budget >= 0) {
+          initialBudget = Math.round((initialState.budget + Number.EPSILON) * 100) / 100;
+        }
+        if (initialState.editingItemId) initialEditingItemId = String(initialState.editingItemId);
+        if (Array.isArray(initialState.locationOrder)) initialLocationOrder = [...initialState.locationOrder];
+        if (Array.isArray(initialState.collapsedGroups)) initialCollapsed = [...initialState.collapsedGroups];
+        if (initialState.uiPreferences && typeof initialState.uiPreferences === 'object') {
+          if (Array.isArray(initialState.uiPreferences.locationOrder) && initialLocationOrder.length === 0) {
+            initialLocationOrder = [...initialState.uiPreferences.locationOrder];
+          }
+          if (Array.isArray(initialState.uiPreferences.collapsedGroups) && initialCollapsed.length === 0) {
+            initialCollapsed = [...initialState.uiPreferences.collapsedGroups];
+          }
+        }
+      }
+
+      const initialSearch = rawFilter.searchQuery !== undefined 
+        ? rawFilter.searchQuery 
+        : (rawFilter.search !== undefined ? rawFilter.search : '');
+      const initialHide = Boolean(rawFilter.hideCompleted);
+
+      const filterObj = {
+        searchQuery: String(initialSearch || ''),
+        search: String(initialSearch || ''),
+        hideCompleted: initialHide
+      };
+
+      const uiPrefs = {
+        locationOrder: initialLocationOrder,
+        collapsedGroups: initialCollapsed
+      };
+
       this.state = {
-        items: Array.isArray(initialState.items) ? deepClone(initialState.items) : [],
-        budget: typeof initialState.budget === 'number' && isFinite(initialState.budget) && initialState.budget >= 0
-          ? Math.round((initialState.budget + Number.EPSILON) * 100) / 100
-          : 0,
-        filter: {
-          searchQuery: (initialState.filter && initialState.filter.searchQuery) ? String(initialState.filter.searchQuery) : '',
-          hideCompleted: Boolean(initialState.filter && initialState.filter.hideCompleted)
-        },
-        editingItemId: initialState.editingItemId ? String(initialState.editingItemId) : null,
-        locationOrder: Array.isArray(initialState.locationOrder) ? [...initialState.locationOrder] : [],
-        collapsedGroups: Array.isArray(initialState.collapsedGroups) ? [...initialState.collapsedGroups] : []
+        items: initialItems.map(sanitizeProduct).filter(Boolean),
+        budget: initialBudget,
+        filter: filterObj,
+        filters: filterObj,
+        editingItemId: initialEditingItemId,
+        locationOrder: initialLocationOrder,
+        collapsedGroups: initialCollapsed,
+        uiPreferences: uiPrefs
       };
 
       this.listeners = new Set();
@@ -222,21 +313,28 @@
       return { ...this.state.filter };
     }
 
+    getFilters() {
+      return { ...(this.state.filters || this.state.filter) };
+    }
+
     getEditingItem() {
       if (!this.state.editingItemId) return null;
       return this.getItemById(this.state.editingItemId);
     }
 
     getFilteredItems() {
-      const query = (this.state.filter.searchQuery || '').toLowerCase().trim();
-      const hideCompleted = Boolean(this.state.filter.hideCompleted);
+      const activeFilter = this.state.filter || this.state.filters || {};
+      const query = normalizeSearchText(activeFilter.searchQuery || activeFilter.search || '');
+      const hideCompleted = Boolean(activeFilter.hideCompleted);
+
+      const tokens = query ? query.split(/\s+/).filter(Boolean) : [];
 
       return this.state.items
         .filter(item => {
           if (hideCompleted && item.completed) return false;
-          if (!query) return true;
-          const searchHaystack = `${item.name} ${item.location || ''} ${item.category || ''}`.toLowerCase();
-          return searchHaystack.includes(query);
+          if (tokens.length === 0) return true;
+          const searchHaystack = normalizeSearchText(`${item.name || ''} ${item.location || ''} ${item.category || ''}`);
+          return tokens.every(token => searchHaystack.includes(token));
         })
         .map(deepClone);
     }
@@ -265,7 +363,7 @@
         const ia = order.indexOf(a);
         const ib = order.indexOf(b);
         if (ia === -1 && ib === -1) return a.localeCompare(b, 'es', { sensitivity: 'base' });
-        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+        return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
       });
 
       const result = {};
@@ -577,14 +675,34 @@
     }
 
     setFilter(filterData = {}) {
+      if (!filterData || typeof filterData !== 'object') return;
+
+      let nextSearch = undefined;
       if (filterData.searchQuery !== undefined) {
-        this.state.filter.searchQuery = String(filterData.searchQuery);
-      }
-      if (filterData.hideCompleted !== undefined) {
-        this.state.filter.hideCompleted = Boolean(filterData.hideCompleted);
+        nextSearch = filterData.searchQuery === null ? '' : String(filterData.searchQuery);
+      } else if (filterData.search !== undefined) {
+        nextSearch = filterData.search === null ? '' : String(filterData.search);
       }
 
-      this._emit('filter:changed', { filter: { ...this.state.filter } });
+      if (nextSearch !== undefined) {
+        this.state.filter.searchQuery = nextSearch;
+        this.state.filter.search = nextSearch;
+        if (this.state.filters) {
+          this.state.filters.searchQuery = nextSearch;
+          this.state.filters.search = nextSearch;
+        }
+      }
+
+      if (filterData.hideCompleted !== undefined) {
+        const hide = Boolean(filterData.hideCompleted);
+        this.state.filter.hideCompleted = hide;
+        if (this.state.filters) {
+          this.state.filters.hideCompleted = hide;
+        }
+      }
+
+      const filterSnapshot = { ...this.state.filter };
+      this._emit('filter:changed', { filter: filterSnapshot, filters: filterSnapshot });
       this._emit('state:changed', { state: this.getState() });
     }
 
@@ -599,6 +717,9 @@
     reorderLocations(newOrder) {
       if (!Array.isArray(newOrder)) return;
       this.state.locationOrder = [...newOrder.map(String)];
+      if (this.state.uiPreferences) {
+        this.state.uiPreferences.locationOrder = this.state.locationOrder;
+      }
       this._persistLocations();
       this._emit('locations:reordered', { locationOrder: this.state.locationOrder });
       this._emit('state:changed', { state: this.getState() });
@@ -617,6 +738,9 @@
       }
 
       this.state.collapsedGroups = Array.from(set);
+      if (this.state.uiPreferences) {
+        this.state.uiPreferences.collapsedGroups = this.state.collapsedGroups;
+      }
       this._persistCollapsedGroups();
       this._emit('group:toggled', { location: target, isCollapsed });
       this._emit('state:changed', { state: this.getState() });
@@ -628,17 +752,49 @@
     // ==========================================
 
     hydrate(data = {}) {
-      if (Array.isArray(data.items)) {
-        this.state.items = deepClone(data.items);
+      if (!data || typeof data !== 'object') return;
+
+      let itemsToHydrate = null;
+      if (Array.isArray(data)) {
+        itemsToHydrate = data;
+      } else if (typeof data === 'object' && Array.isArray(data.items)) {
+        itemsToHydrate = data.items;
       }
-      if (typeof data.budget === 'number' && isFinite(data.budget) && data.budget >= 0) {
-        this.state.budget = Math.round((data.budget + Number.EPSILON) * 100) / 100;
+
+      if (itemsToHydrate !== null) {
+        this.state.items = itemsToHydrate.map(sanitizeProduct).filter(Boolean);
       }
-      if (Array.isArray(data.locationOrder)) {
-        this.state.locationOrder = [...data.locationOrder.map(String)];
-      }
-      if (Array.isArray(data.collapsedGroups)) {
-        this.state.collapsedGroups = [...data.collapsedGroups.map(String)];
+
+      if (typeof data === 'object' && !Array.isArray(data)) {
+        if (typeof data.budget === 'number' && isFinite(data.budget) && data.budget >= 0) {
+          this.state.budget = Math.round((data.budget + Number.EPSILON) * 100) / 100;
+        }
+        if (Array.isArray(data.locationOrder)) {
+          this.state.locationOrder = [...data.locationOrder.map(String)];
+          if (this.state.uiPreferences) {
+            this.state.uiPreferences.locationOrder = this.state.locationOrder;
+          }
+        }
+        if (Array.isArray(data.collapsedGroups)) {
+          this.state.collapsedGroups = [...data.collapsedGroups.map(String)];
+          if (this.state.uiPreferences) {
+            this.state.uiPreferences.collapsedGroups = this.state.collapsedGroups;
+          }
+        }
+        if (data.uiPreferences && typeof data.uiPreferences === 'object') {
+          if (Array.isArray(data.uiPreferences.locationOrder)) {
+            this.state.locationOrder = [...data.uiPreferences.locationOrder.map(String)];
+            if (this.state.uiPreferences) {
+              this.state.uiPreferences.locationOrder = this.state.locationOrder;
+            }
+          }
+          if (Array.isArray(data.uiPreferences.collapsedGroups)) {
+            this.state.collapsedGroups = [...data.uiPreferences.collapsedGroups.map(String)];
+            if (this.state.uiPreferences) {
+              this.state.uiPreferences.collapsedGroups = this.state.collapsedGroups;
+            }
+          }
+        }
       }
 
       this._persistItems();

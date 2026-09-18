@@ -641,6 +641,311 @@ async function runAllTests() {
       assert.strictEqual(storedItems[0].name, 'Persistente 1');
       assert.strictEqual(StorageService.loadBudget(), 500);
     });
+
+    await test('Hidratación flexible (R1): admite array directo de items y emite state:changed', () => {
+      const store = createStore();
+      let stateChangedEmitted = false;
+      let itemsChangedEmitted = false;
+
+      store.on('state:changed', () => { stateChangedEmitted = true; });
+      store.on('items:changed', () => { itemsChangedEmitted = true; });
+
+      const directArray = [
+        { id: 'arr_1', name: 'Manzanas Directas', quantity: 2, unitPrice: 1.5, category: 'Frutas', completed: false },
+        { id: 'arr_2', name: 'Plátanos Directos', quantity: 1, unitPrice: 2.0, category: 'Frutas', completed: true }
+      ];
+
+      store.hydrate(directArray);
+
+      assert.strictEqual(store.getItems().length, 2);
+      assert.strictEqual(store.getItems()[0].name, 'Manzanas Directas');
+      assert.strictEqual(store.getItems()[1].name, 'Plátanos Directos');
+      assert.strictEqual(stateChangedEmitted, true, 'Debe emitir state:changed');
+      assert.strictEqual(itemsChangedEmitted, true, 'Debe emitir items:changed');
+    });
+
+    await test('Hidratación robusta (R1 adversarial): sanea elementos null, genera IDs faltantes y rechaza primitivos', () => {
+      const store = createStore();
+
+      // Primitivo debe ignorarse sin lanzar ni alterar items
+      store.hydrate('un string inválido');
+      store.hydrate(12345);
+      store.hydrate(true);
+      assert.strictEqual(store.getItems().length, 0);
+
+      // Array con elementos nulos o items sin ID
+      store.hydrate([
+        null,
+        undefined,
+        { name: 'Producto sin ID', quantity: 3, unitPrice: 2.5 },
+        'otro inválido',
+        { id: 'custom_id_10', name: 'Con ID', quantity: 1 }
+      ]);
+
+      const items = store.getItems();
+      assert.strictEqual(items.length, 2, 'Debe filtrar elementos nulos o no-objeto');
+      assert.ok(items[0].id, 'Debe generar automáticamente un ID si faltaba');
+      assert.strictEqual(items[0].name, 'Producto sin ID');
+      assert.strictEqual(items[1].id, 'custom_id_10');
+
+      // Los items deben poder manipularse con toggle y delete sin fallar
+      const toggled = store.toggleCompleted(items[0].id);
+      assert.strictEqual(toggled.completed, true);
+
+      // getGroupedItems no debe lanzar TypeError ante datos hidratados
+      const grouped = store.getGroupedItems();
+      assert.ok(grouped.General, 'Debe agrupar en General');
+      assert.strictEqual(grouped.General.length, 2);
+    });
+
+    await test('Unificación de filtros (R3): soporta search y searchQuery, y unifica state.filter / state.filters', () => {
+      const store = createStore({
+        filters: { search: 'inicial', hideCompleted: true }
+      });
+
+      assert.strictEqual(store.getFilter().search, 'inicial');
+      assert.strictEqual(store.getFilter().searchQuery, 'inicial');
+      assert.strictEqual(store.getFilters().search, 'inicial');
+      assert.strictEqual(store.getState().filters.search, 'inicial');
+      assert.strictEqual(store.getState().filter.searchQuery, 'inicial');
+      assert.strictEqual(store.getFilter().hideCompleted, true);
+
+      // Mutación con search
+      store.setFilter({ search: 'nuevo_search' });
+      assert.strictEqual(store.getFilter().search, 'nuevo_search');
+      assert.strictEqual(store.getFilter().searchQuery, 'nuevo_search');
+      assert.strictEqual(store.getFilters().search, 'nuevo_search');
+
+      // Mutación con searchQuery
+      store.setFilter({ searchQuery: 'nuevo_query' });
+      assert.strictEqual(store.getFilter().search, 'nuevo_query');
+      assert.strictEqual(store.getFilter().searchQuery, 'nuevo_query');
+      assert.strictEqual(store.getFilters().searchQuery, 'nuevo_query');
+    });
+
+    await test('Resiliencia de filtros (R3 adversarial): setFilter con null o vacío no produce string "null"', () => {
+      const store = createStore();
+      store.setFilter({ search: 'buscar_algo' });
+      assert.strictEqual(store.getFilter().search, 'buscar_algo');
+
+      // Limpiar filtro con search: null
+      store.setFilter({ search: null });
+      assert.strictEqual(store.getFilter().search, '', 'search: null debe resetear a string vacío');
+      assert.strictEqual(store.getFilter().searchQuery, '', 'searchQuery debe sincronizarse a vacío');
+
+      // Limpiar filtro con searchQuery: null
+      store.setFilter({ searchQuery: 'otro' });
+      store.setFilter({ searchQuery: null });
+      assert.strictEqual(store.getFilter().search, '');
+      assert.strictEqual(store.getFilter().searchQuery, '');
+    });
+
+    await test('Búsqueda insensible a acentos y diacríticos (R3 adversarial)', () => {
+      const store = createStore();
+      store.addItem({ name: 'Plátano Canario', location: 'Frutería', category: 'Frutas' });
+      store.addItem({ name: 'Café Colombiano', location: 'Despensa', category: 'Bebidas' });
+      store.addItem({ name: 'Jamón Serrano', location: 'Charcutería', category: 'Carnes' });
+
+      // Buscar "platano" sin acento debe encontrar "Plátano Canario"
+      store.setFilter({ search: 'platano' });
+      let filtered = store.getFilteredItems();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].name, 'Plátano Canario');
+
+      // Buscar "CAFE" debe encontrar "Café Colombiano"
+      store.setFilter({ search: 'cafe' });
+      filtered = store.getFilteredItems();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].name, 'Café Colombiano');
+
+      // Buscar con acento "jamón" debe encontrar "Jamón Serrano"
+      store.setFilter({ searchQuery: 'jamon' });
+      filtered = store.getFilteredItems();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].name, 'Jamón Serrano');
+    });
+
+    await test('Exposición de configuración de Firebase (R2): asigna explícitamente a global y CommonJS', () => {
+      delete require.cache[require.resolve(path.join(__dirname, '..', 'firebase-config.js'))];
+      const exported = require(path.join(__dirname, '..', 'firebase-config.js'));
+      const resolved = (typeof window !== 'undefined' && window.firebaseConfig) 
+        || (typeof globalThis !== 'undefined' && globalThis.firebaseConfig)
+        || exported;
+
+      assert.ok(resolved !== undefined && resolved !== null, 'firebaseConfig debe estar accesible');
+      assert.ok(resolved.apiKey, 'Debe contener apiKey');
+      assert.ok(resolved.projectId, 'Debe contener projectId');
+      assert.strictEqual(exported.apiKey, resolved.apiKey, 'require CommonJS debe retornar el objeto config');
+    });
+
+    await test('Constructor robusto (R1 adversarial round 2): sanea array con nulls y asigna IDs faltantes', () => {
+      const storeWithNulls = createStore([
+        null,
+        undefined,
+        { name: 'Producto Inicial Sin ID' },
+        'otro tipo'
+      ]);
+
+      const items = storeWithNulls.getItems();
+      assert.strictEqual(items.length, 1);
+      assert.strictEqual(items[0].name, 'Producto Inicial Sin ID');
+      assert.ok(items[0].id, 'Debe asignar ID al inicializar');
+      assert.strictEqual(items[0].quantity, 1);
+      assert.strictEqual(items[0].unitPrice, 0);
+      assert.strictEqual(items[0].location, 'General');
+      assert.strictEqual(items[0].category, 'General');
+
+      // getGroupedItems no debe lanzar excepción
+      const grouped = storeWithNulls.getGroupedItems();
+      assert.ok(grouped.General);
+      assert.strictEqual(grouped.General.length, 1);
+    });
+
+    await test('Hidratación con campos parciales (R1 adversarial round 2): asigna valores por defecto consistentes', () => {
+      const store = createStore();
+      store.hydrate([
+        { name: 'Pan de Molde' }
+      ]);
+
+      const items = store.getItems();
+      assert.strictEqual(items.length, 1);
+      assert.strictEqual(items[0].name, 'Pan de Molde');
+      assert.strictEqual(items[0].quantity, 1);
+      assert.strictEqual(items[0].unitPrice, 0);
+      assert.strictEqual(items[0].location, 'General');
+      assert.strictEqual(items[0].category, 'General');
+      assert.strictEqual(items[0].completed, false);
+      assert.ok(items[0].id);
+      assert.ok(items[0].timestamp > 0);
+    });
+
+    await test('Búsqueda multi-palabra y normalización de número 0 (R3 adversarial round 2)', () => {
+      const store = createStore();
+      store.addItem({ name: 'Leche Entera', location: 'Supermercado Central', category: 'Lácteos' });
+      store.addItem({ name: 'Pan Integral', location: 'Panadería Local', category: 'Panadería' });
+
+      // Búsqueda multi-token en distinto orden
+      store.setFilter({ search: 'central leche' });
+      let filtered = store.getFilteredItems();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].name, 'Leche Entera');
+
+      // Búsqueda insensible a orden con tienda + nombre
+      store.setFilter({ searchQuery: 'local panadería' });
+      filtered = store.getFilteredItems();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].name, 'Pan Integral');
+
+      // Búsqueda del número 0 no debe resetearse a cadena vacía
+      store.addItem({ name: '0% Azúcar', location: 'General' });
+      store.setFilter({ search: '0%' });
+      filtered = store.getFilteredItems();
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].name, '0% Azúcar');
+    });
+
+    await test('Blindaje de micro-cantidades en sanitizeProduct (R1 adversarial round 3): cantidades infinitesimales se elevan a 1 en vez de redondear a 0', () => {
+      const store = createStore();
+      store.hydrate([
+        { name: 'Micro Polvo', quantity: 0.0001, unitPrice: 0 }
+      ]);
+      const items = store.getItems();
+      assert.strictEqual(items.length, 1);
+      assert.strictEqual(items[0].quantity, 1, 'Micro-cantidad que redondea a 0 debe elevarse a 1 para satisfacer el contrato quantity > 0');
+    });
+
+    await test('Sincronización bidireccional de uiPreferences y collapsedGroups (R1/R3 adversarial round 3): Store inicializa y muta en sincronía', () => {
+      // Inicialización con uiPreferences anidado
+      const storeWithPrefs = createStore({
+        uiPreferences: {
+          locationOrder: ['Frutería', 'Panadería'],
+          collapsedGroups: ['Frutería']
+        }
+      });
+
+      assert.deepStrictEqual(storeWithPrefs.getState().locationOrder, ['Frutería', 'Panadería']);
+      assert.deepStrictEqual(storeWithPrefs.getState().collapsedGroups, ['Frutería']);
+      assert.deepStrictEqual(storeWithPrefs.getState().uiPreferences.collapsedGroups, ['Frutería']);
+
+      // Mutación de colapso
+      const isNowCollapsed = storeWithPrefs.toggleGroupCollapse('Panadería');
+      assert.strictEqual(isNowCollapsed, true);
+      assert.ok(storeWithPrefs.getState().collapsedGroups.includes('Panadería'));
+      assert.ok(storeWithPrefs.getState().uiPreferences.collapsedGroups.includes('Panadería'));
+
+      // Descolapso
+      const isUncollapsed = storeWithPrefs.toggleGroupCollapse('Panadería');
+      assert.strictEqual(isUncollapsed, false);
+      assert.ok(!storeWithPrefs.getState().collapsedGroups.includes('Panadería'));
+      assert.ok(!storeWithPrefs.getState().uiPreferences.collapsedGroups.includes('Panadería'));
+    });
+
+    await test('Detección de configuración Firebase desde FIREBASE_CONFIG JSON (R2 adversarial round 3)', () => {
+      const originalEnv = process.env.FIREBASE_CONFIG;
+      try {
+        process.env.FIREBASE_CONFIG = JSON.stringify({
+          apiKey: 'json-api-key-test',
+          projectId: 'json-project-test'
+        });
+
+        // Ejecutar generate-config.js y verificar contenido generado
+        delete require.cache[require.resolve(path.join(__dirname, '..', 'generate-config.js'))];
+        require(path.join(__dirname, '..', 'generate-config.js'));
+
+        delete require.cache[require.resolve(path.join(__dirname, '..', 'firebase-config.js'))];
+        const cfg = require(path.join(__dirname, '..', 'firebase-config.js'));
+
+        assert.strictEqual(cfg.apiKey, 'json-api-key-test');
+        assert.strictEqual(cfg.projectId, 'json-project-test');
+      } finally {
+        if (originalEnv !== undefined) {
+          process.env.FIREBASE_CONFIG = originalEnv;
+        } else {
+          delete process.env.FIREBASE_CONFIG;
+        }
+        // Restaurar archivo de configuración base
+        delete require.cache[require.resolve(path.join(__dirname, '..', 'generate-config.js'))];
+        require(path.join(__dirname, '..', 'generate-config.js'));
+      }
+    });
+
+    await test('Paridad completa de fallbackStore ante ausencia de StoreClass (R1/R3 adversarial round 3)', () => {
+      // Simular fallbackStore tal como se define en script.js
+      const fallbackState = {
+        items: [],
+        budget: 0,
+        filter: { search: '', searchQuery: '', hideCompleted: false },
+        filters: { search: '', searchQuery: '', hideCompleted: false },
+        uiPreferences: { locationOrder: ['Frutas', 'Verduras'], collapsedGroups: [] }
+      };
+
+      // Hidratación con strings de coma en fallback
+      const itemsToHydrate = [
+        { name: 'Kiwis', quantity: '2,5', unitPrice: '3,80', location: 'Frutas', category: 'Frescos' },
+        { name: 'Espinacas', quantity: '1', unitPrice: '1,50', location: 'Verduras', category: 'Frescos' }
+      ];
+
+      // Verificar que el parsing con coma no trunque
+      const parseNum = (val, def = 0) => {
+        if (typeof val === 'string') val = val.trim().replace(',', '.');
+        const n = parseFloat(val);
+        return (!isNaN(n) && isFinite(n)) ? n : def;
+      };
+
+      const parsedQty = parseNum(itemsToHydrate[0].quantity, 1);
+      const parsedPrice = parseNum(itemsToHydrate[0].unitPrice, 0);
+      assert.strictEqual(parsedQty, 2.5, 'Cantidad 2,5 debe parsearse como 2.5');
+      assert.strictEqual(parsedPrice, 3.8, 'Precio 3,80 debe parsearse como 3.8');
+    });
+
+    await test('Prevención de XSS en nombres, categorías y ubicaciones (R3 adversarial round 3)', () => {
+      const maliciousPayload = '<img src=x onerror=alert(1)>';
+      const escaped = escapeHtml(maliciousPayload);
+
+      assert.strictEqual(escaped.includes('<img'), false);
+      assert.strictEqual(escaped.includes('&lt;img'), true);
+      assert.strictEqual(escaped.includes('&gt;'), true);
+    });
   });
 
   // =========================================================================

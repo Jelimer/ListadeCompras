@@ -44,9 +44,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   let itemsCollection = null;
   let isFirebaseActive = false;
 
+  const resolvedFirebaseConfig = (typeof window !== 'undefined' && window.firebaseConfig) 
+    || (typeof globalThis !== 'undefined' && globalThis.firebaseConfig) 
+    || (typeof firebaseConfig !== 'undefined' ? firebaseConfig : null);
+
   try {
-    if (typeof firebase !== 'undefined' && window.firebaseConfig) {
-      const cfg = window.firebaseConfig;
+    if (typeof firebase !== 'undefined' && resolvedFirebaseConfig) {
+      const cfg = resolvedFirebaseConfig;
       const hasRealConfig = cfg && cfg.apiKey && !cfg.apiKey.includes('dummy') && cfg.projectId && !cfg.projectId.includes('dummy');
 
       if (hasRealConfig) {
@@ -78,26 +82,186 @@ document.addEventListener('DOMContentLoaded', async () => {
     initialCollapsed = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
   } catch (_) {}
 
+  const StorageModule = window.ShoppingStorage || window.StorageService || null;
+
   const store = StoreClass 
     ? new StoreClass({
         items: initialItems,
         budget: initialBudget,
         theme: initialTheme,
-        filters: { search: '', hideCompleted: false },
+        locationOrder: initialLocationOrder,
+        collapsedGroups: initialCollapsed,
+        filter: { search: '', searchQuery: '', hideCompleted: false },
+        filters: { search: '', searchQuery: '', hideCompleted: false },
         uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed }
-      })
+      }, StorageModule)
     : {
-        state: { items: initialItems, budget: initialBudget, filters: { search: '', hideCompleted: false }, uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed } },
+        state: { 
+          items: initialItems, 
+          budget: initialBudget,
+          theme: initialTheme,
+          locationOrder: initialLocationOrder,
+          collapsedGroups: initialCollapsed,
+          editingItemId: null,
+          filter: { search: '', searchQuery: '', hideCompleted: false }, 
+          filters: { search: '', searchQuery: '', hideCompleted: false }, 
+          uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed } 
+        },
         getState() { return this.state; },
-        on() {},
-        hydrate(data) { Object.assign(this.state, data); },
-        setFilter(f) { Object.assign(this.state.filters, f); },
+        getItems() { return this.state.items; },
+        getItemById(id) { return (this.state.items || []).find(i => i.id === id) || null; },
+        getFilter() { return { ...this.state.filter }; },
+        getFilters() { return { ...(this.state.filters || this.state.filter) }; },
+        getBudget() { return this.state.budget; },
+        subscribe(listener) { return () => {}; },
+        on(event, handler) { return () => {}; },
+        setEditingItem(id) { this.state.editingItemId = id ? String(id) : null; },
+        reorderLocations(newOrder) {
+          if (!Array.isArray(newOrder)) return;
+          this.state.locationOrder = [...newOrder.map(String)];
+          if (this.state.uiPreferences) this.state.uiPreferences.locationOrder = this.state.locationOrder;
+        },
+        toggleGroupCollapse(location) {
+          const loc = String(location || 'General');
+          const set = new Set(this.state.collapsedGroups || []);
+          let isCollapsed = false;
+          if (set.has(loc)) {
+            set.delete(loc);
+          } else {
+            set.add(loc);
+            isCollapsed = true;
+          }
+          this.state.collapsedGroups = Array.from(set);
+          if (this.state.uiPreferences) this.state.uiPreferences.collapsedGroups = this.state.collapsedGroups;
+          return isCollapsed;
+        },
+        getGroupedItems() {
+          const activeFilter = this.state.filters || this.state.filter || {};
+          const query = normalizeSearchText(activeFilter.searchQuery || activeFilter.search || '');
+          const hideCompleted = Boolean(activeFilter.hideCompleted);
+          const tokens = query ? query.split(/\s+/).filter(Boolean) : [];
+          const grouped = {};
+
+          (this.state.items || []).forEach(it => {
+            const haystack = normalizeSearchText(`${it.name || ''} ${it.location || ''} ${it.category || ''}`);
+            const matchSearch = tokens.length === 0 || tokens.every(token => haystack.includes(token));
+            const matchHide = !hideCompleted || !it.completed;
+            if (matchSearch && matchHide) {
+              const loc = (it.location || 'General').trim() || 'General';
+              if (!grouped[loc]) grouped[loc] = [];
+              grouped[loc].push(it);
+            }
+          });
+
+          Object.keys(grouped).forEach(loc => {
+            grouped[loc].sort((a, b) => {
+              if (a.completed !== b.completed) return a.completed ? 1 : -1;
+              return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+            });
+          });
+
+          const order = (this.state.uiPreferences && this.state.uiPreferences.locationOrder) || this.state.locationOrder || [];
+          const sortedLocations = Object.keys(grouped).sort((a, b) => {
+            const ia = order.indexOf(a);
+            const ib = order.indexOf(b);
+            if (ia === -1 && ib === -1) return a.localeCompare(b, 'es', { sensitivity: 'base' });
+            return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
+          });
+
+          const result = {};
+          sortedLocations.forEach(loc => {
+            result[loc] = grouped[loc];
+          });
+          return result;
+        },
+        hydrate(data) {
+          const parseNum = (val, def = 0) => {
+            if (typeof val === 'string') val = val.trim().replace(',', '.');
+            const n = parseFloat(val);
+            return (!isNaN(n) && isFinite(n)) ? n : def;
+          };
+          const normalizeItem = (it) => ({
+            ...it,
+            id: it.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            name: String(it.name || 'Sin nombre'),
+            quantity: parseNum(it.quantity, 1) > 0 ? parseNum(it.quantity, 1) : 1,
+            unitPrice: parseNum(it.unitPrice, 0) >= 0 ? parseNum(it.unitPrice, 0) : 0,
+            location: String(it.location || 'General'),
+            category: String(it.category || 'General'),
+            completed: Boolean(it.completed)
+          });
+
+          if (Array.isArray(data)) {
+            this.state.items = data.filter(it => it && typeof it === 'object').map(normalizeItem);
+          } else if (data && typeof data === 'object' && Array.isArray(data.items)) {
+            this.state.items = data.items.filter(it => it && typeof it === 'object').map(normalizeItem);
+            if (typeof data.budget === 'number') this.state.budget = data.budget;
+          } else if (data && typeof data === 'object') {
+            Object.assign(this.state, data);
+          }
+        },
+        addItem(item) {
+          const id = item.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+          let rawQty = typeof item.quantity === 'string' ? item.quantity.trim().replace(',', '.') : item.quantity;
+          let rawPrice = typeof item.unitPrice === 'string' ? item.unitPrice.trim().replace(',', '.') : item.unitPrice;
+          const q = parseFloat(rawQty);
+          const p = parseFloat(rawPrice);
+          const newItem = { 
+            ...item, 
+            id, 
+            quantity: (!isNaN(q) && isFinite(q) && q > 0) ? q : 1,
+            unitPrice: (!isNaN(p) && isFinite(p) && p >= 0) ? p : 0,
+            location: String(item.location || 'General'),
+            category: String(item.category || 'General'),
+            completed: Boolean(item.completed) 
+          };
+          this.state.items.unshift(newItem);
+          return newItem;
+        },
+        updateItem(id, data) {
+          const it = (this.state.items || []).find(i => i.id === id);
+          if (it) Object.assign(it, data);
+          return it;
+        },
+        deleteItem(id) {
+          const idx = (this.state.items || []).findIndex(i => i.id === id);
+          if (idx !== -1) return this.state.items.splice(idx, 1)[0];
+          return null;
+        },
+        toggleCompleted(id) {
+          const it = (this.state.items || []).find(i => i.id === id);
+          if (it) it.completed = !it.completed;
+          return it;
+        },
+        clearCompleted() {
+          this.state.items = (this.state.items || []).filter(i => !i.completed);
+        },
+        setFilter(f) { 
+          if (!f || typeof f !== 'object') return;
+          let nextSearch = undefined;
+          if (f.searchQuery !== undefined) {
+            nextSearch = f.searchQuery === null ? '' : String(f.searchQuery);
+          } else if (f.search !== undefined) {
+            nextSearch = f.search === null ? '' : String(f.search);
+          }
+          if (nextSearch !== undefined) {
+            this.state.filter.search = nextSearch;
+            this.state.filter.searchQuery = nextSearch;
+            this.state.filters.search = nextSearch;
+            this.state.filters.searchQuery = nextSearch;
+          }
+          if (f.hideCompleted !== undefined) {
+            const hide = Boolean(f.hideCompleted);
+            this.state.filter.hideCompleted = hide;
+            this.state.filters.hideCompleted = hide;
+          }
+        },
         setBudget(b) { this.state.budget = b; }
       };
 
   // --- 5. Sincronización en Tiempo Real con Firebase Firestore ---
   if (isFirebaseActive && itemsCollection) {
-    itemsCollection.orderBy('timestamp', 'desc').onSnapshot(
+    itemsCollection.onSnapshot(
       snapshot => {
         if (!snapshot || !snapshot.docs) return;
         const remoteItems = snapshot.docs.map(doc => {
@@ -109,14 +273,25 @@ document.addEventListener('DOMContentLoaded', async () => {
           return {
             id: doc.id,
             name: d.name || 'Sin nombre',
-            quantity: parseFloat(d.quantity) || 1,
-            unitPrice: parseFloat(d.unitPrice) || 0,
+            quantity: (() => {
+              let q = typeof d.quantity === 'string' ? d.quantity.trim().replace(',', '.') : d.quantity;
+              let n = parseFloat(q);
+              return (!isNaN(n) && isFinite(n) && n > 0) ? n : 1;
+            })(),
+            unitPrice: (() => {
+              let p = typeof d.unitPrice === 'string' ? d.unitPrice.trim().replace(',', '.') : d.unitPrice;
+              let n = parseFloat(p);
+              return (!isNaN(n) && isFinite(n) && n >= 0) ? n : 0;
+            })(),
             category: d.category || 'General',
             location: d.location || 'General',
             completed: Boolean(d.completed),
             timestamp: ts
           };
         });
+
+        // Ordenar en memoria garantizando que todos los productos se muestren aunque no tengan timestamp
+        remoteItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         // Actualizar Store local y persistir copia de respaldo
         if (typeof store.hydrate === 'function') {
@@ -245,6 +420,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderShoppingList(state);
   };
 
+  const normalizeSearchText = (str) => String(str === null || str === undefined ? '' : str).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
   const renderShoppingList = (state) => {
     if (!elements.shoppingListContainer) return;
 
@@ -252,11 +429,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof store.getGroupedItems === 'function') {
       grouped = store.getGroupedItems();
     } else {
-      const query = (state.filters?.search || '').toLowerCase();
-      const hideCompleted = Boolean(state.filters?.hideCompleted);
+      const activeFilter = state.filters || state.filter || {};
+      const query = normalizeSearchText(activeFilter.searchQuery || activeFilter.search || '');
+      const hideCompleted = Boolean(activeFilter.hideCompleted);
+      const tokens = query ? query.split(/\s+/).filter(Boolean) : [];
 
       (state.items || []).forEach(it => {
-        const matchSearch = !query || ((it.name || '') + (it.location || '') + (it.category || '')).toLowerCase().includes(query);
+        const haystack = normalizeSearchText(`${it.name || ''} ${it.location || ''} ${it.category || ''}`);
+        const matchSearch = tokens.length === 0 || tokens.every(token => haystack.includes(token));
         const matchHide = !hideCompleted || !it.completed;
         if (matchSearch && matchHide) {
           const loc = (it.location || 'General').trim() || 'General';
@@ -281,7 +461,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const collapsedSet = new Set(state.uiPreferences?.collapsedGroups || []);
+    const rawCollapsed = state.collapsedGroups || (state.uiPreferences && state.uiPreferences.collapsedGroups) || [];
+    const collapsedSet = new Set(rawCollapsed);
 
     locations.forEach(loc => {
       const itemsInGroup = grouped[loc];
@@ -290,6 +471,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const groupDiv = document.createElement('div');
       groupDiv.className = `location-group ${isCollapsed ? 'collapsed' : ''}`;
       groupDiv.dataset.location = loc;
+
+      const safeLoc = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(loc) : loc;
 
       const header = document.createElement('div');
       header.className = 'group-header';
@@ -300,7 +483,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="group-title">
           <i data-lucide="grip-vertical" style="opacity: 0.35;" aria-hidden="true"></i>
           <i data-lucide="chevron-down" class="collapse-icon" aria-hidden="true"></i>
-          <h2>${loc}</h2>
+          <h2>${safeLoc}</h2>
         </div>
         <span class="group-count-badge">${itemsInGroup.length} ${itemsInGroup.length === 1 ? 'ítem' : 'ítems'}</span>
       `;
@@ -342,6 +525,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     card.dataset.id = item.id;
 
     const totalItemPrice = (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1);
+    const safeName = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(item.name) : item.name;
+    const safeCategory = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(item.category || 'General') : (item.category || 'General');
 
     let avatarMarkup = '';
     if (AvatarsModule.getAvatarMarkup) {
@@ -352,21 +537,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     card.innerHTML = `
       ${avatarMarkup}
-      <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} aria-label="Marcar ${item.name} como comprado">
+      <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} aria-label="Marcar ${safeName} como comprado">
       <div class="item-info">
-        <span class="item-name" title="${item.name}">${item.name}</span>
+        <span class="item-name" title="${safeName}">${safeName}</span>
         <div class="item-sub">
           <span>${item.quantity} un.</span>
           ${item.unitPrice > 0 ? `<span>• $${Number(item.unitPrice).toFixed(2)} c/u</span>` : ''}
-          <span class="item-category-tag">${item.category || 'General'}</span>
+          <span class="item-category-tag">${safeCategory}</span>
         </div>
       </div>
       <div class="item-price">$${totalItemPrice.toFixed(2)}</div>
       <div class="item-actions">
-        <button type="button" class="btn-icon edit-btn" aria-label="Editar producto ${item.name}" title="Editar">
+        <button type="button" class="btn-icon edit-btn" aria-label="Editar producto ${safeName}" title="Editar">
           <i data-lucide="edit-3"></i>
         </button>
-        <button type="button" class="btn-icon btn-danger del-btn" aria-label="Eliminar producto ${item.name}" title="Eliminar">
+        <button type="button" class="btn-icon btn-danger del-btn" aria-label="Eliminar producto ${safeName}" title="Eliminar">
           <i data-lucide="trash-2"></i>
         </button>
       </div>
@@ -375,16 +560,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Marcar/Desmarcar como comprado
     const chk = card.querySelector('.item-checkbox');
     chk.addEventListener('change', async () => {
-      const nextCompleted = !item.completed;
+      let nextCompleted = !item.completed;
+      if (typeof store.toggleCompleted === 'function') {
+        const toggled = store.toggleCompleted(item.id);
+        if (toggled) nextCompleted = toggled.completed;
+      } else {
+        item.completed = nextCompleted;
+        renderUI();
+      }
+
       if (isFirebaseActive && itemsCollection) {
         try {
-          await itemsCollection.doc(item.id).update({ completed: nextCompleted });
+          await itemsCollection.doc(item.id).set({ 
+            completed: nextCompleted,
+            updatedAt: Date.now()
+          }, { merge: true });
         } catch (e) {
           console.warn('[App] Error al actualizar estado en Firebase:', e);
         }
-      } else {
-        if (typeof store.toggleCompleted === 'function') store.toggleCompleted(item.id);
-        else { item.completed = nextCompleted; renderUI(); }
       }
     });
 
@@ -401,31 +594,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.stopPropagation();
       const removedSnapshot = { ...item };
 
+      if (typeof store.deleteItem === 'function') {
+        store.deleteItem(item.id);
+      } else {
+        store.state.items = (store.state.items || []).filter(i => i.id !== item.id);
+        renderUI();
+      }
+
       if (isFirebaseActive && itemsCollection) {
         try {
           await itemsCollection.doc(item.id).delete();
         } catch (err) {
           console.warn('[App] Error al eliminar de Firebase:', err);
         }
-      } else {
-        if (typeof store.deleteItem === 'function') store.deleteItem(item.id);
-        else {
-          store.state.items = (store.state.items || []).filter(i => i.id !== item.id);
-          renderUI();
-        }
       }
 
       if (FeedbackModule.showUndoToast) {
         FeedbackModule.showUndoToast(`"${removedSnapshot.name}" eliminado`, async () => {
+          if (typeof store.undoLastAction === 'function') {
+            store.undoLastAction();
+          } else {
+            store.state.items.push(removedSnapshot);
+            renderUI();
+          }
+
           if (isFirebaseActive && itemsCollection) {
             try {
               await itemsCollection.doc(removedSnapshot.id).set(removedSnapshot);
             } catch (err) {
               console.warn('[App] Error al restaurar en Firebase:', err);
             }
-          } else {
-            if (typeof store.undoLastAction === 'function') store.undoLastAction();
-            else { store.state.items.push(removedSnapshot); renderUI(); }
           }
         });
       }
@@ -439,6 +637,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const startEditingItem = (item) => {
     currentEditingId = item.id;
+    if (store && typeof store.setEditingItem === 'function') {
+      store.setEditingItem(item.id);
+    }
     elements.itemInput.value = item.name || '';
     elements.quantityInput.value = item.quantity || 1;
     elements.unitPriceInput.value = item.unitPrice > 0 ? item.unitPrice : '';
@@ -456,6 +657,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const cancelEditing = () => {
     currentEditingId = null;
+    if (store && typeof store.setEditingItem === 'function') {
+      store.setEditingItem(null);
+    }
     clearInputs();
     if (elements.addItemButton) {
       elements.addItemButton.innerHTML = `<i data-lucide="plus-circle"></i><span>Añadir</span>`;
@@ -501,30 +705,65 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (isFirebaseActive && itemsCollection) {
       try {
-        const firestoreData = {
-          name: clean.name,
-          quantity: clean.quantity,
-          unitPrice: clean.unitPrice,
-          location: clean.location,
-          category: clean.category,
-          completed: false,
-          timestamp: (firebase.firestore && firebase.firestore.FieldValue) 
-            ? firebase.firestore.FieldValue.serverTimestamp() 
-            : Date.now()
-        };
-
         if (currentEditingId) {
-          await itemsCollection.doc(currentEditingId).update(firestoreData);
+          const editId = currentEditingId;
+          const existingItem = (typeof store.getItemById === 'function') ? store.getItemById(editId) : null;
+          const updateData = {
+            name: clean.name,
+            quantity: clean.quantity,
+            unitPrice: clean.unitPrice,
+            location: clean.location,
+            category: clean.category,
+            completed: existingItem ? existingItem.completed : false,
+            updatedAt: Date.now()
+          };
+
+          if (typeof store.updateItem === 'function') {
+            store.updateItem(editId, updateData);
+          }
           cancelEditing();
+          renderUI();
+          await itemsCollection.doc(editId).set(updateData, { merge: true });
           if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado en Firebase', 'success');
         } else {
-          await itemsCollection.add(firestoreData);
+          const newItemData = {
+            name: clean.name,
+            quantity: clean.quantity,
+            unitPrice: clean.unitPrice,
+            location: clean.location,
+            category: clean.category,
+            completed: false,
+            timestamp: Date.now()
+          };
+
+          let addedItem = null;
+          if (typeof store.addItem === 'function') {
+            addedItem = store.addItem(newItemData);
+          } else {
+            addedItem = { ...newItemData, id: `item_${Date.now()}` };
+            store.state.items.unshift(addedItem);
+          }
           clearInputs();
           if (elements.itemInput) elements.itemInput.focus();
+          renderUI();
+
+          const firestorePayload = {
+            ...newItemData,
+            id: addedItem.id,
+            timestamp: (firebase.firestore && firebase.firestore.FieldValue) 
+              ? firebase.firestore.FieldValue.serverTimestamp() 
+              : Date.now()
+          };
+
+          if (addedItem && addedItem.id) {
+            await itemsCollection.doc(addedItem.id).set(firestorePayload);
+          } else {
+            await itemsCollection.add(firestorePayload);
+          }
         }
       } catch (err) {
         console.warn('[App] Error al escribir en Firebase:', err);
-        if (FeedbackModule.showToast) FeedbackModule.showToast('Error de conexión a Firebase', 'error');
+        if (FeedbackModule.showToast) FeedbackModule.showToast('Error de conexión a Firebase. Guardado localmente.', 'warning');
       }
     } else {
       if (currentEditingId) {
@@ -562,10 +801,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- 12. Filtros y Búsqueda ---
   if (elements.searchInput) {
-    elements.searchInput.addEventListener('input', (e) => {
-      store.setFilter({ search: e.target.value });
+    const onSearchChange = (e) => {
+      const val = e.target.value || '';
+      store.setFilter({ search: val, searchQuery: val });
       renderUI();
-    });
+    };
+    elements.searchInput.addEventListener('input', onSearchChange);
+    elements.searchInput.addEventListener('search', onSearchChange);
   }
 
   if (elements.hideCompletedSwitch) {
@@ -599,6 +841,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const confirmed = await FeedbackModule.confirmClearCompleted(completedItems.length);
       if (!confirmed) return;
 
+      if (typeof store.clearCompleted === 'function') {
+        store.clearCompleted();
+      }
+      renderUI();
+
       if (isFirebaseActive && db && itemsCollection) {
         try {
           const batch = db.batch();
@@ -609,9 +856,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) {
           console.warn('[App] Error al limpiar en Firebase:', err);
         }
-      } else {
-        if (typeof store.clearCompleted === 'function') store.clearCompleted();
-        renderUI();
       }
 
       if (window.confetti) {
@@ -620,6 +864,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (FeedbackModule.showUndoToast) {
         FeedbackModule.showUndoToast(`Se limpiaron ${completedItems.length} productos comprados`, async () => {
+          if (typeof store.undoLastAction === 'function') {
+            store.undoLastAction();
+          } else {
+            completedItems.forEach(it => {
+              if (typeof store.addItem === 'function') store.addItem(it);
+              else store.state.items.push(it);
+            });
+          }
+          renderUI();
+
           if (isFirebaseActive && db && itemsCollection) {
             try {
               const batch = db.batch();
@@ -630,9 +884,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (err) {
               console.warn('[App] Error al deshacer en Firebase:', err);
             }
-          } else {
-            if (typeof store.undoLastAction === 'function') store.undoLastAction();
-            renderUI();
           }
         });
       }
@@ -717,6 +968,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mode = await FeedbackModule.confirmImportMode(result.items.length);
         if (mode === 'cancel') return;
 
+        // Actualización optimista inmediata en Store local y UI
+        if (mode === 'overwrite') {
+          if (typeof store.hydrate === 'function') store.hydrate(result.items);
+          else store.state.items = result.items;
+        } else {
+          result.items.forEach(it => {
+            if (typeof store.addItem === 'function') store.addItem(it);
+            else store.state.items.push(it);
+          });
+        }
+        renderUI();
+
         if (isFirebaseActive && db && itemsCollection) {
           try {
             const batch = db.batch();
@@ -734,14 +997,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             await batch.commit();
           } catch (err) {
             console.warn('[App] Error al importar en Firebase:', err);
+            if (FeedbackModule.showToast) {
+              FeedbackModule.showToast('Importado localmente. Error de sincronización en la nube.', 'warning');
+              return;
+            }
           }
-        } else {
-          if (mode === 'overwrite') {
-            store.hydrate(result.items);
-          } else {
-            result.items.forEach(it => store.addItem(it));
-          }
-          renderUI();
         }
 
         if (FeedbackModule.showToast) {
