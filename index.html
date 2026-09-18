@@ -4,115 +4,166 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lista de Compra | PRO</title>
+
+    <!-- Anti-FOUC: Inicialización síncrona de tema antes de la primera pintura de pantalla -->
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('theme');
+                var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var initialTheme = (savedTheme === 'dark' || savedTheme === 'light') 
+                    ? savedTheme 
+                    : (systemPrefersDark ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', initialTheme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <!-- Librerías de Visualización -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Apache ECharts para gráficos profesionales -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 </head>
 <body>
+    <!-- Enlace accesible de salto al contenido -->
+    <a href="#main-content" class="skip-link sr-only focusable">Saltar al contenido principal</a>
+
     <div class="container">
-        <header>
+        <!-- Encabezado Principal -->
+        <header role="banner">
             <div class="brand">
                 <h1>Lista de Compra</h1>
-                <p style="font-weight: 600; color: var(--text-muted);">Gestión avanzada de suministros</p>
+                <p class="brand-subtitle">Gestión avanzada de suministros</p>
             </div>
-            <div class="header-actions" style="display: flex; gap: 15px;">
-                <button id="themeToggle" class="icon-button" title="Cambiar Tema">
-                    <i data-lucide="moon"></i>
+            <div class="header-actions">
+                <button id="exportButton" class="icon-button" type="button" aria-label="Exportar lista" title="Exportar lista (JSON / CSV)">
+                    <i data-lucide="download" aria-hidden="true"></i>
+                </button>
+                <button id="importButton" class="icon-button" type="button" aria-label="Importar lista" title="Importar lista (JSON / CSV)">
+                    <i data-lucide="upload" aria-hidden="true"></i>
+                </button>
+                <input type="file" id="importFileInput" accept=".json,.csv" style="display: none;" aria-hidden="true">
+                <button id="themeToggle" class="icon-button" type="button" aria-label="Cambiar a modo oscuro" aria-pressed="false" title="Cambiar Tema">
+                    <i data-lucide="moon" aria-hidden="true"></i>
                 </button>
             </div>
         </header>
 
-        <!-- Formulario Superior -->
-        <section class="input-section">
-            <div class="input-wrapper">
-                <i data-lucide="package" class="input-icon"></i>
-                <input type="text" id="itemInput" placeholder="Producto">
+        <!-- Formulario Superior de Ingesta -->
+        <section class="input-section" role="form" aria-label="Añadir nuevo producto">
+            <div class="input-wrapper input-wrapper-item">
+                <i data-lucide="package" class="input-icon" aria-hidden="true"></i>
+                <label for="itemInput" class="sr-only">Nombre del producto</label>
+                <input type="text" id="itemInput" placeholder="Producto" aria-label="Nombre del producto" autocomplete="off" required>
             </div>
-            <div class="input-wrapper" style="max-width: 120px;">
-                <i data-lucide="hash" class="input-icon"></i>
-                <input type="number" id="quantityInput" placeholder="Cant." value="1">
+            <div class="input-wrapper input-wrapper-qty">
+                <i data-lucide="hash" class="input-icon" aria-hidden="true"></i>
+                <label for="quantityInput" class="sr-only">Cantidad</label>
+                <input type="number" id="quantityInput" placeholder="Cant." value="1" min="0.01" step="any" aria-label="Cantidad">
             </div>
-            <div class="input-wrapper" style="max-width: 150px;">
-                <i data-lucide="dollar-sign" class="input-icon"></i>
-                <input type="number" id="unitPriceInput" placeholder="Precio Unit.">
+            <div class="input-wrapper input-wrapper-price">
+                <i data-lucide="dollar-sign" class="input-icon" aria-hidden="true"></i>
+                <label for="unitPriceInput" class="sr-only">Precio Unitario</label>
+                <input type="number" id="unitPriceInput" placeholder="Precio Unit." min="0" step="0.01" aria-label="Precio Unitario">
             </div>
-            <div class="input-wrapper">
-                <i data-lucide="map-pin" class="input-icon"></i>
-                <input type="text" id="locationInput" placeholder="Lugar / Super" list="location-suggestions">
+            <div class="input-wrapper input-wrapper-loc">
+                <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
+                <label for="locationInput" class="sr-only">Lugar o Supermercado</label>
+                <input type="text" id="locationInput" placeholder="Lugar / Super" list="location-suggestions" aria-label="Lugar o Supermercado" autocomplete="off">
                 <datalist id="location-suggestions"></datalist>
             </div>
-            <div class="input-wrapper">
-                <i data-lucide="tag" class="input-icon"></i>
-                <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions">
+            <div class="input-wrapper input-wrapper-cat">
+                <i data-lucide="tag" class="input-icon" aria-hidden="true"></i>
+                <label for="categoryInput" class="sr-only">Categoría</label>
+                <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions" aria-label="Categoría" autocomplete="off">
                 <datalist id="category-suggestions"></datalist>
             </div>
-            <button id="addItemButton" class="btn btn-primary">
-                <i data-lucide="plus-circle"></i>
+            <button id="addItemButton" class="btn btn-primary" type="button" aria-label="Añadir producto a la lista">
+                <i data-lucide="plus-circle" aria-hidden="true"></i>
                 <span>Añadir</span>
             </button>
         </section>
 
         <!-- Dashboard Grid Principal -->
-        <div class="dashboard-grid">
-            <!-- Columna Izquierda: Lista -->
+        <main id="main-content" class="dashboard-grid" role="main">
+            <!-- Columna Izquierda: Lista y Herramientas -->
             <div class="main-content">
-                <div class="toolbar-section" style="margin-bottom: 25px; display: flex; gap: 20px; align-items: center;">
-                    <div class="input-wrapper" style="flex: 1;">
-                        <i data-lucide="search" class="input-icon"></i>
-                        <input type="text" id="searchInput" placeholder="Buscar en toda la lista...">
+                <div class="toolbar-section" role="toolbar" aria-label="Herramientas de filtrado y búsqueda">
+                    <div class="input-wrapper toolbar-search">
+                        <i data-lucide="search" class="input-icon" aria-hidden="true"></i>
+                        <label for="searchInput" class="sr-only">Buscar en toda la lista</label>
+                        <input type="search" id="searchInput" placeholder="Buscar en toda la lista..." aria-label="Buscar productos">
                     </div>
-                    <div class="form-check" style="display: flex; align-items: center; gap: 8px; font-weight: 700; white-space: nowrap;">
-                        <input type="checkbox" id="hideCompletedSwitch">
+                    <div class="form-check">
+                        <input type="checkbox" id="hideCompletedSwitch" role="switch" aria-checked="false">
                         <label for="hideCompletedSwitch">Ocultar Comprados</label>
                     </div>
                 </div>
 
-                <div id="shoppingListContainer">
-                    <!-- Los grupos se inyectan aquí -->
+                <div id="shoppingListContainer" class="shopping-list-container" role="region" aria-live="polite" aria-label="Lista de compras agrupada por ubicación">
+                    <!-- Los grupos de productos se inyectan dinámicamente aquí -->
                 </div>
             </div>
 
-            <!-- Columna Derecha: Estadísticas y Gráfico -->
-            <aside class="stats-panel">
+            <!-- Columna Derecha: Panel de Estadísticas y Presupuesto -->
+            <aside class="stats-panel" aria-label="Resumen financiero y estadísticas">
                 <div class="stat-card">
-                    <span class="stat-label">Presupuesto</span>
-                    <input type="number" id="budgetInput" class="budget-minimal-input" style="border: none; background: transparent; width: 100%; font-size: 1.8rem; font-weight: 800; color: var(--warning);" placeholder="0.00">
+                    <label for="budgetInput" class="stat-label">Presupuesto</label>
+                    <input type="number" id="budgetInput" class="budget-minimal-input" placeholder="0.00" min="0" step="0.01" aria-label="Presupuesto disponible">
                 </div>
                 
                 <div class="stat-card">
                     <span class="stat-label">Total Pendiente</span>
-                    <span id="grandTotalValue" class="stat-value">$0.00</span>
+                    <span id="grandTotalValue" class="stat-value" aria-live="polite">$0.00</span>
                     <div class="progress-container">
-                        <div id="budgetProgressBar" class="progress-bar"></div>
+                        <div id="budgetProgressBar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-valuetext="0% consumido" aria-label="Progreso del presupuesto"></div>
                     </div>
-                    <span id="budgetStats" style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted);"></span>
+                    <span id="budgetStats" class="budget-stats" aria-live="polite"></span>
                 </div>
 
                 <div class="stat-card chart-box">
                     <span class="stat-label">Unidades por Categoría</span>
-                    <div id="categoryChart" style="width: 100%; height: 100%;"></div>
+                    <div id="categoryChart" class="chart-canvas" role="img" aria-label="Gráfico interactivo de unidades pendientes por categoría y ubicación"></div>
                 </div>
 
-                <div style="margin-top: 20px;">
-                    <button id="resetListButton" class="btn btn-secondary" style="width: 100%;">
-                        <i data-lucide="trash-2"></i>
-                        Limpiar Comprados
+                <div class="stats-actions">
+                    <button id="resetListButton" class="btn btn-secondary btn-block" type="button" aria-label="Limpiar todos los productos marcados como comprados">
+                        <i data-lucide="trash-2" aria-hidden="true"></i>
+                        <span>Limpiar Comprados</span>
                     </button>
                 </div>
             </aside>
-        </div>
+        </main>
     </div>
 
+    <!-- Región en vivo para anuncios textuales accesibles (Screen Readers) -->
+    <div id="ariaAnnouncer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Scripts de Terceros y SDKs -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <script src="firebase-config.js"></script>
+
+    <!-- Módulos Core UMD (Arquitectura Desacoplada M1-M4) -->
+    <script src="js/storage.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/avatars.js"></script>
+    <script src="js/analytics.js"></script>
+    <script src="js/chart.js"></script>
+    <script src="js/export-import.js"></script>
+    <script src="js/ui-feedback.js"></script>
+
+    <!-- Script de Inicialización y Gestión de UI -->
     <script src="script.js"></script>
 </body>
 </html>

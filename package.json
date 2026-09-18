@@ -4,6 +4,8 @@
   "description": "Una simple aplicación de lista de compras",
   "main": "script.js",
   "scripts": {
+    "start": "npx serve .",
+    "test": "node tests/e2e_runner.js",
     "build": "node generate-config.js"
   },
   "author": "",

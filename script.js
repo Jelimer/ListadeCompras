@@ -1,344 +1,629 @@
-document.addEventListener('DOMContentLoaded', () => {
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const itemsCollection = db.collection('shoppingItems');
+/**
+ * script.js
+ * Orquestador Principal y Controlador de UI para Lista de Compra | PRO.
+ * Arquitectura desacoplada en capas: Storage, Reactive Store, Analytics, Chart, Export/Import y Feedback.
+ * 100% Offline-First, Accesible (WCAG AA/AAA) y Resiliente.
+ */
+document.addEventListener('DOMContentLoaded', async () => {
+  'use strict';
 
-    const elements = {
-        itemInput: document.getElementById('itemInput'),
-        quantityInput: document.getElementById('quantityInput'),
-        unitPriceInput: document.getElementById('unitPriceInput'),
-        locationInput: document.getElementById('locationInput'),
-        categoryInput: document.getElementById('categoryInput'),
-        addItemButton: document.getElementById('addItemButton'),
-        resetListButton: document.getElementById('resetListButton'),
-        shoppingListContainer: document.getElementById('shoppingListContainer'),
-        locationSuggestions: document.getElementById('location-suggestions'),
-        categorySuggestions: document.getElementById('category-suggestions'),
-        searchInput: document.getElementById('searchInput'),
-        hideCompletedSwitch: document.getElementById('hideCompletedSwitch'),
-        themeToggle: document.getElementById('themeToggle'),
-        budgetInput: document.getElementById('budgetInput'),
-        budgetProgressBar: document.getElementById('budgetProgressBar'),
-        budgetStats: document.getElementById('budgetStats'),
-        grandTotalValue: document.getElementById('grandTotalValue')
-    };
+  // --- 1. Referencias al DOM ---
+  const elements = {
+    // Formulario de Ingesta
+    itemInput: document.getElementById('itemInput'),
+    quantityInput: document.getElementById('quantityInput'),
+    unitPriceInput: document.getElementById('unitPriceInput'),
+    locationInput: document.getElementById('locationInput'),
+    categoryInput: document.getElementById('categoryInput'),
+    addItemButton: document.getElementById('addItemButton'),
 
-    let allItems = [];
-    let editingItemId = null;
-    let locationOrder = JSON.parse(localStorage.getItem('locationOrder')) || [];
-    let collapsedGroups = new Set(JSON.parse(localStorage.getItem('collapsedGroups')) || []);
-    let chartInstance = null;
+    // Sugerencias Datalist
+    locationSuggestions: document.getElementById('location-suggestions'),
+    categorySuggestions: document.getElementById('category-suggestions'),
 
-    const updateTheme = (theme) => {
-        document.documentElement.setAttribute('data-theme', theme);
-        elements.themeToggle.innerHTML = theme === 'dark' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
-        lucide.createIcons();
-        if(chartInstance) renderItems(); 
-    };
-    updateTheme(localStorage.getItem('theme') || 'light');
+    // Filtros y Búsqueda
+    searchInput: document.getElementById('searchInput'),
+    hideCompletedSwitch: document.getElementById('hideCompletedSwitch'),
 
-    // --- GRÁFICO CON ECHARTS (Separación perfecta y etiquetas) ---
-    const updateChart = (stackedData, categories) => {
-        const chartDom = document.getElementById('categoryChart');
-        if (!chartDom) return;
-        
-        if (!chartInstance) {
-            chartInstance = echarts.init(chartDom);
-        }
+    // Acciones de Cabecera
+    themeToggle: document.getElementById('themeToggle'),
+    exportButton: document.getElementById('exportButton'),
+    importButton: document.getElementById('importButton'),
+    importFileInput: document.getElementById('importFileInput'),
 
-        const locations = Object.keys(stackedData).sort();
-        if (locations.length === 0) {
-            chartInstance.clear();
-            return;
-        }
+    // Panel de Estadísticas y Presupuesto
+    budgetInput: document.getElementById('budgetInput'),
+    budgetProgressBar: document.getElementById('budgetProgressBar'),
+    budgetStats: document.getElementById('budgetStats'),
+    grandTotalValue: document.getElementById('grandTotalValue'),
+    resetListButton: document.getElementById('resetListButton'),
 
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const colorPalette = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
+    // Contenedor Principal de la Lista
+    shoppingListContainer: document.getElementById('shoppingListContainer')
+  };
 
-        const series = categories.map((cat, i) => ({
-            name: cat,
-            type: 'bar',
-            stack: 'total',
-            label: {
-                show: true,
-                position: 'inside',
-                formatter: (params) => params.value > 0 ? params.value : '',
-                color: '#fff',
-                fontSize: 10,
-                fontWeight: 'bold'
-            },
-            emphasis: { focus: 'series' },
-            data: locations.map(loc => stackedData[loc][cat] || 0),
-            itemStyle: { borderRadius: 4 },
-            barMaxWidth: 35, // Grosor máximo de barra para garantizar separación
-            color: colorPalette[i % colorPalette.length]
-        }));
+  // --- 2. Acceso a Módulos UMD ---
+  const StorageModule = window.ShoppingStorage || {};
+  const StateModule = window.ShoppingState || {};
+  const ValidationModule = window.ShoppingValidation || {};
+  const AvatarsModule = window.ShoppingAvatars || {};
+  const AnalyticsModule = window.ShoppingAnalytics || {};
+  const ChartModule = window.ShoppingChart || {};
+  const ExportImportModule = window.ShoppingExportImport || {};
+  const FeedbackModule = window.ShoppingFeedback || {};
 
-        const option = {
-            tooltip: { 
-                trigger: 'item',
-                backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                borderWidth: 1,
-                textStyle: { color: isDark ? '#f1f5f9' : '#1e293b', fontFamily: 'Plus Jakarta Sans' },
-                formatter: (params) => {
-                    const loc = params.name; // Lugar (Eje Y)
-                    const cat = params.seriesName; // Categoría (Color)
-                    
-                    // Filtrar productos pendientes para este lugar y categoría
-                    const products = allItems
-                        .map(d => ({ id: d.id, ...d.data() }))
-                        .filter(item => (item.location || 'General') === loc && (item.category || 'Varios') === cat && !item.completed)
-                        .map(item => `• ${item.name}`)
-                        .join('<br/>');
+  // --- 3. Inicialización de Almacenamiento y Store ---
+  let storageService = null;
+  if (typeof StorageModule.createDefaultStorageService === 'function') {
+    storageService = StorageModule.createDefaultStorageService();
+  }
 
-                    const header = `<div style="font-weight:800; margin-bottom:5px; color:${params.color}">${loc} - ${cat}</div>`;
-                    const subheader = `<div style="font-size:0.8rem; margin-bottom:8px; opacity:0.7">${params.value} unidades pendientes</div>`;
-                    const list = products ? `<div style="font-size:0.85rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:5px;">${products}</div>` : '<i>Sin pendientes</i>';
-                    
-                    return `<div style="padding:5px;">${header}${subheader}${list}</div>`;
-                }
-            },
-            legend: { 
-                bottom: '0%', 
-                textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold', fontSize: 10 },
-                itemWidth: 8,
-                itemHeight: 8,
-                pageIconColor: isDark ? '#fff' : '#000'
-            },
-            grid: { left: '3%', right: '8%', bottom: '15%', top: '5%', containLabel: true },
-            xAxis: { 
-                type: 'value', 
-                minInterval: 1, // Solo enteros
-                splitLine: { lineStyle: { type: 'dashed', opacity: 0.1 } },
-                axisLabel: { color: isDark ? '#94a3b8' : '#64748b' }
-            },
-            yAxis: { 
-                type: 'category', 
-                data: locations,
-                axisLabel: { 
-                    color: isDark ? '#f8fafc' : '#0f172a', 
-                    fontWeight: 'bold',
-                    width: 100,
-                    overflow: 'break'
-                },
-                axisLine: { show: false },
-                axisTick: { show: false }
-            },
-            series: series
-        };
+  // Carga inicial de datos desde persistencia local o Firebase
+  let initialItems = [];
+  let initialBudget = 0;
+  let initialTheme = 'light';
+  let initialLocationOrder = [];
+  let initialCollapsed = [];
 
-        chartInstance.setOption(option, true); // True para limpiar configuraciones anteriores
-    };
+  if (storageService) {
+    try {
+      initialItems = await storageService.loadItems();
+    } catch (e) {
+      console.warn('[App] No se pudieron cargar items de storage, iniciando vacío:', e);
+      initialItems = [];
+    }
+    initialBudget = storageService.loadBudget() || 0;
+    initialTheme = storageService.loadTheme() || 'light';
+    initialLocationOrder = storageService.loadLocationOrder() || [];
+    initialCollapsed = storageService.loadCollapsedGroups() || [];
+  } else {
+    try {
+      initialItems = JSON.parse(localStorage.getItem('shopping_items') || '[]');
+      initialBudget = parseFloat(localStorage.getItem('budget')) || 0;
+      initialTheme = localStorage.getItem('theme') || 'light';
+      initialLocationOrder = JSON.parse(localStorage.getItem('locationOrder') || '[]');
+      initialCollapsed = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
+    } catch (e) {
+      initialItems = [];
+    }
+  }
 
-    const renderItems = () => {
-        const query = elements.searchInput.value.toLowerCase();
-        const hideCompleted = elements.hideCompletedSwitch.checked;
-        
-        const locs = [...new Set(allItems.map(d => d.data().location).filter(l => l))];
-        const cats = [...new Set(allItems.map(d => d.data().category).filter(c => c))];
-        elements.locationSuggestions.innerHTML = locs.map(l => `<option value="${l}">`).join('');
-        elements.categorySuggestions.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+  const store = new (StateModule.Store || class MockStore {
+    constructor(init) { this.state = init; }
+    getState() { return this.state; }
+  })({
+    items: initialItems,
+    budget: initialBudget,
+    theme: initialTheme,
+    filters: { search: '', hideCompleted: false },
+    uiPreferences: {
+      locationOrder: initialLocationOrder,
+      collapsedGroups: initialCollapsed
+    }
+  }, storageService);
 
-        let filtered = allItems.filter(doc => {
-            const data = doc.data();
-            return (data.name + (data.location || '') + (data.category || '')).toLowerCase().includes(query) && 
-                   (!hideCompleted || !data.completed);
-        });
+  // --- 4. Controlador de Apache ECharts ---
+  const chartDom = document.getElementById('categoryChart');
+  let chartController = null;
+  if (chartDom && ChartModule.ChartController) {
+    chartController = new ChartModule.ChartController(chartDom, { echarts: window.echarts });
+  }
 
-        const scrollPos = window.scrollY;
-        elements.shoppingListContainer.innerHTML = '';
-        
-        const grouped = {};
-        const stackedData = {}; 
-        const distinctCategories = new Set();
-        let totalGeneral = 0;
+  // --- 5. Gestión del Tema (Claro / Oscuro) ---
+  const applyTheme = (theme) => {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (elements.themeToggle) {
+      elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      elements.themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+      elements.themeToggle.innerHTML = theme === 'dark' 
+        ? '<i data-lucide="sun" aria-hidden="true"></i>' 
+        : '<i data-lucide="moon" aria-hidden="true"></i>';
+      if (window.lucide) window.lucide.createIcons();
+    }
+    if (store && typeof store.setTheme === 'function') {
+      store.setTheme(theme);
+    }
+    renderUI();
+  };
 
-        filtered.forEach(doc => {
-            const data = { id: doc.id, ...doc.data() };
-            const loc = data.location || 'General';
-            const cat = data.category || 'Varios';
-            const qty = parseFloat(data.quantity) || 1;
-            
-            if (!grouped[loc]) grouped[loc] = [];
-            grouped[loc].push(data);
-            
-            if (!data.completed) {
-                totalGeneral += (parseFloat(data.unitPrice) || 0) * qty;
-                if (!stackedData[loc]) stackedData[loc] = {};
-                stackedData[loc][cat] = (stackedData[loc][cat] || 0) + qty;
-                distinctCategories.add(cat);
-            }
-        });
+  // Detectar y aplicar preferencia de tema inicial
+  const savedTheme = localStorage.getItem('theme') || initialTheme || 'light';
+  applyTheme(savedTheme);
 
-        elements.grandTotalValue.textContent = `$${totalGeneral.toFixed(2)}`;
-        updateBudgetUI(totalGeneral);
-        updateChart(stackedData, Array.from(distinctCategories).sort());
-
-        const sortedLocs = Object.keys(grouped).sort((a, b) => {
-            let ia = locationOrder.indexOf(a), ib = locationOrder.indexOf(b);
-            if (ia === -1 && ib === -1) return a.localeCompare(b);
-            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-        });
-
-        sortedLocs.forEach(loc => {
-            const items = grouped[loc].sort((a, b) => {
-                if (a.completed !== b.completed) return a.completed ? 1 : -1;
-                return a.name.localeCompare(b.name);
-            });
-
-            const groupDiv = document.createElement('div');
-            groupDiv.className = `location-group ${collapsedGroups.has(loc) ? 'collapsed' : ''}`;
-            groupDiv.dataset.location = loc;
-            groupDiv.innerHTML = `
-                <div class="group-header">
-                    <div class="group-title">
-                        <i data-lucide="grip-vertical" style="opacity:0.4"></i>
-                        <i data-lucide="chevron-down" class="collapse-icon"></i>
-                        <h2>${loc}</h2>
-                    </div>
-                    <span style="font-weight:800; opacity:0.5; font-size:0.8rem">${items.length} items</span>
-                </div>
-                <div class="shopping-list"></div>
-            `;
-
-            groupDiv.querySelector('.group-header').addEventListener('click', () => {
-                groupDiv.classList.toggle('collapsed');
-                if (groupDiv.classList.contains('collapsed')) collapsedGroups.add(loc);
-                else collapsedGroups.delete(loc);
-                localStorage.setItem('collapsedGroups', JSON.stringify(Array.from(collapsedGroups)));
-            });
-
-            const list = groupDiv.querySelector('.shopping-list');
-            items.forEach(item => list.appendChild(createCard(item)));
-            elements.shoppingListContainer.appendChild(groupDiv);
-        });
-        
-        lucide.createIcons();
-        window.scrollTo(0, scrollPos);
-    };
-
-    const createCard = (item) => {
-        const div = document.createElement('div');
-        div.className = `shopping-item ${item.completed ? 'completed' : ''}`;
-        const total = (item.unitPrice || 0) * (item.quantity || 1);
-        const imgUrl = `https://loremflickr.com/200/200/${encodeURIComponent(item.name.split(' ')[0])},grocery/all`;
-
-        div.innerHTML = `
-            <img src="${imgUrl}" class="product-img" loading="lazy" onerror="this.src='https://via.placeholder.com/65?text=🛒'">
-            <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''}>
-            <div class="item-info">
-                <span class="item-name" title="${item.name}">${item.name}</span>
-                <span class="item-sub">${item.quantity} un. • ${item.category || 'General'}</span>
-            </div>
-            <div class="item-price">$${total.toFixed(2)}</div>
-            <div class="item-actions">
-                <button class="btn-icon edit-btn"><i data-lucide="edit-3"></i></button>
-                <button class="btn-icon del-btn"><i data-lucide="trash-2"></i></button>
-            </div>
-        `;
-
-        div.querySelector('.item-checkbox').addEventListener('change', () => {
-            itemsCollection.doc(item.id).update({ completed: !item.completed });
-        });
-
-        div.querySelector('.edit-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            editingItemId = item.id;
-            elements.itemInput.value = item.name;
-            elements.quantityInput.value = item.quantity;
-            elements.unitPriceInput.value = item.unitPrice;
-            elements.locationInput.value = item.location;
-            elements.categoryInput.value = item.category;
-            elements.addItemButton.querySelector('span').textContent = 'Actualizar';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-
-        div.querySelector('.del-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if(confirm(`¿Eliminar ${item.name}?`)) itemsCollection.doc(item.id).delete();
-        });
-
-        return div;
-    };
-
-    const updateBudgetUI = (total) => {
-        const budget = parseFloat(elements.budgetInput.value) || 0;
-        if (budget > 0) {
-            const pct = Math.min((total / budget) * 100, 100);
-            elements.budgetProgressBar.style.width = `${pct}%`;
-            elements.budgetProgressBar.style.background = pct > 90 ? 'var(--danger)' : 'var(--primary)';
-            elements.budgetStats.textContent = `Restante: $${(budget - total).toFixed(2)}`;
-        }
-    };
-
-    elements.addItemButton.addEventListener('click', async () => {
-        const name = elements.itemInput.value.trim();
-        if (!name) return;
-        const data = {
-            name,
-            quantity: parseFloat(elements.quantityInput.value) || 1,
-            unitPrice: parseFloat(elements.unitPriceInput.value) || 0,
-            location: elements.locationInput.value.trim() || 'General',
-            category: elements.categoryInput.value.trim() || 'General',
-            completed: false,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        if (editingItemId) {
-            await itemsCollection.doc(editingItemId).update(data);
-            editingItemId = null;
-            elements.addItemButton.querySelector('span').textContent = 'Añadir';
-        } else {
-            await itemsCollection.add(data);
-        }
-
-        [elements.itemInput, elements.unitPriceInput, elements.locationInput, elements.categoryInput].forEach(i => i.value = '');
-        elements.quantityInput.value = 1;
-    });
-
-    elements.budgetInput.addEventListener('input', () => {
-        localStorage.setItem('budget', elements.budgetInput.value);
-        renderItems();
-    });
-    elements.budgetInput.value = localStorage.getItem('budget') || '';
-
-    elements.resetListButton.addEventListener('click', async () => {
-        const snap = await itemsCollection.where('completed', '==', true).get();
-        if (snap.empty) return;
-        if (confirm('¿Limpiar comprados?')) {
-            const batch = db.batch();
-            snap.docs.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-        }
-    });
-
-    new Sortable(elements.shoppingListContainer, {
-        animation: 150,
-        handle: '.group-header',
-        onEnd: () => {
-            const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
-                .map(g => g.dataset.location);
-            locationOrder = newOrder;
-            localStorage.setItem('locationOrder', JSON.stringify(newOrder));
-        }
-    });
-
-    elements.searchInput.addEventListener('input', renderItems);
-    elements.hideCompletedSwitch.addEventListener('change', renderItems);
-
+  if (elements.themeToggle) {
     elements.themeToggle.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const nextTheme = current === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', nextTheme);
+      applyTheme(nextTheme);
+    });
+  }
+
+  // --- 6. Renderizado de la Interfaz de Usuario (UI) ---
+  const renderUI = () => {
+    const state = store.getState();
+    const items = state.items || [];
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // A. Analíticas Financieras (precisión en centavos)
+    let metrics = { totalPending: 0, totalSpent: 0, totalOverall: 0, budgetRemaining: 0, budgetPercentage: 0 };
+    if (AnalyticsModule.calculateMetrics) {
+      metrics = AnalyticsModule.calculateMetrics(items, state.budget);
+    } else {
+      let pending = 0;
+      items.forEach(it => { if (!it.completed) pending += (Number(it.unitPrice) || 0) * (Number(it.quantity) || 1); });
+      metrics.totalPending = Math.round(pending * 100) / 100;
+    }
+
+    // B. Tarjetas de Estadísticas
+    if (elements.grandTotalValue) {
+      elements.grandTotalValue.textContent = `$${metrics.totalPending.toFixed(2)}`;
+    }
+
+    if (elements.budgetInput && document.activeElement !== elements.budgetInput) {
+      elements.budgetInput.value = state.budget > 0 ? state.budget : '';
+    }
+
+    if (elements.budgetProgressBar) {
+      const pct = metrics.budgetPercentage;
+      elements.budgetProgressBar.style.width = `${pct}%`;
+      elements.budgetProgressBar.className = 'progress-bar';
+      if (pct >= 100) {
+        elements.budgetProgressBar.classList.add('danger');
+      } else if (pct >= 80) {
+        elements.budgetProgressBar.classList.add('warning');
+      }
+    }
+
+    if (elements.budgetStats) {
+      if (state.budget > 0) {
+        const sign = metrics.budgetRemaining < 0 ? '-' : '';
+        const absRem = Math.abs(metrics.budgetRemaining).toFixed(2);
+        elements.budgetStats.textContent = metrics.budgetRemaining >= 0 
+          ? `Disponible: $${absRem} (${metrics.budgetPercentage}% consumido)`
+          : `⚠️ Excedido por: $${absRem}`;
+        elements.budgetStats.style.color = metrics.budgetRemaining < 0 ? 'var(--danger)' : 'var(--text-muted)';
+      } else {
+        elements.budgetStats.textContent = 'Sin presupuesto asignado';
+        elements.budgetStats.style.color = 'var(--text-muted)';
+      }
+    }
+
+    // C. Gráfico de Categorías en Apache ECharts
+    if (chartController) {
+      let breakdown = {};
+      if (AnalyticsModule.getCategoryBreakdown) {
+        breakdown = AnalyticsModule.getCategoryBreakdown(items);
+      }
+      chartController.render(breakdown, items, isDark);
+    }
+
+    // D. Actualizar sugerencias de autocompletado
+    const distinctLocs = [...new Set(items.map(it => (it.location || '').trim()).filter(Boolean))].sort();
+    const distinctCats = [...new Set(items.map(it => (it.category || '').trim()).filter(Boolean))].sort();
+
+    if (elements.locationSuggestions) {
+      elements.locationSuggestions.innerHTML = distinctLocs.map(l => `<option value="${l}">`).join('');
+    }
+    if (elements.categorySuggestions) {
+      elements.categorySuggestions.innerHTML = distinctCats.map(c => `<option value="${c}">`).join('');
+    }
+
+    // E. Renderizado de la Lista Agrupada por Ubicación
+    renderShoppingList(state);
+  };
+
+  const renderShoppingList = (state) => {
+    if (!elements.shoppingListContainer) return;
+
+    let grouped = {};
+    if (typeof store.getGroupedItems === 'function') {
+      grouped = store.getGroupedItems();
+    } else {
+      (state.items || []).forEach(it => {
+        const loc = (it.location || 'General').trim() || 'General';
+        if (!grouped[loc]) grouped[loc] = [];
+        grouped[loc].push(it);
+      });
+    }
+
+    const locations = Object.keys(grouped);
+    elements.shoppingListContainer.innerHTML = '';
+
+    if (locations.length === 0) {
+      elements.shoppingListContainer.innerHTML = `
+        <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted);">
+          <i data-lucide="shopping-bag" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;"></i>
+          <p style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Tu lista de compras está vacía</p>
+          <p style="font-size: 0.85rem; margin-top: 4px;">Añade productos usando el formulario superior para comenzar.</p>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    const collapsedSet = new Set(state.uiPreferences?.collapsedGroups || []);
+
+    locations.forEach(loc => {
+      const itemsInGroup = grouped[loc];
+      const isCollapsed = collapsedSet.has(loc);
+
+      const groupDiv = document.createElement('div');
+      groupDiv.className = `location-group ${isCollapsed ? 'collapsed' : ''}`;
+      groupDiv.dataset.location = loc;
+
+      const header = document.createElement('div');
+      header.className = 'group-header';
+      header.setAttribute('role', 'button');
+      header.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      header.setAttribute('tabindex', '0');
+      header.innerHTML = `
+        <div class="group-title">
+          <i data-lucide="grip-vertical" style="opacity: 0.35;" aria-hidden="true"></i>
+          <i data-lucide="chevron-down" class="collapse-icon" aria-hidden="true"></i>
+          <h2>${loc}</h2>
+        </div>
+        <span class="group-count-badge">${itemsInGroup.length} ${itemsInGroup.length === 1 ? 'ítem' : 'ítems'}</span>
+      `;
+
+      header.addEventListener('click', () => {
+        store.toggleGroupCollapse(loc);
+      });
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          store.toggleGroupCollapse(loc);
+        }
+      });
+
+      const listDiv = document.createElement('div');
+      listDiv.className = 'shopping-list';
+
+      itemsInGroup.forEach(item => {
+        listDiv.appendChild(createItemCard(item));
+      });
+
+      groupDiv.appendChild(header);
+      groupDiv.appendChild(listDiv);
+      elements.shoppingListContainer.appendChild(groupDiv);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  };
+
+  const createItemCard = (item) => {
+    const card = document.createElement('div');
+    card.className = `shopping-item ${item.completed ? 'completed' : ''}`;
+    card.dataset.id = item.id;
+
+    const totalItemPrice = (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1);
+
+    // Avatar local offline SVG/Lucide
+    let avatarMarkup = '';
+    if (AvatarsModule.getAvatarMarkup) {
+      avatarMarkup = AvatarsModule.getAvatarMarkup(item.category, item.name);
+    } else {
+      avatarMarkup = `<div class="product-avatar"><i data-lucide="package"></i></div>`;
+    }
+
+    card.innerHTML = `
+      ${avatarMarkup}
+      <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} aria-label="Marcar ${item.name} como comprado">
+      <div class="item-info">
+        <span class="item-name" title="${item.name}">${item.name}</span>
+        <div class="item-sub">
+          <span>${item.quantity} un.</span>
+          ${item.unitPrice > 0 ? `<span>• $${Number(item.unitPrice).toFixed(2)} c/u</span>` : ''}
+          <span class="item-category-tag">${item.category || 'General'}</span>
+        </div>
+      </div>
+      <div class="item-price">$${totalItemPrice.toFixed(2)}</div>
+      <div class="item-actions">
+        <button type="button" class="btn-icon edit-btn" aria-label="Editar producto ${item.name}" title="Editar">
+          <i data-lucide="edit-3"></i>
+        </button>
+        <button type="button" class="btn-icon btn-danger del-btn" aria-label="Eliminar producto ${item.name}" title="Eliminar">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div>
+    `;
+
+    // Checkbox toggle
+    const chk = card.querySelector('.item-checkbox');
+    chk.addEventListener('change', () => {
+      store.toggleCompleted(item.id);
+    });
+
+    // Botón Editar
+    const editBtn = card.querySelector('.edit-btn');
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startEditingItem(item);
+    });
+
+    // Botón Eliminar con Deshacer
+    const delBtn = card.querySelector('.del-btn');
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const removedName = item.name;
+      store.deleteItem(item.id);
+
+      if (FeedbackModule.showUndoToast) {
+        FeedbackModule.showUndoToast(`"${removedName}" eliminado`, () => {
+          store.undoLastAction();
+        });
+      }
+    });
+
+    return card;
+  };
+
+  // --- 7. Modo Edición ---
+  let currentEditingId = null;
+
+  const startEditingItem = (item) => {
+    currentEditingId = item.id;
+    elements.itemInput.value = item.name || '';
+    elements.quantityInput.value = item.quantity || 1;
+    elements.unitPriceInput.value = item.unitPrice > 0 ? item.unitPrice : '';
+    elements.locationInput.value = item.location || '';
+    elements.categoryInput.value = item.category || '';
+
+    if (elements.addItemButton) {
+      elements.addItemButton.innerHTML = `<i data-lucide="check-circle"></i><span>Guardar</span>`;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    elements.itemInput.focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditing = () => {
+    currentEditingId = null;
+    clearInputs();
+    if (elements.addItemButton) {
+      elements.addItemButton.innerHTML = `<i data-lucide="plus-circle"></i><span>Añadir</span>`;
+      if (window.lucide) window.lucide.createIcons();
+    }
+  };
+
+  const clearInputs = () => {
+    if (elements.itemInput) elements.itemInput.value = '';
+    if (elements.quantityInput) elements.quantityInput.value = '1';
+    if (elements.unitPriceInput) elements.unitPriceInput.value = '';
+    if (elements.locationInput) elements.locationInput.value = '';
+    if (elements.categoryInput) elements.categoryInput.value = '';
+  };
+
+  // --- 8. Manejo de Ingesta (Añadir / Guardar) ---
+  const handleFormSubmit = () => {
+    const rawData = {
+      name: elements.itemInput.value,
+      quantity: elements.quantityInput.value,
+      unitPrice: elements.unitPriceInput.value,
+      location: elements.locationInput.value,
+      category: elements.categoryInput.value
+    };
+
+    let validationRes = null;
+    if (ValidationModule.validateItem) {
+      validationRes = ValidationModule.validateItem(rawData);
+    } else {
+      validationRes = { isValid: !!rawData.name.trim(), cleanData: rawData };
+    }
+
+    if (!validationRes.isValid) {
+      const errMsg = (validationRes.errors && validationRes.errors[0]) || 'Por favor verifica los datos ingresados.';
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast(errMsg, 'error');
+      } else {
+        alert(errMsg);
+      }
+      elements.itemInput.focus();
+      return;
+    }
+
+    const clean = validationRes.cleanData;
+
+    if (currentEditingId) {
+      store.updateItem(currentEditingId, clean);
+      cancelEditing();
+      if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado correctamente', 'success');
+    } else {
+      store.addItem(clean);
+      clearInputs();
+      if (elements.itemInput) elements.itemInput.focus();
+    }
+  };
+
+  if (elements.addItemButton) {
+    elements.addItemButton.addEventListener('click', handleFormSubmit);
+  }
+
+  // --- 9. Atajos de Teclado (F19) ---
+  [elements.itemInput, elements.quantityInput, elements.unitPriceInput, elements.locationInput, elements.categoryInput].forEach(inp => {
+    if (!inp) return;
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleFormSubmit();
+      } else if (e.key === 'Escape') {
+        if (currentEditingId) {
+          e.preventDefault();
+          cancelEditing();
+        }
+      }
+    });
+  });
+
+  // --- 10. Filtros Reactivos (Búsqueda y Ocultar Comprados) ---
+  if (elements.searchInput) {
+    elements.searchInput.addEventListener('input', (e) => {
+      store.setFilter({ search: e.target.value });
+    });
+  }
+
+  if (elements.hideCompletedSwitch) {
+    elements.hideCompletedSwitch.addEventListener('change', (e) => {
+      store.setFilter({ hideCompleted: e.target.checked });
+    });
+  }
+
+  // --- 11. Presupuesto Reactivo ---
+  if (elements.budgetInput) {
+    elements.budgetInput.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0;
+      store.setBudget(val);
+    });
+  }
+
+  // --- 12. Limpiar Comprados con Confirmación y Deshacer ---
+  if (elements.resetListButton) {
+    elements.resetListButton.addEventListener('click', async () => {
+      const state = store.getState();
+      const completedCount = (state.items || []).filter(it => it.completed).length;
+
+      if (completedCount === 0) {
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast('No hay productos comprados para limpiar', 'info');
+        }
+        return;
+      }
+
+      const confirmed = await FeedbackModule.confirmClearCompleted(completedCount);
+      if (confirmed) {
+        store.clearCompleted();
+        if (window.confetti) {
+          window.confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        }
+        if (FeedbackModule.showUndoToast) {
+          FeedbackModule.showUndoToast(`Se limpiaron ${completedCount} productos comprados`, () => {
+            store.undoLastAction();
+          });
+        }
+      }
+    });
+  }
+
+  // --- 13. Exportación e Importación de Listas ---
+  if (elements.exportButton) {
+    elements.exportButton.addEventListener('click', async () => {
+      const state = store.getState();
+      if (!state.items || state.items.length === 0) {
+        if (FeedbackModule.showToast) FeedbackModule.showToast('La lista está vacía, no hay nada para exportar', 'warning');
+        return;
+      }
+
+      const Swal = window.Swal;
+      let format = 'json';
+
+      if (Swal) {
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        updateTheme(isDark ? 'light' : 'dark');
+        const res = await Swal.fire({
+          title: 'Exportar Lista',
+          text: 'Selecciona el formato de exportación:',
+          icon: 'question',
+          showCancelButton: true,
+          showDenyButton: true,
+          confirmButtonText: 'JSON (.json)',
+          denyButtonText: 'CSV (.csv Excel)',
+          cancelButtonText: 'Cancelar',
+          background: isDark ? '#1e293b' : '#ffffff',
+          color: isDark ? '#f8fafc' : '#0f172a',
+          confirmButtonColor: '#4f46e5',
+          denyButtonColor: '#047857'
+        });
+
+        if (res.isConfirmed) format = 'json';
+        else if (res.isDenied) format = 'csv';
+        else return;
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      if (format === 'json') {
+        const jsonContent = ExportImportModule.exportJSON(state.items, state.budget);
+        ExportImportModule.triggerDownload(jsonContent, `lista-compras-${dateStr}.json`, 'application/json;charset=utf-8');
+      } else {
+        const csvContent = ExportImportModule.exportCSV(state.items);
+        ExportImportModule.triggerDownload(csvContent, `lista-compras-${dateStr}.csv`, 'text/csv;charset=utf-8');
+      }
+
+      if (FeedbackModule.showToast) FeedbackModule.showToast('Archivo descargado con éxito', 'success');
+    });
+  }
+
+  if (elements.importButton && elements.importFileInput) {
+    elements.importButton.addEventListener('click', () => {
+      elements.importFileInput.value = '';
+      elements.importFileInput.click();
     });
 
-    itemsCollection.orderBy('timestamp', 'desc').onSnapshot(snap => {
-        allItems = snap.docs;
-        renderItems();
-    });
+    elements.importFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
 
-    window.addEventListener('resize', () => {
-        if(chartInstance) chartInstance.resize();
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const content = event.target.result;
+        const isJSON = file.name.endsWith('.json') || content.trim().startsWith('{');
+        
+        let result = null;
+        if (isJSON) {
+          result = ExportImportModule.importJSON(content);
+        } else {
+          result = ExportImportModule.importCSV(content);
+        }
+
+        if (!result.success || !result.items || result.items.length === 0) {
+          const err = result.error || 'El archivo seleccionado no contiene productos válidos.';
+          if (FeedbackModule.showToast) FeedbackModule.showToast(err, 'error');
+          return;
+        }
+
+        const mode = await FeedbackModule.confirmImportMode(result.items.length);
+        if (mode === 'cancel') return;
+
+        if (mode === 'overwrite') {
+          store.hydrate(result.items);
+          if (result.budget > 0) store.setBudget(result.budget);
+        } else {
+          // Merge
+          result.items.forEach(it => {
+            store.addItem(it);
+          });
+          if (result.budget > 0) {
+            const currentBudget = store.getState().budget || 0;
+            if (currentBudget === 0) store.setBudget(result.budget);
+          }
+        }
+
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast(`Se importaron ${result.items.length} productos con éxito`, 'success');
+        }
+      };
+
+      reader.readAsText(file);
     });
+  }
+
+  // --- 14. Drag & Drop Reordenamiento con SortableJS ---
+  if (window.Sortable && elements.shoppingListContainer) {
+    new window.Sortable(elements.shoppingListContainer, {
+      animation: 150,
+      handle: '.group-header',
+      onEnd: () => {
+        const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
+          .map(g => g.dataset.location);
+        store.reorderLocations(newOrder);
+      }
+    });
+  }
+
+  // --- 15. Suscripción a Cambios del Store ---
+  store.on('state:changed', () => {
+    renderUI();
+  });
+
+  // Primer renderizado
+  renderUI();
 });
