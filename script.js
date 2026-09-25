@@ -62,6 +62,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const FeedbackModule = window.ShoppingFeedback || window.UIFeedback || {};
   const StoreClass = window.Store || (window.ShoppingStore && window.ShoppingStore.Store) || (window.ShoppingState && window.ShoppingState.Store);
 
+  function normalizeSearchText(str) {
+    return String(str === null || str === undefined ? '' : str)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
   // --- 3. Inicialización y Detección de Firebase Firestore ---
   let db = null;
   let itemsCollection = null;
@@ -447,11 +455,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // F. Actualización del Módulo de Rutas y Mapa
     updateMapRouteUI();
-  };
+  }
 
-  const normalizeSearchText = (str) => String(str === null || str === undefined ? '' : str).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-  const renderShoppingList = (state) => {
+  function renderShoppingList(state) {
     if (!elements.shoppingListContainer) return;
 
     let grouped = {};
@@ -546,9 +552,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     if (window.lucide) window.lucide.createIcons();
-  };
+  }
 
-  const createItemCard = (item) => {
+  function createItemCard(item) {
     const card = document.createElement('div');
     card.className = `shopping-item ${item.completed ? 'completed' : ''}`;
     card.dataset.id = item.id;
@@ -659,12 +665,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     return card;
-  };
+  }
 
   // --- 9. Modo Edición ---
   let currentEditingId = null;
 
-  const startEditingItem = (item) => {
+  function startEditingItem(item) {
     currentEditingId = item.id;
     if (store && typeof store.setEditingItem === 'function') {
       store.setEditingItem(item.id);
@@ -682,9 +688,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     elements.itemInput.focus();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }
 
-  const cancelEditing = () => {
+  function cancelEditing() {
     currentEditingId = null;
     if (store && typeof store.setEditingItem === 'function') {
       store.setEditingItem(null);
@@ -694,18 +700,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.addItemButton.innerHTML = `<i data-lucide="plus-circle"></i><span>Añadir</span>`;
       if (window.lucide) window.lucide.createIcons();
     }
-  };
+  }
 
-  const clearInputs = () => {
+  function clearInputs() {
     if (elements.itemInput) elements.itemInput.value = '';
     if (elements.quantityInput) elements.quantityInput.value = '1';
     if (elements.unitPriceInput) elements.unitPriceInput.value = '';
     if (elements.locationInput) elements.locationInput.value = '';
     if (elements.categoryInput) elements.categoryInput.value = '';
-  };
+  }
 
   // --- 10. Formulario de Añadir / Guardar ---
-  const handleFormSubmit = async () => {
+  async function handleFormSubmit() {
     const rawData = {
       name: elements.itemInput.value,
       quantity: elements.quantityInput.value,
@@ -806,7 +812,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       renderUI();
     }
-  };
+  }
 
   if (elements.addItemButton) {
     elements.addItemButton.addEventListener('click', handleFormSubmit);

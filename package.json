@@ -5,7 +5,7 @@
   "main": "script.js",
   "scripts": {
     "start": "npx serve .",
-    "test": "node tests/e2e_runner.js && node tests/m1_unit.test.js && node tests/map_routing.test.js",
+    "test": "node tests/e2e_runner.js && node tests/m1_unit.test.js && node tests/map_routing.test.js && node tests/script_lifecycle.test.js",
     "build": "node generate-config.js"
   },
   "author": "",
