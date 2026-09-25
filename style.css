@@ -1199,11 +1199,74 @@ input:focus {
     background: #10b981;
 }
 
+/* Modo Panorámico Ampliado para Vista de Mapa (Aprovechar laterales e inferior) */
+.container.map-panoramic-mode,
+.container:has(#panel-map.active) {
+    max-width: 98vw !important;
+    width: 98vw !important;
+    padding: 14px 18px !important;
+    margin: 0 auto;
+    transition: max-width 0.25s ease, padding 0.25s ease;
+}
+
+/* Layout Panorámico de Mapa y Barra Lateral */
+.panel-map-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+@media (min-width: 900px) {
+    .panel-map-layout {
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 20px;
+        align-items: stretch;
+        min-height: calc(100vh - 180px);
+    }
+}
+
+.map-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+@media (max-width: 899.98px) {
+    .map-sidebar {
+        max-height: none;
+        overflow-y: visible;
+        padding-right: 0;
+    }
+}
+
+/* Área Principal del Mapa */
+.map-main-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: calc(100vh - 180px);
+    position: relative;
+}
+
+@media (max-width: 899.98px) {
+    .map-main-wrapper {
+        min-height: 420px;
+        height: clamp(380px, 50vh, 520px);
+        order: -1; /* En móvil el mapa se posiciona arriba */
+    }
+}
+
 /* 6. Contenedor Interactivo del Mapa Leaflet */
 .map-view-container {
     width: 100%;
-    height: clamp(350px, 45vh, 450px);
-    min-height: 380px;
+    height: 100%;
+    min-height: calc(100vh - 180px);
     border-radius: 16px;
     overflow: hidden;
     border: 1px solid var(--border);
@@ -1211,6 +1274,281 @@ input:focus {
     position: relative;
     z-index: 1;
     background: var(--card-bg);
+}
+
+@media (max-width: 899.98px) {
+    .map-view-container {
+        min-height: 400px;
+        height: 100%;
+    }
+}
+
+/* Botones Flotantes de Control del Mapa (Zoom y Encuadre) */
+.map-floating-controls {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.map-floating-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.map-floating-btn i,
+.map-floating-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.map-floating-btn:hover {
+    background: var(--bg-surface-elevated);
+    color: var(--primary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+.map-floating-btn:active {
+    transform: translateY(1px);
+}
+
+.map-floating-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Tarjeta de Itinerario de Paradas Reordenables */
+.route-stops-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.route-stops-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.route-stops-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-main);
+}
+
+.route-stops-title i,
+.route-stops-title svg {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+}
+
+.btn-reset-order {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--primary);
+    background: transparent;
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-reset-order:hover {
+    background: var(--primary);
+    color: var(--primary-fg, #ffffff);
+}
+
+.btn-reset-order i,
+.btn-reset-order svg {
+    width: 14px;
+    height: 14px;
+}
+
+.route-stops-help {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.route-stops-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Tarjeta individual de parada */
+.route-stop-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    user-select: none;
+}
+
+.route-stop-item.route-origin-item {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.stop-drag-handle {
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.stop-drag-handle i,
+.stop-drag-handle svg {
+    width: 16px;
+    height: 16px;
+}
+
+.stop-drag-handle:hover,
+.route-stop-item:hover .stop-drag-handle {
+    opacity: 1;
+    color: var(--primary);
+}
+
+.stop-drag-handle:active {
+    cursor: grabbing;
+}
+
+.stop-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #4f46e5;
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.route-origin-item .stop-badge {
+    background: #10b981;
+}
+
+.stop-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stop-name {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stop-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.stop-price-tag {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.stop-reorder-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.btn-move-stop {
+    width: 22px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 10px;
+    transition: all 0.15s ease;
+}
+
+.btn-move-stop:hover:not(:disabled) {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+
+.btn-move-stop:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
+/* Feedback de Arrastre Drag & Drop */
+.sortable-ghost {
+    opacity: 0.4;
+    background: rgba(79, 70, 229, 0.12) !important;
+    border: 2px dashed #4f46e5 !important;
+}
+
+.sortable-chosen {
+    box-shadow: var(--shadow-lg) !important;
+    background: var(--bg-surface-elevated) !important;
+}
+
+/* Filtro elegante de modo oscuro para OpenStreetMap */
+[data-theme="dark"] .map-view-container .leaflet-tile-pane {
+    filter: brightness(0.65) invert(1) contrast(2.6) hue-rotate(190deg) saturate(0.35);
 }
 
 /* 7. Gestión de Z-Index y Estilos de Leaflet (Evitar solapamientos) */

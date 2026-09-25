@@ -10,7 +10,16 @@
   if (typeof define === 'function' && define.amd) {
     define([], factory);
   } else if (typeof module === 'object' && module.exports) {
-    module.exports = factory();
+    const exports = factory();
+    module.exports = exports;
+    if (typeof window !== 'undefined') {
+      window.MapRouteService = exports;
+      window.MapRoute = exports;
+    }
+    if (typeof global !== 'undefined') {
+      global.MapRouteService = exports;
+      global.MapRoute = exports;
+    }
   } else {
     const exports = factory();
     root.MapRouteService = exports;
@@ -29,7 +38,8 @@
 
   const STORAGE_KEYS = {
     STORE_COORDS: 'shopping_store_coords',
-    ROUTE_ORIGIN: 'shopping_route_origin'
+    ROUTE_ORIGIN: 'shopping_route_origin',
+    CUSTOM_STOP_ORDER: 'shopping_custom_stop_order'
   };
 
   const DEFAULTS = {
@@ -49,18 +59,17 @@
 
   const TILE_PROVIDERS = {
     LIGHT: {
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       options: {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
-        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
         maxZoom: 19
       }
     },
     DARK: {
-      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       options: {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
-        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+        className: 'leaflet-dark-tiles',
         maxZoom: 19
       }
     }
@@ -127,6 +136,16 @@
     } catch (_) {
       memoryFallback.setItem(key, str);
     }
+  }
+
+  function safeStorageRemove(key) {
+    try {
+      const driver = getStorageDriver();
+      driver.removeItem(key);
+    } catch (_) {
+      // Ignorado
+    }
+    memoryFallback.removeItem(key);
   }
 
   /**
@@ -271,6 +290,48 @@
     safeStorageSet(STORAGE_KEYS.ROUTE_ORIGIN, JSON.stringify(payload));
     return true;
   }
+
+  /**
+   * Obtiene el orden personalizado de paradas fijado manualmente por el usuario.
+   * @returns {string[]|null}
+   */
+  function getCustomStopOrder() {
+    try {
+      const raw = safeStorageGet(STORAGE_KEYS.CUSTOM_STOP_ORDER);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Guarda el orden manual de paradas reordenadas por el usuario.
+   * @param {string[]} orderArray
+   * @returns {boolean}
+   */
+  function setCustomStopOrder(orderArray) {
+    if (Array.isArray(orderArray) && orderArray.length > 0) {
+      safeStorageSet(STORAGE_KEYS.CUSTOM_STOP_ORDER, JSON.stringify(orderArray));
+      return true;
+    } else {
+      resetCustomStopOrder();
+      return false;
+    }
+  }
+
+  /**
+   * Elimina el orden personalizado, volviendo a la optimización automática (TSP).
+   * @returns {boolean}
+   */
+  function resetCustomStopOrder() {
+    safeStorageRemove(STORAGE_KEYS.CUSTOM_STOP_ORDER);
+    return true;
+  }
+
 
   // ==========================================
   // 4. MOTOR DE GEOCODIFICACIÓN DEFENSIVO
@@ -536,7 +597,7 @@
    * 5. Desempate determinista por orden alfabético de tienda (localeCompare).
    * 6. Genera el itinerario completo con distancias, minutos y URL de Google Maps.
    */
-  function calculateOptimalRoute(items, customOrigin = null) {
+  function calculateOptimalRoute(items, customOrigin = null, options = {}) {
     const origin = (customOrigin && isValidCoordinates(customOrigin))
       ? customOrigin
       : getStoredOrigin();
@@ -548,7 +609,8 @@
         totalDistanceKm: 0,
         totalUrbanDistanceKm: 0,
         estimatedDurationMinutes: 0,
-        googleMapsUrl: ''
+        googleMapsUrl: '',
+        isCustomOrder: false
       };
     }
 
@@ -561,7 +623,8 @@
         totalDistanceKm: 0,
         totalUrbanDistanceKm: 0,
         estimatedDurationMinutes: 0,
-        googleMapsUrl: ''
+        googleMapsUrl: '',
+        isCustomOrder: false
       };
     }
 
@@ -635,48 +698,93 @@
       });
     }
 
-    // --- ALGORITMO TSP GREEDY (NEAREST NEIGHBOR) ---
-    const unvisited = [...candidateStops];
+    // --- EVALUACIÓN DE ORDEN MANUAL VS TSP NEAREST NEIGHBOR ---
+    const manualOrder = (options && Array.isArray(options.customStopOrder))
+      ? options.customStopOrder
+      : ((options && options.ignoreCustomOrder) ? null : getCustomStopOrder());
+
     const orderedStops = [];
-    let currentPoint = { lat: origin.lat, lng: origin.lng };
     let accumulatedHaversineKm = 0;
     let accumulatedUrbanKm = 0;
+    let isCustomOrder = false;
 
-    while (unvisited.length > 0) {
-      let nearestIndex = 0;
-      let minDistance = haversineDistance(currentPoint, unvisited[0]);
+    if (Array.isArray(manualOrder) && manualOrder.length > 0) {
+      isCustomOrder = true;
+      const stopsMap = new Map();
+      candidateStops.forEach(s => stopsMap.set(s.storeName, s));
 
-      for (let i = 1; i < unvisited.length; i++) {
-        const candidate = unvisited[i];
-        const dist = haversineDistance(currentPoint, candidate);
-
-        if (dist < minDistance - 1e-9) {
-          minDistance = dist;
-          nearestIndex = i;
-        } else if (Math.abs(dist - minDistance) <= 1e-9) {
-          // Desempate determinista por orden alfabético
-          if (candidate.storeName.localeCompare(unvisited[nearestIndex].storeName) < 0) {
-            minDistance = dist;
-            nearestIndex = i;
-          }
+      const sequencedStops = [];
+      // 1. Respetar el orden manual para las tiendas que existan
+      for (const name of manualOrder) {
+        if (stopsMap.has(name)) {
+          sequencedStops.push(stopsMap.get(name));
+          stopsMap.delete(name);
         }
       }
+      // 2. Si hay nuevas tiendas no contempladas en manualOrder, añadirlas al final
+      for (const remaining of stopsMap.values()) {
+        sequencedStops.push(remaining);
+      }
 
-      const selectedStop = unvisited.splice(nearestIndex, 1)[0];
-      const legHaversine = haversineDistance(currentPoint, selectedStop);
-      const legUrban = calculateUrbanDistance(legHaversine);
-      const legMinutes = calculateEstimatedMinutes(legUrban);
+      let currentPoint = { lat: origin.lat, lng: origin.lng };
+      for (let i = 0; i < sequencedStops.length; i++) {
+        const stop = sequencedStops[i];
+        const legHaversine = haversineDistance(currentPoint, stop);
+        const legUrban = calculateUrbanDistance(legHaversine);
+        const legMinutes = calculateEstimatedMinutes(legUrban);
 
-      selectedStop.stepIndex = orderedStops.length + 1;
-      selectedStop.stepDistanceKm = Math.round(legHaversine * 100) / 100;
-      selectedStop.stepUrbanDistanceKm = Math.round(legUrban * 100) / 100;
-      selectedStop.stepMinutes = legMinutes;
+        stop.stepIndex = i + 1;
+        stop.stepDistanceKm = Math.round(legHaversine * 100) / 100;
+        stop.stepUrbanDistanceKm = Math.round(legUrban * 100) / 100;
+        stop.stepMinutes = legMinutes;
 
-      accumulatedHaversineKm += legHaversine;
-      accumulatedUrbanKm += legUrban;
+        accumulatedHaversineKm += legHaversine;
+        accumulatedUrbanKm += legUrban;
 
-      orderedStops.push(selectedStop);
-      currentPoint = { lat: selectedStop.lat, lng: selectedStop.lng };
+        orderedStops.push(stop);
+        currentPoint = { lat: stop.lat, lng: stop.lng };
+      }
+    } else {
+      // --- ALGORITMO TSP GREEDY (NEAREST NEIGHBOR) ---
+      const unvisited = [...candidateStops];
+      let currentPoint = { lat: origin.lat, lng: origin.lng };
+
+      while (unvisited.length > 0) {
+        let nearestIndex = 0;
+        let minDistance = haversineDistance(currentPoint, unvisited[0]);
+
+        for (let i = 1; i < unvisited.length; i++) {
+          const candidate = unvisited[i];
+          const dist = haversineDistance(currentPoint, candidate);
+
+          if (dist < minDistance - 1e-9) {
+            minDistance = dist;
+            nearestIndex = i;
+          } else if (Math.abs(dist - minDistance) <= 1e-9) {
+            // Desempate determinista por orden alfabético
+            if (candidate.storeName.localeCompare(unvisited[nearestIndex].storeName) < 0) {
+              minDistance = dist;
+              nearestIndex = i;
+            }
+          }
+        }
+
+        const selectedStop = unvisited.splice(nearestIndex, 1)[0];
+        const legHaversine = haversineDistance(currentPoint, selectedStop);
+        const legUrban = calculateUrbanDistance(legHaversine);
+        const legMinutes = calculateEstimatedMinutes(legUrban);
+
+        selectedStop.stepIndex = orderedStops.length + 1;
+        selectedStop.stepDistanceKm = Math.round(legHaversine * 100) / 100;
+        selectedStop.stepUrbanDistanceKm = Math.round(legUrban * 100) / 100;
+        selectedStop.stepMinutes = legMinutes;
+
+        accumulatedHaversineKm += legHaversine;
+        accumulatedUrbanKm += legUrban;
+
+        orderedStops.push(selectedStop);
+        currentPoint = { lat: selectedStop.lat, lng: selectedStop.lng };
+      }
     }
 
     const totalDistanceKm = Math.round(accumulatedHaversineKm * 100) / 100;
@@ -691,7 +799,8 @@
       totalDistanceKm,
       totalUrbanDistanceKm,
       estimatedDurationMinutes,
-      googleMapsUrl
+      googleMapsUrl,
+      isCustomOrder
     };
   }
 
@@ -787,19 +896,14 @@
       const center = options.center || [DEFAULTS.DEFAULT_ORIGIN.lat, DEFAULTS.DEFAULT_ORIGIN.lng];
       const zoom = options.zoom || 13;
 
-      // Configuración de mapa móvil con protección contra scroll trap
+      // Configuración de mapa móvil y de escritorio con zoom interactivo
       this.map = L.map(containerId, {
         center,
         zoom,
-        zoomControl: false,
-        scrollWheelZoom: false, // Prevención de trampa de scroll en móviles
+        zoomControl: true,
+        scrollWheelZoom: true,
         attributionControl: true
       });
-
-      // Añadir control de zoom accesible en esquina superior derecha
-      if (L.control && typeof L.control.zoom === 'function') {
-        L.control.zoom({ position: 'topright' }).addTo(this.map);
-      }
 
       // Capa de teselas inicial
       this._applyTileLayer(this.currentTheme);
@@ -1090,6 +1194,28 @@
     }
 
     /**
+     * Acerca la vista del mapa (Zoom In).
+     */
+    zoomIn() {
+      if (this.map && typeof this.map.zoomIn === 'function') {
+        try {
+          this.map.zoomIn();
+        } catch (_) {}
+      }
+    }
+
+    /**
+     * Aleja la vista del mapa (Zoom Out).
+     */
+    zoomOut() {
+      if (this.map && typeof this.map.zoomOut === 'function') {
+        try {
+          this.map.zoomOut();
+        } catch (_) {}
+      }
+    }
+
+    /**
      * Destruye de forma segura la instancia del mapa.
      */
     destroy() {
@@ -1117,13 +1243,16 @@
     DEFAULTS,
     TILE_PROVIDERS,
 
-    // Capa de Almacenamiento
+    // Capa de Almacenamiento y Orden Manual
     getStoredCoordinates,
     saveStoreCoordinate,
     getStoredOrigin,
     getOrigin: getStoredOrigin,
     saveOrigin,
     setOrigin: saveOrigin,
+    getCustomStopOrder,
+    setCustomStopOrder,
+    resetCustomStopOrder,
     normalizeStoreName,
     isValidCoordinates,
 
@@ -1138,7 +1267,7 @@
     calculateOptimalRoute,
     generateGoogleMapsUrl,
 
-    // Controlador de Mapa Leaflet
+    // Controlador de Mapa Leaflet y Controles de Zoom
     MapController,
     mapController: mapControllerInstance,
     initMap: (containerId, opts) => mapControllerInstance.initMap(containerId, opts),
@@ -1148,6 +1277,8 @@
     fitRouteBounds: (stops, origin) => mapControllerInstance.fitRouteBounds(stops, origin),
     renderRouteOnMap: (route) => mapControllerInstance.renderRouteOnMap(route),
     invalidateSize: () => mapControllerInstance.invalidateSize(),
+    zoomIn: () => mapControllerInstance.zoomIn(),
+    zoomOut: () => mapControllerInstance.zoomOut(),
     destroy: () => mapControllerInstance.destroy()
   };
 

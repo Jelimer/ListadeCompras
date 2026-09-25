@@ -50,7 +50,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     routeDistance: document.getElementById('route-distance'),
     routeDuration: document.getElementById('route-duration'),
     routeStops: document.getElementById('route-stops'),
-    btnOpenGoogleMaps: document.getElementById('btn-open-google-maps')
+    btnOpenGoogleMaps: document.getElementById('btn-open-google-maps'),
+    routeStopsList: document.getElementById('route-stops-list'),
+    btnResetRouteOrder: document.getElementById('btn-reset-route-order'),
+    btnMapZoomIn: document.getElementById('btn-map-zoom-in'),
+    btnMapZoomOut: document.getElementById('btn-map-zoom-out'),
+    btnMapFitBounds: document.getElementById('btn-map-fit-bounds'),
+    container: document.querySelector('.container')
   };
 
   // --- 2. Acceso a Módulos Auxiliares ---
@@ -61,6 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const ExportImportModule = window.ShoppingExportImport || window.ExportImportService || {};
   const FeedbackModule = window.ShoppingFeedback || window.UIFeedback || {};
   const StoreClass = window.Store || (window.ShoppingStore && window.ShoppingStore.Store) || (window.ShoppingState && window.ShoppingState.Store);
+  const MapRouteService = (typeof window !== 'undefined' && (window.MapRouteService || window.MapRoute)) || (typeof global !== 'undefined' && (global.MapRouteService || global.MapRoute)) || {};
 
   function normalizeSearchText(str) {
     return String(str === null || str === undefined ? '' : str)
@@ -1095,6 +1102,189 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // A. Actualización de Métricas y Renderizado de Ruta en el Mapa
+  // A. Actualización de Métricas, Itinerario y Renderizado de Ruta en el Mapa
+  let sortableInstance = null;
+
+  function renderRouteStopsList(route) {
+    if (!elements.routeStopsList) return;
+    elements.routeStopsList.innerHTML = '';
+
+    const origin = route.origin || (MapRouteService.getOrigin && MapRouteService.getOrigin());
+    const stops = route.orderedStops || [];
+
+    if (stops.length === 0) {
+      elements.routeStopsList.innerHTML = `
+        <div style="text-align:center; padding: 20px 10px; color: var(--text-muted); font-size: 0.85rem;">
+          <p style="font-weight:600;">No hay paradas de compra pendientes.</p>
+          <p style="font-size: 0.75rem; margin-top: 4px;">Añade comercios en tus productos para trazar el itinerario.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // 1. Elemento Fijo de Punto de Partida
+    const originItem = document.createElement('div');
+    originItem.className = 'route-stop-item route-origin-item';
+    const originAddr = origin.address || (origin.type === 'gps' ? 'Mi Ubicación actual (GPS)' : 'Punto de partida');
+    const safeOriginAddr = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(originAddr) : originAddr;
+    originItem.innerHTML = `
+      <div class="stop-badge" aria-label="Punto de partida">📍</div>
+      <div class="stop-details">
+        <span class="stop-name">Origen: ${safeOriginAddr}</span>
+        <span class="stop-meta">${origin.type === 'gps' ? 'Geolocalización GPS' : 'Punto de partida configurado'}</span>
+      </div>
+    `;
+    elements.routeStopsList.appendChild(originItem);
+
+    // 2. Paradas Ordenadas Reordenables
+    stops.forEach((stop, idx) => {
+      const stopDiv = document.createElement('div');
+      stopDiv.className = 'route-stop-item';
+      stopDiv.dataset.location = stop.storeName;
+      stopDiv.setAttribute('draggable', 'true');
+
+      const safeStoreName = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(stop.storeName) : stop.storeName;
+      const totalAmount = stop.estimatedTotal > 0 ? `$${Number(stop.estimatedTotal).toFixed(2)}` : '$0.00';
+      const itemsCountText = `${stop.itemCount || (stop.pendingItems && stop.pendingItems.length) || 0} art.`;
+
+      stopDiv.innerHTML = `
+        <div class="stop-drag-handle" title="Arrastra para reordenar esta parada" aria-label="Arrastrar parada">
+          <i data-lucide="grip-vertical"></i>
+        </div>
+        <div class="stop-badge">${idx + 1}</div>
+        <div class="stop-details">
+          <span class="stop-name" title="${safeStoreName}">${safeStoreName}</span>
+          <div class="stop-meta">
+            <span>${itemsCountText}</span>
+            <span>•</span>
+            <span class="stop-price-tag">${totalAmount}</span>
+            ${stop.stepDistanceKm ? `<span>• ${stop.stepDistanceKm} km</span>` : ''}
+          </div>
+        </div>
+        <div class="stop-reorder-actions">
+          <button type="button" class="btn-move-stop btn-move-up" title="Mover hacia arriba" aria-label="Mover hacia arriba" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button type="button" class="btn-move-stop btn-move-down" title="Mover hacia abajo" aria-label="Mover hacia abajo" ${idx === stops.length - 1 ? 'disabled' : ''}>▼</button>
+        </div>
+      `;
+
+      // Clics en botones accesibles Subir / Bajar
+      const btnUp = stopDiv.querySelector('.btn-move-up');
+      const btnDown = stopDiv.querySelector('.btn-move-down');
+
+      if (btnUp) {
+        btnUp.addEventListener('click', (e) => {
+          e.stopPropagation();
+          moveStopPosition(idx, idx - 1, stops);
+        });
+      }
+      if (btnDown) {
+        btnDown.addEventListener('click', (e) => {
+          e.stopPropagation();
+          moveStopPosition(idx, idx + 1, stops);
+        });
+      }
+
+      elements.routeStopsList.appendChild(stopDiv);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+
+    // Inicializar SortableJS o drag & drop nativo
+    initStopsDragAndDrop(elements.routeStopsList, stops);
+  }
+
+  function moveStopPosition(fromIndex, toIndex, stops) {
+    if (toIndex < 0 || toIndex >= stops.length || fromIndex === toIndex) return;
+    const currentOrder = stops.map(s => s.storeName);
+    const moved = currentOrder.splice(fromIndex, 1)[0];
+    currentOrder.splice(toIndex, 0, moved);
+
+    if (typeof MapRouteService !== 'undefined' && typeof MapRouteService.setCustomStopOrder === 'function') {
+      MapRouteService.setCustomStopOrder(currentOrder);
+    }
+    updateMapRouteUI();
+    if (FeedbackModule.showToast) {
+      FeedbackModule.showToast('Recorrido actualizado con nuevo orden de paradas', 'info');
+    }
+  }
+
+  function initStopsDragAndDrop(container, stops) {
+    if (window.Sortable && typeof window.Sortable.create === 'function') {
+      if (sortableInstance && typeof sortableInstance.destroy === 'function') {
+        try { sortableInstance.destroy(); } catch (_) {}
+      }
+      sortableInstance = window.Sortable.create(container, {
+        animation: 180,
+        handle: '.stop-drag-handle',
+        filter: '.route-origin-item',
+        preventOnFilter: true,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: () => {
+          const stopEls = container.querySelectorAll('.route-stop-item[data-location]');
+          const newOrder = Array.from(stopEls).map(el => el.dataset.location).filter(Boolean);
+          if (newOrder.length > 0) {
+            if (typeof MapRouteService !== 'undefined' && typeof MapRouteService.setCustomStopOrder === 'function') {
+              MapRouteService.setCustomStopOrder(newOrder);
+            }
+            updateMapRouteUI();
+            if (FeedbackModule.showToast) {
+              FeedbackModule.showToast('Recorrido actualizado con nuevo orden de paradas', 'info');
+            }
+          }
+        }
+      });
+    } else {
+      setupNativeDragAndDrop(container);
+    }
+  }
+
+  function setupNativeDragAndDrop(container) {
+    let draggedItem = null;
+    const items = container.querySelectorAll('.route-stop-item:not(.route-origin-item)');
+
+    items.forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        draggedItem = item;
+        item.classList.add('sortable-chosen');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', item.dataset.location || '');
+        }
+      });
+
+      item.addEventListener('dragend', () => {
+        if (draggedItem) draggedItem.classList.remove('sortable-chosen');
+        draggedItem = null;
+        const stopEls = container.querySelectorAll('.route-stop-item[data-location]');
+        const newOrder = Array.from(stopEls).map(el => el.dataset.location).filter(Boolean);
+        if (newOrder.length > 0 && typeof MapRouteService !== 'undefined' && typeof MapRouteService.setCustomStopOrder === 'function') {
+          MapRouteService.setCustomStopOrder(newOrder);
+        }
+        updateMapRouteUI();
+      });
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (draggedItem && draggedItem !== item) {
+          const allItems = Array.from(container.querySelectorAll('.route-stop-item:not(.route-origin-item)'));
+          const draggedIdx = allItems.indexOf(draggedItem);
+          const targetIdx = allItems.indexOf(item);
+          if (draggedIdx < targetIdx) {
+            item.after(draggedItem);
+          } else {
+            item.before(draggedItem);
+          }
+        }
+      });
+    });
+  }
+
   function updateMapRouteUI() {
     if (typeof window.MapRouteService === 'undefined' || !MapRouteService.calculateOptimalRoute) return;
     const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
@@ -1129,6 +1319,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         elements.btnOpenGoogleMaps.setAttribute('aria-disabled', 'true');
       }
     }
+
+    // Actualizar lista interactiva de paradas del itinerario
+    renderRouteStopsList(route);
   }
 
   // B. Selector Ágil de Vistas (Conmutación Sincronizada Desktop & Mobile)
@@ -1136,6 +1329,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isList = viewName === 'list';
     const isStats = viewName === 'stats';
     const isMap = viewName === 'map';
+
+    // Conmutar modo panorámico para aprovechar todo el ancho y alto en mapa
+    const appContainer = elements.container || document.querySelector('.container');
+    if (appContainer) {
+      if (isMap) {
+        appContainer.classList.add('map-panoramic-mode');
+      } else {
+        appContainer.classList.remove('map-panoramic-mode');
+      }
+    }
 
     // Sincronización Pestañas Desktop
     setTabSelected(elements.tabList, isList);
@@ -1303,6 +1506,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     elements.locationInput.addEventListener('input', () => {
       clearTimeout(locDebounceTimer);
       locDebounceTimer = setTimeout(triggerBgGeocode, 500);
+    });
+  }
+
+  // G. Controles del Mapa: Zoom In, Zoom Out, Encuadrar Ruta y Re-optimizar
+  if (elements.btnMapZoomIn) {
+    elements.btnMapZoomIn.addEventListener('click', () => {
+      if (typeof MapRouteService !== 'undefined' && typeof MapRouteService.zoomIn === 'function') {
+        MapRouteService.zoomIn();
+      }
+    });
+  }
+
+  if (elements.btnMapZoomOut) {
+    elements.btnMapZoomOut.addEventListener('click', () => {
+      if (typeof MapRouteService !== 'undefined' && typeof MapRouteService.zoomOut === 'function') {
+        MapRouteService.zoomOut();
+      }
+    });
+  }
+
+  if (elements.btnMapFitBounds) {
+    elements.btnMapFitBounds.addEventListener('click', () => {
+      if (typeof MapRouteService === 'undefined') return;
+      const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
+      const currentOrigin = (typeof MapRouteService.getOrigin === 'function') ? MapRouteService.getOrigin() : null;
+      const route = MapRouteService.calculateOptimalRoute(items, currentOrigin);
+      if (route && typeof MapRouteService.fitRouteBounds === 'function') {
+        MapRouteService.fitRouteBounds(route.orderedStops, route.origin);
+      }
+    });
+  }
+
+  if (elements.btnResetRouteOrder) {
+    elements.btnResetRouteOrder.addEventListener('click', () => {
+      if (typeof MapRouteService !== 'undefined' && typeof MapRouteService.resetCustomStopOrder === 'function') {
+        MapRouteService.resetCustomStopOrder();
+      }
+      updateMapRouteUI();
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast('Ruta re-optimizada automáticamente por distancia mínima', 'success');
+      }
     });
   }
 

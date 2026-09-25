@@ -164,62 +164,98 @@
             </section>
 
             <!-- Panel 3: Ruta en Mapa -->
-            <section id="panel-map" class="view-panel" role="tabpanel" aria-labelledby="tab-map" tabindex="0" hidden>
-                <div class="map-controls-card">
-                    <div class="origin-input-row">
-                        <label for="manual-origin-input" class="stat-label">Punto de Partida</label>
-                        <div class="origin-inputs-container">
-                            <div class="input-wrapper origin-input-wrapper">
-                                <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
-                                <input type="text" id="manual-origin-input" placeholder="Escribe tu punto de salida..." aria-label="Punto de partida manual" autocomplete="off">
+            <section id="panel-map" class="view-panel panel-map-layout" role="tabpanel" aria-labelledby="tab-map" tabindex="0" hidden>
+                <!-- Barra Lateral: Origen, Métricas, Google Maps e Itinerario de Paradas Reordenables -->
+                <aside class="map-sidebar">
+                    <div class="map-controls-card">
+                        <div class="origin-input-row">
+                            <label for="manual-origin-input" class="stat-label">Punto de Partida</label>
+                            <div class="origin-inputs-container">
+                                <div class="input-wrapper origin-input-wrapper">
+                                    <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
+                                    <input type="text" id="manual-origin-input" placeholder="Escribe tu punto de salida..." aria-label="Punto de partida manual" autocomplete="off">
+                                </div>
+                                <button id="btn-set-manual-origin" class="btn btn-secondary" type="button" aria-label="Fijar origen manual">
+                                    <i data-lucide="check" aria-hidden="true"></i>
+                                    <span>Fijar origen</span>
+                                </button>
+                                <button id="btn-gps-origin" class="btn btn-secondary" type="button" aria-label="Usar mi ubicación GPS" title="Usar mi ubicación GPS actual">
+                                    <i data-lucide="crosshair" aria-hidden="true"></i>
+                                    <span>Usar mi ubicación GPS</span>
+                                </button>
                             </div>
-                            <button id="btn-set-manual-origin" class="btn btn-secondary" type="button" aria-label="Fijar origen manual">
-                                <i data-lucide="check" aria-hidden="true"></i>
-                                <span>Fijar origen</span>
+                        </div>
+
+                        <!-- Tarjeta resumen de ruta -->
+                        <div id="route-summary-card" class="route-summary-card">
+                            <div class="route-metric-item">
+                                <i data-lucide="milestone" class="metric-icon" aria-hidden="true"></i>
+                                <div>
+                                    <span class="metric-label">Distancia estimada</span>
+                                    <strong id="route-distance" class="metric-value">0.0 km</strong>
+                                </div>
+                            </div>
+                            <div class="route-metric-divider" aria-hidden="true"></div>
+                            <div class="route-metric-item">
+                                <i data-lucide="clock" class="metric-icon" aria-hidden="true"></i>
+                                <div>
+                                    <span class="metric-label">Tiempo estimado</span>
+                                    <strong id="route-duration" class="metric-value">0 min</strong>
+                                </div>
+                            </div>
+                            <div class="route-metric-divider" aria-hidden="true"></div>
+                            <div class="route-metric-item">
+                                <i data-lucide="store" class="metric-icon" aria-hidden="true"></i>
+                                <div>
+                                    <span class="metric-label">Paradas de compra</span>
+                                    <strong id="route-stops" class="metric-value">0 paradas</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botón prominente de Google Maps -->
+                        <a id="btn-open-google-maps" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block btn-open-gmaps" aria-label="Abrir ruta en Google Maps">
+                            <i data-lucide="navigation" aria-hidden="true"></i>
+                            <span>Abrir ruta en Google Maps</span>
+                        </a>
+                    </div>
+
+                    <!-- Itinerario de Paradas Reordenables (Drag & Drop) -->
+                    <div class="route-stops-card">
+                        <div class="route-stops-header">
+                            <div class="route-stops-title">
+                                <i data-lucide="list-ordered" aria-hidden="true"></i>
+                                <h3>Itinerario de Paradas</h3>
+                            </div>
+                            <button type="button" id="btn-reset-route-order" class="btn-reset-order" title="Re-optimizar orden automático por cercanía (TSP)">
+                                <i data-lucide="sparkles" aria-hidden="true"></i>
+                                <span>Optimizar</span>
                             </button>
-                            <button id="btn-gps-origin" class="btn btn-secondary" type="button" aria-label="Usar mi ubicación GPS" title="Usar mi ubicación GPS actual">
-                                <i data-lucide="crosshair" aria-hidden="true"></i>
-                                <span>Usar mi ubicación GPS</span>
+                        </div>
+                        <p class="route-stops-help">Arrastra las paradas para personalizar el orden de tu recorrido:</p>
+                        <div id="route-stops-list" class="route-stops-list" role="list" aria-label="Lista de paradas del recorrido de compra">
+                            <!-- Inyectado dinámicamente -->
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Área Principal: Mapa Interactivo Leaflet en Pantalla Panorámica -->
+                <div class="map-main-wrapper">
+                    <div id="map-container" class="map-view-container" role="region" aria-label="Mapa interactivo con la ruta de compras">
+                        <!-- Controles Flotantes de Zoom y Ajuste en Esquina Superior -->
+                        <div class="map-floating-controls" role="toolbar" aria-label="Controles de navegación en mapa">
+                            <button type="button" id="btn-map-zoom-in" class="map-floating-btn" aria-label="Acercar mapa" title="Acercar (+)">
+                                <i data-lucide="plus" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="btn-map-zoom-out" class="map-floating-btn" aria-label="Alejar mapa" title="Alejar (-)">
+                                <i data-lucide="minus" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="btn-map-fit-bounds" class="map-floating-btn" aria-label="Centrar y encuadrar toda la ruta" title="Centrar ruta completa">
+                                <i data-lucide="maximize-2" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
-
-                    <!-- Tarjeta resumen de ruta -->
-                    <div id="route-summary-card" class="route-summary-card">
-                        <div class="route-metric-item">
-                            <i data-lucide="milestone" class="metric-icon" aria-hidden="true"></i>
-                            <div>
-                                <span class="metric-label">Distancia estimada</span>
-                                <strong id="route-distance" class="metric-value">0.0 km</strong>
-                            </div>
-                        </div>
-                        <div class="route-metric-divider" aria-hidden="true"></div>
-                        <div class="route-metric-item">
-                            <i data-lucide="clock" class="metric-icon" aria-hidden="true"></i>
-                            <div>
-                                <span class="metric-label">Tiempo estimado</span>
-                                <strong id="route-duration" class="metric-value">0 min</strong>
-                            </div>
-                        </div>
-                        <div class="route-metric-divider" aria-hidden="true"></div>
-                        <div class="route-metric-item">
-                            <i data-lucide="store" class="metric-icon" aria-hidden="true"></i>
-                            <div>
-                                <span class="metric-label">Paradas de compra</span>
-                                <strong id="route-stops" class="metric-value">0 paradas</strong>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Botón prominente de Google Maps -->
-                    <a id="btn-open-google-maps" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block btn-open-gmaps" aria-label="Abrir ruta en Google Maps">
-                        <i data-lucide="navigation" aria-hidden="true"></i>
-                        <span>Abrir ruta en Google Maps</span>
-                    </a>
                 </div>
-
-                <!-- Contenedor interactivo del mapa Leaflet -->
-                <div id="map-container" class="map-view-container" style="min-height: 380px;" role="region" aria-label="Mapa interactivo con la ruta de compras"></div>
             </section>
         </main>
 

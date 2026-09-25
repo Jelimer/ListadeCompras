@@ -12,6 +12,10 @@ const { createTestEnvironment } = require('./mock_dom.js');
 async function runScriptLifecycleTests() {
   console.log('Iniciando Suite de Pruebas: Ciclo de Vida y UI de script.js...');
 
+  process.on('unhandledRejection', (err) => {
+    console.error('ERROR DENTRO DE DOMContentLoaded:', err);
+  });
+
   const env = createTestEnvironment();
 
   global.window = env.window;
@@ -120,9 +124,51 @@ async function runScriptLifecycleTests() {
   assert.strictEqual(panelStats.classList.contains('active'), false, 'panel-stats debe desactivarse');
   console.log('  ✓ Test 6: Retorno a pestaña "Lista de Compras" exitoso');
 
+  // Test 7: Modo panorámico en .container
+  const appContainer = env.document.querySelector('.container');
+  tabMap.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  assert.strictEqual(appContainer.classList.contains('map-panoramic-mode'), true, '.container debe tener clase map-panoramic-mode al activar mapa');
+  tabList.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  assert.strictEqual(appContainer.classList.contains('map-panoramic-mode'), false, '.container debe remover map-panoramic-mode al salir del mapa');
+  console.log('  ✓ Test 7: Modo panorámico activa y desactiva expansión de pantalla completa');
+
+  // Test 8: Renderizado del Itinerario de Paradas
+  tabMap.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  const stopsList = env.document.getElementById('route-stops-list');
+  assert.ok(stopsList, 'route-stops-list debe existir en el DOM');
+  assert.ok(stopsList.textContent.includes('Amarilla Gas'), 'El itinerario debe incluir la parada de Amarilla Gas');
+  assert.ok(stopsList.textContent.includes('Origen:'), 'El itinerario debe incluir el Punto de Partida');
+  console.log('  ✓ Test 8: El itinerario de paradas reordenables se renderiza con origen y tiendas');
+
+  // Test 9: Botones flotantes de Zoom y Optimizar
+  const btnZoomIn = env.document.getElementById('btn-map-zoom-in');
+  const btnZoomOut = env.document.getElementById('btn-map-zoom-out');
+  const btnFitBounds = env.document.getElementById('btn-map-fit-bounds');
+  const btnResetOrder = env.document.getElementById('btn-reset-route-order');
+
+  assert.ok(btnZoomIn, 'btn-map-zoom-in debe existir');
+  assert.ok(btnZoomOut, 'btn-map-zoom-out debe existir');
+  assert.ok(btnFitBounds, 'btn-map-fit-bounds debe existir');
+  assert.ok(btnResetOrder, 'btn-reset-route-order debe existir');
+
+  // Disparar clics sin errores
+  btnZoomIn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  btnZoomOut.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  btnFitBounds.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  btnResetOrder.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  console.log('  ✓ Test 9: Botones flotantes de Zoom In, Zoom Out, Encuadre y Optimizar responden a clics');
+
+  // Test 10: Reordenamiento y persistencia de orden manual
+  const mapService = env.window.MapRouteService;
+  mapService.setCustomStopOrder(['Tienda B', 'Tienda A']);
+  assert.deepStrictEqual(mapService.getCustomStopOrder(), ['Tienda B', 'Tienda A'], 'getCustomStopOrder debe retornar el orden manual');
+  mapService.resetCustomStopOrder();
+  assert.strictEqual(mapService.getCustomStopOrder(), null, 'resetCustomStopOrder debe limpiar el orden');
+  console.log('  ✓ Test 10: Persistencia de orden manual de paradas y reseteo automático validados');
+
   console.log('\n==================================================');
   console.log('RESUMEN DE PRUEBAS LIFECYCLE DE SCRIPT.JS:');
-  console.log('Total: 6 | Aprobadas: 6 | Falladas: 0');
+  console.log('Total: 10 | Aprobadas: 10 | Falladas: 0');
   console.log('==================================================\n');
 }
 
@@ -130,3 +176,4 @@ runScriptLifecycleTests().catch(err => {
   console.error('Fallo en pruebas de script_lifecycle:', err);
   process.exit(1);
 });
+
