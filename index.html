@@ -220,6 +220,44 @@
                         </a>
                     </div>
 
+                    <!-- Gestor de Viajes de Compra -->
+                    <div class="trips-card">
+                        <div class="trips-header">
+                            <div class="trips-title">
+                                <i data-lucide="compass" aria-hidden="true"></i>
+                                <h3>Mis Viajes</h3>
+                            </div>
+                            <button type="button" id="btn-new-trip" class="btn btn-sm btn-primary-outline" title="Crear nuevo viaje de compra" aria-label="Crear nuevo viaje">
+                                <i data-lucide="plus" aria-hidden="true"></i>
+                                <span>Nuevo</span>
+                            </button>
+                        </div>
+                        <div class="trip-selector-row">
+                            <div class="trip-select-wrapper">
+                                <i data-lucide="route" class="trip-select-icon" aria-hidden="true"></i>
+                                <select id="trip-select" class="trip-select" aria-label="Seleccionar viaje de compra activo">
+                                    <!-- Inyectado dinámicamente -->
+                                </select>
+                            </div>
+                            <div class="trip-actions-btn-group">
+                                <button type="button" id="btn-rename-trip" class="btn-trip-action" title="Renombrar este viaje" aria-label="Renombrar viaje">
+                                    <i data-lucide="edit-2" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" id="btn-delete-trip" class="btn-trip-action btn-trip-delete" title="Eliminar este viaje" aria-label="Eliminar viaje">
+                                    <i data-lucide="trash-2" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="trip-meta-info">
+                            <span id="trip-included-count" class="trip-meta-badge">0 lugares en este viaje</span>
+                            <div class="trip-meta-quick-actions">
+                                <button type="button" id="btn-select-all-trip-stops" class="btn-link-action" title="Tildar todos los lugares en este viaje">Todos</button>
+                                <span class="meta-dot" aria-hidden="true">•</span>
+                                <button type="button" id="btn-deselect-all-trip-stops" class="btn-link-action" title="Destildar todos los lugares">Ninguno</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Itinerario de Paradas Reordenables (Drag & Drop) -->
                     <div class="route-stops-card">
                         <div class="route-stops-header">
@@ -232,7 +270,7 @@
                                 <span>Optimizar</span>
                             </button>
                         </div>
-                        <p class="route-stops-help">Arrastra las paradas para personalizar el orden de tu recorrido:</p>
+                        <p class="route-stops-help">Tilda los lugares a visitar y arrastra para personalizar el orden:</p>
                         <div id="route-stops-list" class="route-stops-list" role="list" aria-label="Lista de paradas del recorrido de compra">
                             <!-- Inyectado dinámicamente -->
                         </div>
@@ -241,6 +279,15 @@
 
                 <!-- Área Principal: Mapa Interactivo Leaflet en Pantalla Panorámica -->
                 <div class="map-main-wrapper">
+                    <!-- Banner Flotante para Selección Directa en el Mapa -->
+                    <div id="map-picker-banner" class="map-picker-banner" hidden>
+                        <div class="map-picker-content">
+                            <i data-lucide="map-pin" class="picker-pin-icon" aria-hidden="true"></i>
+                            <span>Haz clic en el mapa para ubicar <strong><span id="map-picker-store-name"></span></strong></span>
+                        </div>
+                        <button type="button" id="btn-cancel-map-picker" class="btn btn-sm btn-secondary" aria-label="Cancelar selección en mapa">Cancelar</button>
+                    </div>
+
                     <div id="map-container" class="map-view-container" role="region" aria-label="Mapa interactivo con la ruta de compras">
                         <!-- Controles Flotantes de Zoom y Ajuste en Esquina Superior -->
                         <div class="map-floating-controls" role="toolbar" aria-label="Controles de navegación en mapa">
@@ -276,6 +323,51 @@
         </nav>
     </div>
 
+    <!-- Modal Accesible: Ajuste de Dirección Exacta de Comercio -->
+    <div id="modal-edit-store-location" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-store-title" hidden>
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <i data-lucide="map-pin" aria-hidden="true"></i>
+                    <h3 id="modal-store-title">Ubicación de Tienda</h3>
+                </div>
+                <button type="button" id="btn-close-store-modal" class="modal-close-btn" aria-label="Cerrar ventana">
+                    <i data-lucide="x" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Indica la dirección precisa de este comercio o márcalo directamente en el mapa para ubicarlo con total exactitud:</p>
+                
+                <div class="input-group">
+                    <label for="input-store-address" class="input-label">Dirección exacta / Calle y altura</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="search" class="input-icon" aria-hidden="true"></i>
+                        <input type="text" id="input-store-address" placeholder="Ej: Av. 3 de Abril 1200, Corrientes" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="modal-coords-status" id="modal-current-coords-text">
+                    <!-- Muestra coordenadas actuales si ya existen -->
+                </div>
+
+                <div class="modal-actions-grid">
+                    <button type="button" id="btn-search-store-address" class="btn btn-primary">
+                        <i data-lucide="check" aria-hidden="true"></i>
+                        <span>Buscar y Guardar</span>
+                    </button>
+                    <button type="button" id="btn-pick-on-map-from-modal" class="btn btn-secondary">
+                        <i data-lucide="crosshair" aria-hidden="true"></i>
+                        <span>Elegir en el mapa</span>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-reset-store-location" class="btn btn-sm btn-danger-outline" title="Restablecer ubicación original">Restablecer por defecto</button>
+                <button type="button" id="btn-cancel-store-modal" class="btn btn-sm btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Región en vivo para anuncios textuales accesibles (Screen Readers) -->
     <div id="ariaAnnouncer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -289,7 +381,7 @@
 
     <!-- Leaflet 1.9.4 JavaScript & Map Route Module -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="js/map-route.js?v=2.2.0"></script>
+    <script src="js/map-route.js?v=2.3.0"></script>
 
     <!-- Módulos Core UMD (Arquitectura Desacoplada M1-M4) -->
     <script src="js/storage.js"></script>
@@ -302,6 +394,6 @@
     <script src="js/ui-feedback.js"></script>
 
     <!-- Script de Inicialización y Gestión de UI -->
-    <script src="script.js?v=2.2.0"></script>
+    <script src="script.js?v=2.3.0"></script>
 </body>
 </html>

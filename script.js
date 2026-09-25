@@ -56,6 +56,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnMapZoomIn: document.getElementById('btn-map-zoom-in'),
     btnMapZoomOut: document.getElementById('btn-map-zoom-out'),
     btnMapFitBounds: document.getElementById('btn-map-fit-bounds'),
+
+    // Gestor de Viajes de Compra
+    tripsCard: document.querySelector('.trips-card'),
+    tripSelect: document.getElementById('trip-select'),
+    btnNewTrip: document.getElementById('btn-new-trip'),
+    btnRenameTrip: document.getElementById('btn-rename-trip'),
+    btnDeleteTrip: document.getElementById('btn-delete-trip'),
+    tripIncludedCount: document.getElementById('trip-included-count'),
+    btnSelectAllTripStops: document.getElementById('btn-select-all-trip-stops'),
+    btnDeselectAllTripStops: document.getElementById('btn-deselect-all-trip-stops'),
+
+    // Banner de Selección Directa en Mapa
+    mapPickerBanner: document.getElementById('map-picker-banner'),
+    mapPickerStoreName: document.getElementById('map-picker-store-name'),
+    btnCancelMapPicker: document.getElementById('btn-cancel-map-picker'),
+
+    // Modal de Edición de Ubicación
+    modalEditStoreLocation: document.getElementById('modal-edit-store-location'),
+    modalStoreTitle: document.getElementById('modal-store-title'),
+    inputStoreAddress: document.getElementById('input-store-address'),
+    modalCurrentCoordsText: document.getElementById('modal-current-coords-text'),
+    btnSearchStoreAddress: document.getElementById('btn-search-store-address'),
+    btnPickOnMapFromModal: document.getElementById('btn-pick-on-map-from-modal'),
+    btnResetStoreLocation: document.getElementById('btn-reset-store-location'),
+    btnCloseStoreModal: document.getElementById('btn-close-store-modal'),
+    btnCancelStoreModal: document.getElementById('btn-cancel-store-modal'),
+
     container: document.querySelector('.container')
   };
 
@@ -1223,9 +1250,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     elements.routeStopsList.innerHTML = '';
 
     const origin = route.origin || (MapRouteService.getOrigin && MapRouteService.getOrigin());
-    const stops = route.orderedStops || [];
+    const allCandidateStops = (Array.isArray(route.allStops) && route.allStops.length > 0)
+      ? route.allStops
+      : (route.orderedStops || []);
 
-    if (stops.length === 0) {
+    if (allCandidateStops.length === 0) {
       elements.routeStopsList.innerHTML = `
         <div style="text-align:center; padding: 20px 10px; color: var(--text-muted); font-size: 0.85rem;">
           <p style="font-weight:600;">No hay paradas de compra pendientes.</p>
@@ -1234,6 +1263,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
       return;
     }
+
+    // Ordenar para mostrar primero las paradas activas en su orden de itinerario, seguidas de las excluidas
+    const orderedNames = (route.orderedStops || []).map(s => s.storeName);
+    const orderedSet = new Set(orderedNames);
+    const stops = [
+      ...(route.orderedStops || []),
+      ...allCandidateStops.filter(s => !orderedSet.has(s.storeName))
+    ];
 
     // 1. Elemento Fijo de Punto de Partida
     const originItem = document.createElement('div');
@@ -1249,52 +1286,93 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     elements.routeStopsList.appendChild(originItem);
 
-    // 2. Paradas Ordenadas Reordenables
+    // 2. Paradas Ordenadas y Paradas Excluidas
+    const activeStopsList = route.orderedStops || [];
     stops.forEach((stop, idx) => {
+      const isIncluded = stop.isIncluded !== false;
       const stopDiv = document.createElement('div');
-      stopDiv.className = 'route-stop-item';
+      stopDiv.className = `route-stop-item ${isIncluded ? '' : 'is-excluded'}`;
       stopDiv.dataset.location = stop.storeName;
-      stopDiv.setAttribute('draggable', 'true');
+      if (isIncluded) {
+        stopDiv.setAttribute('draggable', 'true');
+      }
 
       const safeStoreName = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(stop.storeName) : stop.storeName;
       const totalAmount = stop.estimatedTotal > 0 ? `$${Number(stop.estimatedTotal).toFixed(2)}` : '$0.00';
       const itemsCountText = `${stop.itemCount || (stop.pendingItems && stop.pendingItems.length) || 0} art.`;
+      const safeAddress = ValidationModule.escapeHtml ? ValidationModule.escapeHtml(stop.address || stop.storeName) : (stop.address || stop.storeName);
+      const stopNumberBadge = isIncluded ? (stop.stepIndex || (idx + 1)) : '—';
 
       stopDiv.innerHTML = `
-        <div class="stop-drag-handle" title="Arrastra para reordenar esta parada" aria-label="Arrastrar parada">
+        <div class="stop-drag-handle" title="${isIncluded ? 'Arrastra para reordenar esta parada' : 'Parada no incluida en la ruta'}" aria-label="Arrastrar parada" ${isIncluded ? '' : 'style="opacity:0.25; cursor:not-allowed;"'}>
           <i data-lucide="grip-vertical"></i>
         </div>
-        <div class="stop-badge">${idx + 1}</div>
+        <label class="stop-checkbox-label" title="${isIncluded ? 'Desmarcar para excluir de este viaje' : 'Marcar para incluir en este viaje'}">
+          <input type="checkbox" class="stop-checkbox" data-store="${safeStoreName}" ${isIncluded ? 'checked' : ''} aria-label="Incluir ${safeStoreName} en la ruta">
+        </label>
+        <div class="stop-badge">${stopNumberBadge}</div>
         <div class="stop-details">
-          <span class="stop-name" title="${safeStoreName}">${safeStoreName}</span>
+          <div class="stop-title-row">
+            <span class="stop-name" title="${safeStoreName}">${safeStoreName}</span>
+            ${!isIncluded ? '<span class="stop-excluded-tag">No incluido</span>' : ''}
+          </div>
           <div class="stop-meta">
             <span>${itemsCountText}</span>
             <span>•</span>
             <span class="stop-price-tag">${totalAmount}</span>
-            ${stop.stepDistanceKm ? `<span>• ${stop.stepDistanceKm} km</span>` : ''}
+            ${isIncluded && stop.stepDistanceKm ? `<span>• ${stop.stepDistanceKm} km</span>` : ''}
+          </div>
+          <div class="stop-address-preview" title="${safeAddress}">
+            <i data-lucide="map-pin" class="meta-icon"></i>
+            <span>${safeAddress}</span>
           </div>
         </div>
-        <div class="stop-reorder-actions">
-          <button type="button" class="btn-move-stop btn-move-up" title="Mover hacia arriba" aria-label="Mover hacia arriba" ${idx === 0 ? 'disabled' : ''}>▲</button>
-          <button type="button" class="btn-move-stop btn-move-down" title="Mover hacia abajo" aria-label="Mover hacia abajo" ${idx === stops.length - 1 ? 'disabled' : ''}>▼</button>
+        <div class="stop-actions">
+          <button type="button" class="btn-edit-location" data-store="${safeStoreName}" title="Ajustar dirección exacta o señalar en el mapa" aria-label="Editar dirección de ${safeStoreName}">
+            <i data-lucide="map-pin"></i>
+          </button>
+          <div class="stop-reorder-actions">
+            <button type="button" class="btn-move-stop btn-move-up" title="Mover hacia arriba" aria-label="Mover hacia arriba" ${idx === 0 || !isIncluded ? 'disabled' : ''}>▲</button>
+            <button type="button" class="btn-move-stop btn-move-down" title="Mover hacia abajo" aria-label="Mover hacia abajo" ${idx >= activeStopsList.length - 1 || !isIncluded ? 'disabled' : ''}>▼</button>
+          </div>
         </div>
       `;
 
-      // Clics en botones accesibles Subir / Bajar
-      const btnUp = stopDiv.querySelector('.btn-move-up');
-      const btnDown = stopDiv.querySelector('.btn-move-down');
-
-      if (btnUp) {
-        btnUp.addEventListener('click', (e) => {
-          e.stopPropagation();
-          moveStopPosition(idx, idx - 1, stops);
+      // Clic en checkbox para incluir / excluir parada del viaje
+      const chk = stopDiv.querySelector('.stop-checkbox');
+      if (chk) {
+        chk.addEventListener('change', () => {
+          handleStopCheckboxToggle(stop.storeName, chk.checked);
         });
       }
-      if (btnDown) {
-        btnDown.addEventListener('click', (e) => {
+
+      // Clic en botón de edición de ubicación exacta
+      const btnEditLoc = stopDiv.querySelector('.btn-edit-location');
+      if (btnEditLoc) {
+        btnEditLoc.addEventListener('click', (e) => {
           e.stopPropagation();
-          moveStopPosition(idx, idx + 1, stops);
+          openEditStoreModal(stop.storeName);
         });
+      }
+
+      // Clics en botones accesibles Subir / Bajar (solo paradas activas)
+      if (isIncluded) {
+        const activeIdx = activeStopsList.findIndex(s => s.storeName === stop.storeName);
+        const btnUp = stopDiv.querySelector('.btn-move-up');
+        const btnDown = stopDiv.querySelector('.btn-move-down');
+
+        if (btnUp && activeIdx > 0) {
+          btnUp.addEventListener('click', (e) => {
+            e.stopPropagation();
+            moveStopPosition(activeIdx, activeIdx - 1, activeStopsList);
+          });
+        }
+        if (btnDown && activeIdx < activeStopsList.length - 1) {
+          btnDown.addEventListener('click', (e) => {
+            e.stopPropagation();
+            moveStopPosition(activeIdx, activeIdx + 1, activeStopsList);
+          });
+        }
       }
 
       elements.routeStopsList.appendChild(stopDiv);
@@ -1302,12 +1380,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (window.lucide) window.lucide.createIcons();
 
-    // Inicializar SortableJS o drag & drop nativo
-    initStopsDragAndDrop(elements.routeStopsList, stops);
+    // Inicializar SortableJS o drag & drop nativo para paradas activas
+    initStopsDragAndDrop(elements.routeStopsList, activeStopsList);
+  }
+
+  function handleStopCheckboxToggle(storeName, isChecked) {
+    if (typeof MapRouteService === 'undefined') return;
+    const activeTrip = MapRouteService.getActiveTrip();
+    if (!activeTrip) return;
+
+    // Obtener todos los comercios pendientes actuales
+    const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
+    const pendingItems = items.filter(it => it && !it.completed);
+    const allStores = [...new Set(pendingItems.map(it => (it.location && String(it.location).trim()) || 'General'))];
+
+    // Si includedStores era null, inicialmente todos estaban incluidos
+    let currentIncluded = Array.isArray(activeTrip.includedStores)
+      ? [...activeTrip.includedStores]
+      : [...allStores];
+
+    if (isChecked) {
+      if (!currentIncluded.includes(storeName)) {
+        currentIncluded.push(storeName);
+      }
+    } else {
+      currentIncluded = currentIncluded.filter(s => s !== storeName);
+    }
+
+    MapRouteService.setTripIncludedStores(activeTrip.id, currentIncluded);
+    updateMapRouteUI();
+    if (FeedbackModule.showToast) {
+      FeedbackModule.showToast(
+        isChecked ? `"${storeName}" añadido a la ruta` : `"${storeName}" excluido de la ruta`,
+        'info'
+      );
+    }
   }
 
   function moveStopPosition(fromIndex, toIndex, stops) {
-    if (toIndex < 0 || toIndex >= stops.length || fromIndex === toIndex) return;
+    if (!Array.isArray(stops) || toIndex < 0 || toIndex >= stops.length || fromIndex === toIndex) return;
     const currentOrder = stops.map(s => s.storeName);
     const moved = currentOrder.splice(fromIndex, 1)[0];
     currentOrder.splice(toIndex, 0, moved);
@@ -1329,12 +1440,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       sortableInstance = window.Sortable.create(container, {
         animation: 180,
         handle: '.stop-drag-handle',
-        filter: '.route-origin-item',
+        filter: '.route-origin-item, .is-excluded',
         preventOnFilter: true,
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
         onEnd: () => {
-          const stopEls = container.querySelectorAll('.route-stop-item[data-location]');
+          const stopEls = container.querySelectorAll('.route-stop-item:not(.route-origin-item):not(.is-excluded)[data-location]');
           const newOrder = Array.from(stopEls).map(el => el.dataset.location).filter(Boolean);
           if (newOrder.length > 0) {
             if (typeof MapRouteService !== 'undefined' && typeof MapRouteService.setCustomStopOrder === 'function') {
@@ -1354,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function setupNativeDragAndDrop(container) {
     let draggedItem = null;
-    const items = container.querySelectorAll('.route-stop-item:not(.route-origin-item)');
+    const items = container.querySelectorAll('.route-stop-item:not(.route-origin-item):not(.is-excluded)');
 
     items.forEach(item => {
       item.addEventListener('dragstart', (e) => {
@@ -1369,7 +1480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       item.addEventListener('dragend', () => {
         if (draggedItem) draggedItem.classList.remove('sortable-chosen');
         draggedItem = null;
-        const stopEls = container.querySelectorAll('.route-stop-item[data-location]');
+        const stopEls = container.querySelectorAll('.route-stop-item:not(.route-origin-item):not(.is-excluded)[data-location]');
         const newOrder = Array.from(stopEls).map(el => el.dataset.location).filter(Boolean);
         if (newOrder.length > 0 && typeof MapRouteService !== 'undefined' && typeof MapRouteService.setCustomStopOrder === 'function') {
           MapRouteService.setCustomStopOrder(newOrder);
@@ -1385,7 +1496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       item.addEventListener('drop', (e) => {
         e.preventDefault();
         if (draggedItem && draggedItem !== item) {
-          const allItems = Array.from(container.querySelectorAll('.route-stop-item:not(.route-origin-item)'));
+          const allItems = Array.from(container.querySelectorAll('.route-stop-item:not(.route-origin-item):not(.is-excluded)'));
           const draggedIdx = allItems.indexOf(draggedItem);
           const targetIdx = allItems.indexOf(item);
           if (draggedIdx < targetIdx) {
@@ -1398,6 +1509,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  function renderTripsSelector() {
+    if (!elements.tripSelect || typeof MapRouteService === 'undefined' || !MapRouteService.getTripsData) return;
+    const tripsData = MapRouteService.getTripsData();
+    const trips = tripsData.trips || [];
+    const activeTripId = tripsData.activeTripId;
+
+    elements.tripSelect.innerHTML = '';
+    trips.forEach(trip => {
+      const opt = document.createElement('option');
+      opt.value = trip.id;
+      opt.textContent = trip.name;
+      if (trip.id === activeTripId) {
+        opt.selected = true;
+      }
+      elements.tripSelect.appendChild(opt);
+    });
+
+    if (elements.tripIncludedCount) {
+      const activeTrip = MapRouteService.getActiveTrip();
+      const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
+      const pendingItems = items.filter(it => it && !it.completed);
+      const totalStoresCount = new Set(pendingItems.map(it => (it.location && String(it.location).trim()) || 'General')).size;
+
+      if (!activeTrip || activeTrip.includedStores === null) {
+        elements.tripIncludedCount.textContent = `${totalStoresCount} de ${totalStoresCount} lugares`;
+      } else {
+        const incCount = activeTrip.includedStores.filter(s => {
+          return pendingItems.some(it => ((it.location && String(it.location).trim()) || 'General') === s);
+        }).length;
+        elements.tripIncludedCount.textContent = `${incCount} de ${totalStoresCount} lugares`;
+      }
+    }
+  }
+
   function updateMapRouteUI() {
     if (typeof window.MapRouteService === 'undefined' || !MapRouteService.calculateOptimalRoute) return;
     const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
@@ -1407,6 +1552,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof MapRouteService.renderRouteOnMap === 'function') {
       MapRouteService.renderRouteOnMap(route);
     }
+
+    // Actualizar selector de viajes y métricas de paradas
+    renderTripsSelector();
 
     // Actualizar métricas de la tarjeta resumen
     if (elements.routeDistance) {
@@ -1435,6 +1583,328 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Actualizar lista interactiva de paradas del itinerario
     renderRouteStopsList(route);
+  }
+
+  // B. Gestor de Viajes de Compra: Listeners y Acciones
+  if (elements.tripSelect) {
+    elements.tripSelect.addEventListener('change', (e) => {
+      if (typeof MapRouteService === 'undefined') return;
+      MapRouteService.setActiveTrip(e.target.value);
+      updateMapRouteUI();
+    });
+  }
+
+  if (elements.btnNewTrip) {
+    elements.btnNewTrip.addEventListener('click', async () => {
+      if (typeof MapRouteService === 'undefined') return;
+      let tripName = '';
+      if (window.Swal) {
+        const { value, isConfirmed } = await window.Swal.fire({
+          title: 'Nuevo Viaje de Compra',
+          text: 'Ingresa un nombre para tu nuevo viaje:',
+          input: 'text',
+          inputPlaceholder: 'Ej: Viaje 2, Supermercado y Farmacia...',
+          showCancelButton: true,
+          confirmButtonText: 'Crear Viaje',
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#4f46e5',
+          inputValidator: (val) => {
+            if (!val || !val.trim()) return 'El nombre no puede estar vacío';
+          }
+        });
+        if (!isConfirmed || !value) return;
+        tripName = value.trim();
+      } else {
+        tripName = (prompt('Nombre del nuevo viaje:') || '').trim();
+        if (!tripName) return;
+      }
+
+      const newTrip = MapRouteService.createTrip(tripName);
+      updateMapRouteUI();
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast(`Viaje "${newTrip.name}" creado con éxito`, 'success');
+      }
+    });
+  }
+
+  if (elements.btnRenameTrip) {
+    elements.btnRenameTrip.addEventListener('click', async () => {
+      if (typeof MapRouteService === 'undefined') return;
+      const activeTrip = MapRouteService.getActiveTrip();
+      if (!activeTrip) return;
+
+      let newName = '';
+      if (window.Swal) {
+        const { value, isConfirmed } = await window.Swal.fire({
+          title: 'Renombrar Viaje',
+          input: 'text',
+          inputValue: activeTrip.name,
+          showCancelButton: true,
+          confirmButtonText: 'Guardar',
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#4f46e5',
+          inputValidator: (val) => {
+            if (!val || !val.trim()) return 'El nombre no puede estar vacío';
+          }
+        });
+        if (!isConfirmed || !value) return;
+        newName = value.trim();
+      } else {
+        newName = (prompt('Nuevo nombre para el viaje:', activeTrip.name) || '').trim();
+        if (!newName) return;
+      }
+
+      MapRouteService.renameTrip(activeTrip.id, newName);
+      updateMapRouteUI();
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast(`Viaje renombrado a "${newName}"`, 'success');
+      }
+    });
+  }
+
+  if (elements.btnDeleteTrip) {
+    elements.btnDeleteTrip.addEventListener('click', async () => {
+      if (typeof MapRouteService === 'undefined') return;
+      const tripsData = MapRouteService.getTripsData();
+      if (tripsData.trips.length <= 1) {
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast('Debe haber al menos un viaje en la lista', 'warning');
+        }
+        return;
+      }
+
+      const activeTrip = MapRouteService.getActiveTrip();
+      let confirmed = false;
+      if (window.Swal) {
+        const res = await window.Swal.fire({
+          title: '¿Eliminar viaje?',
+          text: `Se eliminará "${activeTrip.name}". Los productos de la lista se conservan intactos.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Sí, eliminar',
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#ef4444'
+        });
+        confirmed = res.isConfirmed;
+      } else {
+        confirmed = confirm(`¿Deseas eliminar el viaje "${activeTrip.name}"?`);
+      }
+
+      if (confirmed) {
+        MapRouteService.deleteTrip(activeTrip.id);
+        updateMapRouteUI();
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast(`Viaje "${activeTrip.name}" eliminado`, 'info');
+        }
+      }
+    });
+  }
+
+  if (elements.btnSelectAllTripStops) {
+    elements.btnSelectAllTripStops.addEventListener('click', () => {
+      if (typeof MapRouteService === 'undefined') return;
+      const activeTrip = MapRouteService.getActiveTrip();
+      if (!activeTrip) return;
+      MapRouteService.setTripIncludedStores(activeTrip.id, null);
+      updateMapRouteUI();
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast('Todos los lugares incluidos en este viaje', 'success');
+      }
+    });
+  }
+
+  if (elements.btnDeselectAllTripStops) {
+    elements.btnDeselectAllTripStops.addEventListener('click', () => {
+      if (typeof MapRouteService === 'undefined') return;
+      const activeTrip = MapRouteService.getActiveTrip();
+      if (!activeTrip) return;
+      MapRouteService.setTripIncludedStores(activeTrip.id, []);
+      updateMapRouteUI();
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast('Todos los lugares desmarcados de este viaje', 'info');
+      }
+    });
+  }
+
+  // Modal de Edición de Ubicación y Selección Directa en Mapa
+  let currentEditingStoreName = null;
+
+  function openEditStoreModal(storeName) {
+    if (!elements.modalEditStoreLocation || !storeName) return;
+    currentEditingStoreName = storeName;
+
+    if (elements.modalStoreTitle) {
+      elements.modalStoreTitle.textContent = `Ubicación de "${storeName}"`;
+    }
+
+    const coordsMap = (typeof MapRouteService !== 'undefined' && MapRouteService.getStoredCoordinates)
+      ? MapRouteService.getStoredCoordinates()
+      : {};
+    const normKey = (typeof MapRouteService !== 'undefined' && MapRouteService.normalizeStoreName)
+      ? MapRouteService.normalizeStoreName(storeName)
+      : storeName.toLowerCase().trim();
+    const stored = coordsMap[normKey];
+
+    if (elements.inputStoreAddress) {
+      elements.inputStoreAddress.value = (stored && (stored.address || stored.displayName)) || '';
+    }
+
+    if (elements.modalCurrentCoordsText) {
+      if (stored && typeof stored.lat === 'number' && typeof stored.lng === 'number') {
+        const sourceLabel = stored.source === 'map_click' ? 'Punto señalado en el mapa' : (stored.source === 'manual' ? 'Dirección manual' : 'Geocodificación');
+        elements.modalCurrentCoordsText.innerHTML = `<strong>Ubicación fijada:</strong> ${stored.lat.toFixed(5)}, ${stored.lng.toFixed(5)}<br><span style="font-size:0.75rem; opacity:0.8;">Tipo: ${sourceLabel}</span>`;
+      } else {
+        elements.modalCurrentCoordsText.innerHTML = `<em>Ubicación aproximada automática. Ingresa una dirección exacta o márcala directamente en el mapa.</em>`;
+      }
+    }
+
+    if (elements.btnResetStoreLocation) {
+      elements.btnResetStoreLocation.style.display = stored ? 'inline-block' : 'none';
+    }
+
+    elements.modalEditStoreLocation.removeAttribute('hidden');
+    if (elements.inputStoreAddress) {
+      elements.inputStoreAddress.focus();
+    }
+  }
+
+  function closeEditStoreModal() {
+    if (!elements.modalEditStoreLocation) return;
+    elements.modalEditStoreLocation.setAttribute('hidden', '');
+    currentEditingStoreName = null;
+  }
+
+  if (elements.btnCloseStoreModal) {
+    elements.btnCloseStoreModal.addEventListener('click', closeEditStoreModal);
+  }
+  if (elements.btnCancelStoreModal) {
+    elements.btnCancelStoreModal.addEventListener('click', closeEditStoreModal);
+  }
+
+  // Guardar dirección manual desde el modal
+  if (elements.btnSearchStoreAddress && elements.inputStoreAddress) {
+    const handleSaveStoreAddress = async () => {
+      const addressText = (elements.inputStoreAddress.value || '').trim();
+      if (!addressText) {
+        if (FeedbackModule.showToast) FeedbackModule.showToast('Escribe una dirección válida', 'warning');
+        elements.inputStoreAddress.focus();
+        return;
+      }
+      if (!currentEditingStoreName || typeof MapRouteService === 'undefined') return;
+
+      const origHtml = elements.btnSearchStoreAddress.innerHTML;
+      elements.btnSearchStoreAddress.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Buscando...</span>`;
+      if (window.lucide) window.lucide.createIcons();
+
+      try {
+        const resolved = await MapRouteService.geocodeAddress(addressText, { immediate: true });
+        if (resolved && MapRouteService.isValidCoordinates(resolved)) {
+          MapRouteService.saveStoreCoordinate(currentEditingStoreName, {
+            lat: resolved.lat,
+            lng: resolved.lng,
+            address: resolved.displayName || addressText,
+            source: 'manual'
+          });
+          closeEditStoreModal();
+          updateMapRouteUI();
+          if (FeedbackModule.showToast) {
+            FeedbackModule.showToast(`Ubicación de "${currentEditingStoreName}" actualizada con éxito`, 'success');
+          }
+        } else {
+          if (FeedbackModule.showToast) {
+            FeedbackModule.showToast('No se encontraron coordenadas para esa dirección. Intenta seleccionarla en el mapa.', 'warning');
+          }
+        }
+      } catch (err) {
+        console.warn('[App] Error al geocodificar dirección de tienda:', err);
+      } finally {
+        elements.btnSearchStoreAddress.innerHTML = origHtml;
+        if (window.lucide) window.lucide.createIcons();
+      }
+    };
+
+    elements.btnSearchStoreAddress.addEventListener('click', handleSaveStoreAddress);
+    elements.inputStoreAddress.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveStoreAddress();
+      }
+    });
+  }
+
+  // Elegir punto en el mapa desde el modal
+  if (elements.btnPickOnMapFromModal) {
+    elements.btnPickOnMapFromModal.addEventListener('click', () => {
+      const targetStore = currentEditingStoreName;
+      closeEditStoreModal();
+      if (targetStore) {
+        startPickLocationOnMap(targetStore);
+      }
+    });
+  }
+
+  // Restablecer ubicación predeterminada
+  if (elements.btnResetStoreLocation) {
+    elements.btnResetStoreLocation.addEventListener('click', () => {
+      if (!currentEditingStoreName || typeof MapRouteService === 'undefined') return;
+      MapRouteService.removeStoreCoordinate(currentEditingStoreName);
+      closeEditStoreModal();
+      updateMapRouteUI();
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast(`Ubicación de "${currentEditingStoreName}" restablecida por defecto`, 'info');
+      }
+    });
+  }
+
+  // Modo interactivo de selección directa en el mapa
+  function startPickLocationOnMap(storeName) {
+    if (typeof MapRouteService === 'undefined' || !MapRouteService.enablePickLocationMode) return;
+    if (elements.mapPickerStoreName) {
+      elements.mapPickerStoreName.textContent = storeName;
+    }
+    if (elements.mapPickerBanner) {
+      elements.mapPickerBanner.removeAttribute('hidden');
+    }
+
+    if (typeof switchView === 'function') {
+      switchView('map');
+    }
+
+    MapRouteService.enablePickLocationMode(storeName, (picked) => {
+      if (elements.mapPickerBanner) {
+        elements.mapPickerBanner.setAttribute('hidden', '');
+      }
+      if (picked && typeof picked.lat === 'number' && typeof picked.lng === 'number') {
+        MapRouteService.saveStoreCoordinate(picked.storeName, {
+          lat: picked.lat,
+          lng: picked.lng,
+          address: 'Ubicación seleccionada en el mapa',
+          source: 'map_click'
+        });
+        updateMapRouteUI();
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast(`Ubicación de "${picked.storeName}" fijada en el mapa`, 'success');
+        }
+      }
+    });
+
+    if (FeedbackModule.showToast) {
+      FeedbackModule.showToast(`Haz clic sobre el mapa para ubicar "${storeName}"`, 'info');
+    }
+  }
+
+  if (elements.btnCancelMapPicker) {
+    elements.btnCancelMapPicker.addEventListener('click', () => {
+      if (typeof MapRouteService !== 'undefined' && MapRouteService.disablePickLocationMode) {
+        MapRouteService.disablePickLocationMode();
+      }
+      if (elements.mapPickerBanner) {
+        elements.mapPickerBanner.setAttribute('hidden', '');
+      }
+      if (FeedbackModule.showToast) {
+        FeedbackModule.showToast('Selección en el mapa cancelada', 'info');
+      }
+    });
   }
 
   // C. Inicialización de MapRouteService y Leaflet

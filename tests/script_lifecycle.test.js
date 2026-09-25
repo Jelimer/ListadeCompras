@@ -166,9 +166,100 @@ async function runScriptLifecycleTests() {
   assert.strictEqual(mapService.getCustomStopOrder(), null, 'resetCustomStopOrder debe limpiar el orden');
   console.log('  ✓ Test 10: Persistencia de orden manual de paradas y reseteo automático validados');
 
+  // Test 11: Gestor de Viajes (Crear, Renombrar, Eliminar, Conmutar)
+  const tripSelect = env.document.getElementById('trip-select');
+  assert.ok(tripSelect, 'trip-select debe existir en el DOM');
+  const initialTrips = mapService.getTripsData();
+  assert.ok(Array.isArray(initialTrips.trips), 'getTripsData debe retornar array de viajes');
+  assert.ok(initialTrips.trips.length >= 1, 'Debe haber al menos 1 viaje');
+
+  // Crear nuevo viaje
+  const createdTrip = mapService.createTrip('Viaje Fin de Semana');
+  assert.strictEqual(createdTrip.name, 'Viaje Fin de Semana');
+  assert.strictEqual(mapService.getActiveTrip().id, createdTrip.id, 'El nuevo viaje debe quedar activo');
+
+  // Renombrar viaje
+  mapService.renameTrip(createdTrip.id, 'Viaje Express');
+  assert.strictEqual(mapService.getActiveTrip().name, 'Viaje Express');
+
+  // Eliminar viaje
+  mapService.deleteTrip(createdTrip.id);
+  assert.notStrictEqual(mapService.getActiveTrip().id, createdTrip.id, 'Tras eliminar, el viaje activo debe cambiar');
+  console.log('  ✓ Test 11: Gestor de Viajes (crear, renombrar, eliminar y conmutar) validado');
+
+  // Test 12: Checkboxes de Paradas e Inclusión/Exclusión
+  const sampleItems = [
+    { id: '1', name: 'Leche', quantity: 2, unitPrice: 100, location: 'Super A', completed: false },
+    { id: '2', name: 'Pan', quantity: 1, unitPrice: 50, location: 'Panadería B', completed: false }
+  ];
+  // Ambas incluidas
+  const routeAll = mapService.calculateOptimalRoute(sampleItems, null, { includedStores: ['Super A', 'Panadería B'] });
+  assert.strictEqual(routeAll.orderedStops.length, 2, 'Ruta con ambas tiendas debe tener 2 paradas');
+  assert.strictEqual(routeAll.allStops.length, 2);
+
+  // Solo Super A incluida (Panadería B destildada)
+  const routeOne = mapService.calculateOptimalRoute(sampleItems, null, { includedStores: ['Super A'] });
+  assert.strictEqual(routeOne.orderedStops.length, 1, 'Ruta filtrada debe tener solo 1 parada');
+  assert.strictEqual(routeOne.orderedStops[0].storeName, 'Super A');
+  assert.strictEqual(routeOne.allStops.length, 2, 'allStops debe conservar las 2 tiendas');
+  assert.strictEqual(routeOne.allStops.find(s => s.storeName === 'Super A').isIncluded, true);
+  assert.strictEqual(routeOne.allStops.find(s => s.storeName === 'Panadería B').isIncluded, false);
+  assert.ok(!routeOne.googleMapsUrl.includes('Panader%C3%ADa') && !routeOne.googleMapsUrl.includes('Panaderia'), 'Google Maps URL no debe incluir paradas excluidas');
+  console.log('  ✓ Test 12: Checkboxes de paradas y exclusión/inclusión en ruta validados');
+
+  // Test 13: Ajuste de dirección manual y guardado de coordenadas
+  const savedOk = mapService.saveStoreCoordinate('Super A', {
+    lat: -27.4698,
+    lng: -58.8341,
+    address: 'Av. 3 de Abril 1200, Corrientes',
+    source: 'manual'
+  });
+  assert.strictEqual(savedOk, true);
+  const coords = mapService.getStoredCoordinates();
+  const normKey = mapService.normalizeStoreName('Super A');
+  assert.strictEqual(coords[normKey].lat, -27.4698);
+  assert.strictEqual(coords[normKey].address, 'Av. 3 de Abril 1200, Corrientes');
+
+  // Remover coordenadas
+  const removeOk = mapService.removeStoreCoordinate('Super A');
+  assert.strictEqual(removeOk, true);
+  assert.strictEqual(mapService.getStoredCoordinates()[normKey], undefined);
+  console.log('  ✓ Test 13: Ajuste de dirección manual exacta y remoción de coordenadas validados');
+
+  // Test 14: Modo de selección interactiva directa en el mapa
+  let pickedResult = null;
+  mapService.enablePickLocationMode('Farmacia C', (res) => {
+    pickedResult = res;
+  });
+  // Simular clic en el mapa de Leaflet
+  assert.ok(mapService.mapController && mapService.mapController.map, 'mapController debe tener instancia de mapa');
+  mapService.mapController.map.fire('click', { latlng: { lat: -27.45, lng: -58.82 } });
+  assert.ok(pickedResult, 'Callback de selección en mapa debe recibir las coordenadas');
+  assert.strictEqual(pickedResult.storeName, 'Farmacia C');
+  assert.strictEqual(pickedResult.lat, -27.45);
+  assert.strictEqual(pickedResult.lng, -58.82);
+
+  // Desactivar sin errores
+  mapService.disablePickLocationMode();
+  console.log('  ✓ Test 14: Modo de selección directa en el mapa interactivo validado');
+
+  // Test 15: Elementos UI del gestor de viajes, modal y picker en el DOM
+  const modal = env.document.getElementById('modal-edit-store-location');
+  const pickerBanner = env.document.getElementById('map-picker-banner');
+  const btnNewTrip = env.document.getElementById('btn-new-trip');
+  const btnSelectAll = env.document.getElementById('btn-select-all-trip-stops');
+  const btnDeselectAll = env.document.getElementById('btn-deselect-all-trip-stops');
+
+  assert.ok(modal, 'Modal de edición de tienda debe existir en el DOM');
+  assert.ok(pickerBanner, 'Banner flotante de selección en mapa debe existir en el DOM');
+  assert.ok(btnNewTrip, 'Botón de nuevo viaje debe existir');
+  assert.ok(btnSelectAll, 'Botón seleccionar todos debe existir');
+  assert.ok(btnDeselectAll, 'Botón deseleccionar todos debe existir');
+  console.log('  ✓ Test 15: Componentes DOM del gestor de viajes, modal y picker verificados');
+
   console.log('\n==================================================');
   console.log('RESUMEN DE PRUEBAS LIFECYCLE DE SCRIPT.JS:');
-  console.log('Total: 10 | Aprobadas: 10 | Falladas: 0');
+  console.log('Total: 15 | Aprobadas: 15 | Falladas: 0');
   console.log('==================================================\n');
 }
 

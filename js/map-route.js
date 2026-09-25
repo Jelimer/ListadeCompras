@@ -39,7 +39,8 @@
   const STORAGE_KEYS = {
     STORE_COORDS: 'shopping_store_coords',
     ROUTE_ORIGIN: 'shopping_route_origin',
-    CUSTOM_STOP_ORDER: 'shopping_custom_stop_order'
+    CUSTOM_STOP_ORDER: 'shopping_custom_stop_order',
+    TRIPS_DATA: 'shopping_trips_data'
   };
 
   const DEFAULTS = {
@@ -242,6 +243,26 @@
   }
 
   /**
+   * Elimina las coordenadas guardadas de una tienda para restaurar su fallback determinista.
+   */
+  function removeStoreCoordinate(storeName) {
+    if (!storeName) return false;
+    const key = normalizeStoreName(storeName);
+    const stores = getStoredCoordinates();
+    if (stores && stores[key]) {
+      delete stores[key];
+      const payload = {
+        version: 1,
+        updatedAt: Date.now(),
+        stores
+      };
+      safeStorageSet(STORAGE_KEYS.STORE_COORDS, JSON.stringify(payload));
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Obtiene el punto de origen de navegación guardado o el valor predeterminado de referencia.
    */
   function getStoredOrigin() {
@@ -291,11 +312,164 @@
     return true;
   }
 
+  const DEFAULT_TRIP = {
+    id: 'trip_1',
+    name: 'Viaje 1',
+    includedStores: null,
+    customOrder: null
+  };
+
+  /**
+   * Obtiene la estructura completa de viajes guardada en LocalStorage.
+   */
+  function getTripsData() {
+    const raw = safeStorageGet(STORAGE_KEYS.TRIPS_DATA);
+    if (!raw) {
+      return {
+        activeTripId: DEFAULT_TRIP.id,
+        trips: [Object.assign({}, DEFAULT_TRIP)]
+      };
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.trips) && parsed.trips.length > 0) {
+        if (!parsed.activeTripId || !parsed.trips.some(t => t.id === parsed.activeTripId)) {
+          parsed.activeTripId = parsed.trips[0].id;
+        }
+        return parsed;
+      }
+    } catch (_) {}
+    return {
+      activeTripId: DEFAULT_TRIP.id,
+      trips: [Object.assign({}, DEFAULT_TRIP)]
+    };
+  }
+
+  /**
+   * Guarda los viajes en almacenamiento persistente.
+   */
+  function saveTripsData(data) {
+    if (!data || !Array.isArray(data.trips) || data.trips.length === 0) return false;
+    safeStorageSet(STORAGE_KEYS.TRIPS_DATA, JSON.stringify(data));
+    return true;
+  }
+
+  /**
+   * Obtiene el viaje actualmente activo.
+   */
+  function getActiveTrip() {
+    const data = getTripsData();
+    let trip = data.trips.find(t => t.id === data.activeTripId);
+    if (!trip) {
+      trip = data.trips[0] || Object.assign({}, DEFAULT_TRIP);
+    }
+    return trip;
+  }
+
+  /**
+   * Conmuta el viaje activo.
+   */
+  function setActiveTrip(tripId) {
+    const data = getTripsData();
+    if (data.trips.some(t => t.id === tripId)) {
+      data.activeTripId = tripId;
+      saveTripsData(data);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Crea un nuevo viaje agrupador de lugares.
+   */
+  function createTrip(name) {
+    const data = getTripsData();
+    const count = data.trips.length + 1;
+    const finalName = (name && String(name).trim()) || `Viaje ${count}`;
+    const newTrip = {
+      id: `trip_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name: finalName,
+      includedStores: null,
+      customOrder: null
+    };
+    data.trips.push(newTrip);
+    data.activeTripId = newTrip.id;
+    saveTripsData(data);
+    return newTrip;
+  }
+
+  /**
+   * Renombra un viaje existente.
+   */
+  function renameTrip(tripId, newName) {
+    if (!newName || !String(newName).trim()) return false;
+    const data = getTripsData();
+    const trip = data.trips.find(t => t.id === tripId);
+    if (trip) {
+      trip.name = String(newName).trim();
+      saveTripsData(data);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Elimina un viaje (solo si hay más de 1 viaje en la lista).
+   */
+  function deleteTrip(tripId) {
+    const data = getTripsData();
+    if (data.trips.length <= 1) return false;
+    const idx = data.trips.findIndex(t => t.id === tripId);
+    if (idx !== -1) {
+      data.trips.splice(idx, 1);
+      if (data.activeTripId === tripId) {
+        data.activeTripId = data.trips[0].id;
+      }
+      saveTripsData(data);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Actualiza el listado de tiendas tildadas/incluidas para un viaje.
+   * Si includedStores es null, se interpretará que todas las tiendas están incluidas.
+   */
+  function setTripIncludedStores(tripId, includedStores) {
+    const data = getTripsData();
+    const trip = data.trips.find(t => t.id === tripId);
+    if (trip) {
+      trip.includedStores = Array.isArray(includedStores) ? [...includedStores] : null;
+      saveTripsData(data);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Actualiza el orden personalizado de paradas específico de un viaje.
+   */
+  function setTripCustomOrder(tripId, orderArray) {
+    const data = getTripsData();
+    const trip = data.trips.find(t => t.id === tripId);
+    if (trip) {
+      trip.customOrder = (Array.isArray(orderArray) && orderArray.length > 0) ? [...orderArray] : null;
+      saveTripsData(data);
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Obtiene el orden personalizado de paradas fijado manualmente por el usuario.
+   * Prioriza el orden del viaje activo, con fallback al almacenamiento global legacy.
    * @returns {string[]|null}
    */
   function getCustomStopOrder() {
+    const activeTrip = getActiveTrip();
+    if (activeTrip && Array.isArray(activeTrip.customOrder) && activeTrip.customOrder.length > 0) {
+      return activeTrip.customOrder;
+    }
     try {
       const raw = safeStorageGet(STORAGE_KEYS.CUSTOM_STOP_ORDER);
       if (raw) {
@@ -314,6 +488,10 @@
    * @returns {boolean}
    */
   function setCustomStopOrder(orderArray) {
+    const activeTrip = getActiveTrip();
+    if (activeTrip) {
+      setTripCustomOrder(activeTrip.id, orderArray);
+    }
     if (Array.isArray(orderArray) && orderArray.length > 0) {
       safeStorageSet(STORAGE_KEYS.CUSTOM_STOP_ORDER, JSON.stringify(orderArray));
       return true;
@@ -328,6 +506,10 @@
    * @returns {boolean}
    */
   function resetCustomStopOrder() {
+    const activeTrip = getActiveTrip();
+    if (activeTrip) {
+      setTripCustomOrder(activeTrip.id, null);
+    }
     safeStorageRemove(STORAGE_KEYS.CUSTOM_STOP_ORDER);
     return true;
   }
@@ -606,6 +788,7 @@
       return {
         origin,
         orderedStops: [],
+        allStops: [],
         totalDistanceKm: 0,
         totalUrbanDistanceKm: 0,
         estimatedDurationMinutes: 0,
@@ -620,6 +803,7 @@
       return {
         origin,
         orderedStops: [],
+        allStops: [],
         totalDistanceKm: 0,
         totalUrbanDistanceKm: 0,
         estimatedDurationMinutes: 0,
@@ -698,6 +882,56 @@
       });
     }
 
+    // --- EVALUACIÓN DE INCLUSIÓN DE TIENDAS (TRIPS / CHECKBOXES) ---
+    let includedSet = null;
+    if (options && Array.isArray(options.includedStores)) {
+      includedSet = new Set(options.includedStores);
+    } else if (options && options.includedStores instanceof Set) {
+      includedSet = options.includedStores;
+    } else if (options && options.includedStores === null) {
+      includedSet = null;
+    } else {
+      // Consultar el viaje activo si tiene filtro de paradas
+      const activeTrip = getActiveTrip();
+      if (activeTrip && Array.isArray(activeTrip.includedStores)) {
+        includedSet = new Set(activeTrip.includedStores);
+      }
+    }
+
+    let excludedSet = null;
+    if (options && Array.isArray(options.excludedStores)) {
+      excludedSet = new Set(options.excludedStores);
+    } else if (options && options.excludedStores instanceof Set) {
+      excludedSet = options.excludedStores;
+    }
+
+    for (const stop of candidateStops) {
+      let isInc = true;
+      if (includedSet !== null) {
+        isInc = includedSet.has(stop.storeName);
+      }
+      if (excludedSet !== null && excludedSet.has(stop.storeName)) {
+        isInc = false;
+      }
+      stop.isIncluded = isInc;
+    }
+
+    // Paradas activas que formarán parte de la ruta física y polilínea
+    const activeStops = candidateStops.filter(s => s.isIncluded);
+
+    if (activeStops.length === 0) {
+      return {
+        origin,
+        orderedStops: [],
+        allStops: candidateStops,
+        totalDistanceKm: 0,
+        totalUrbanDistanceKm: 0,
+        estimatedDurationMinutes: 0,
+        googleMapsUrl: '',
+        isCustomOrder: false
+      };
+    }
+
     // --- EVALUACIÓN DE ORDEN MANUAL VS TSP NEAREST NEIGHBOR ---
     const manualOrder = (options && Array.isArray(options.customStopOrder))
       ? options.customStopOrder
@@ -711,17 +945,17 @@
     if (Array.isArray(manualOrder) && manualOrder.length > 0) {
       isCustomOrder = true;
       const stopsMap = new Map();
-      candidateStops.forEach(s => stopsMap.set(s.storeName, s));
+      activeStops.forEach(s => stopsMap.set(s.storeName, s));
 
       const sequencedStops = [];
-      // 1. Respetar el orden manual para las tiendas que existan
+      // 1. Respetar el orden manual para las tiendas activas que existan
       for (const name of manualOrder) {
         if (stopsMap.has(name)) {
           sequencedStops.push(stopsMap.get(name));
           stopsMap.delete(name);
         }
       }
-      // 2. Si hay nuevas tiendas no contempladas en manualOrder, añadirlas al final
+      // 2. Si hay nuevas tiendas activas no contempladas en manualOrder, añadirlas al final
       for (const remaining of stopsMap.values()) {
         sequencedStops.push(remaining);
       }
@@ -745,8 +979,8 @@
         currentPoint = { lat: stop.lat, lng: stop.lng };
       }
     } else {
-      // --- ALGORITMO TSP GREEDY (NEAREST NEIGHBOR) ---
-      const unvisited = [...candidateStops];
+      // --- ALGORITMO TSP GREEDY (NEAREST NEIGHBOR) SOBRE PARADAS ACTIVAS ---
+      const unvisited = [...activeStops];
       let currentPoint = { lat: origin.lat, lng: origin.lng };
 
       while (unvisited.length > 0) {
@@ -796,6 +1030,7 @@
     return {
       origin,
       orderedStops,
+      allStops: candidateStops,
       totalDistanceKm,
       totalUrbanDistanceKm,
       estimatedDurationMinutes,
@@ -974,14 +1209,18 @@
     /**
      * Crea un icono SVG accesible para una parada numerada del itinerario.
      */
-    _createStopIcon(stopNumber, storeName) {
+    _createStopIcon(stopNumber, storeName, isIncluded = true) {
       const L = this._getLeaflet();
       if (!L || typeof L.divIcon !== 'function') return null;
 
+      const bgColor = isIncluded ? '#4f46e5' : '#94a3b8';
+      const label = isIncluded ? stopNumber : '—';
+      const opacity = isIncluded ? '1' : '0.75';
+
       const html = `
-        <div class="map-pin-stop" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;" aria-label="Parada ${stopNumber}: ${escapeHtml(storeName)}">
-          <div style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#4f46e5;color:#ffffff;font-weight:700;font-size:14px;border-radius:50%;border:3px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);">
-            ${stopNumber}
+        <div class="map-pin-stop" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:${opacity};" aria-label="Parada ${stopNumber}: ${escapeHtml(storeName)} ${isIncluded ? '' : '(Excluida)'}">
+          <div style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:${bgColor};color:#ffffff;font-weight:700;font-size:14px;border-radius:50%;border:3px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);">
+            ${label}
           </div>
           <div style="background:rgba(15,23,42,0.85);color:#f8fafc;font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;margin-top:2px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 5px rgba(0,0,0,0.2);">
             ${escapeHtml(storeName)}
@@ -1041,8 +1280,9 @@
         stops.forEach((stop, idx) => {
           if (!isValidCoordinates(stop)) return;
 
-          const stopNumber = idx + 1;
-          const stopIcon = this._createStopIcon(stopNumber, stop.storeName);
+          const isIncluded = stop.isIncluded !== false;
+          const stopNumber = isIncluded ? (stop.stepIndex || (idx + 1)) : '—';
+          const stopIcon = this._createStopIcon(stopNumber, stop.storeName, isIncluded);
           const markerOpts = stopIcon ? { icon: stopIcon } : {};
           const marker = L.marker([stop.lat, stop.lng], markerOpts);
 
@@ -1073,11 +1313,15 @@
             itemsListHtml = `<p style="font-size:12px;color:var(--text-muted,#64748b);margin:6px 0;">Sin productos pendientes</p>`;
           }
 
+          const badgeHtml = isIncluded
+            ? `<span style="background:#4f46e5;color:#ffffff;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;">Parada ${stopNumber}</span>`
+            : `<span style="background:#94a3b8;color:#ffffff;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;">Excluido del viaje</span>`;
+
           const popupContent = `
             <div class="map-popup-card" style="font-family:inherit;min-width:220px;max-width:280px;padding:4px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                <span style="background:#4f46e5;color:#ffffff;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;">Parada ${stopNumber}</span>
-                <span style="font-size:11px;color:var(--text-muted,#64748b);">${stop.stepDistanceKm ? stop.stepDistanceKm + ' km' : ''}</span>
+                ${badgeHtml}
+                <span style="font-size:11px;color:var(--text-muted,#64748b);">${isIncluded && stop.stepDistanceKm ? stop.stepDistanceKm + ' km' : ''}</span>
               </div>
               <h4 style="margin:4px 0;font-size:15px;font-weight:700;color:var(--text-main,#0f172a);">${escapeHtml(stop.storeName)}</h4>
               <p style="margin:0 0 6px;font-size:11px;color:var(--text-muted,#64748b);">${escapeHtml(stop.address || stop.storeName)}</p>
@@ -1177,9 +1421,67 @@
      */
     renderRouteOnMap(route) {
       if (!route) return;
-      this.renderMarkers(route.orderedStops, route.origin);
+      const displayStops = (Array.isArray(route.allStops) && route.allStops.length > 0)
+        ? route.allStops
+        : route.orderedStops;
+      this.renderMarkers(displayStops, route.origin);
       this.renderPolyline(route.orderedStops, route.origin);
-      this.fitRouteBounds(route.orderedStops, route.origin);
+      const boundsStops = (Array.isArray(route.orderedStops) && route.orderedStops.length > 0)
+        ? route.orderedStops
+        : displayStops;
+      this.fitRouteBounds(boundsStops, route.origin);
+    }
+
+    /**
+     * Activa el modo interactivo para señalar en el mapa la ubicación exacta de un comercio.
+     */
+    enablePickLocationMode(storeName, onPicked) {
+      this.disablePickLocationMode();
+      this._pickingStoreName = storeName;
+      this._pickingCallback = onPicked;
+
+      const container = (this.map && typeof this.map.getContainer === 'function')
+        ? this.map.getContainer()
+        : (typeof document !== 'undefined' ? document.getElementById(this.containerId) : null);
+
+      if (container && container.classList) {
+        container.classList.add('map-picking-crosshair');
+      }
+
+      this._pickClickHandler = (e) => {
+        const lat = e && e.latlng && Number(e.latlng.lat);
+        const lng = e && e.latlng && Number(e.latlng.lng);
+        const cb = this._pickingCallback;
+        const store = this._pickingStoreName;
+        this.disablePickLocationMode();
+        if (typeof cb === 'function' && !isNaN(lat) && !isNaN(lng)) {
+          cb({ lat, lng, storeName: store });
+        }
+      };
+
+      if (this.map && typeof this.map.on === 'function') {
+        this.map.on('click', this._pickClickHandler);
+      }
+    }
+
+    /**
+     * Desactiva el modo de selección en el mapa.
+     */
+    disablePickLocationMode() {
+      if (this.map && this._pickClickHandler && typeof this.map.off === 'function') {
+        this.map.off('click', this._pickClickHandler);
+      }
+      this._pickClickHandler = null;
+      this._pickingStoreName = null;
+      this._pickingCallback = null;
+
+      const container = (this.map && typeof this.map.getContainer === 'function')
+        ? this.map.getContainer()
+        : (typeof document !== 'undefined' ? document.getElementById(this.containerId) : null);
+
+      if (container && container.classList) {
+        container.classList.remove('map-picking-crosshair');
+      }
     }
 
     /**
@@ -1219,6 +1521,7 @@
      * Destruye de forma segura la instancia del mapa.
      */
     destroy() {
+      this.disablePickLocationMode();
       if (this.map && typeof this.map.remove === 'function') {
         try {
           this.map.remove();
@@ -1246,6 +1549,7 @@
     // Capa de Almacenamiento y Orden Manual
     getStoredCoordinates,
     saveStoreCoordinate,
+    removeStoreCoordinate,
     getStoredOrigin,
     getOrigin: getStoredOrigin,
     saveOrigin,
@@ -1255,6 +1559,17 @@
     resetCustomStopOrder,
     normalizeStoreName,
     isValidCoordinates,
+
+    // Gestor de Viajes de Compra
+    getTripsData,
+    saveTripsData,
+    getActiveTrip,
+    setActiveTrip,
+    createTrip,
+    renameTrip,
+    deleteTrip,
+    setTripIncludedStores,
+    setTripCustomOrder,
 
     // Geocodificación y Geolocalización
     geocodeAddress,
@@ -1276,6 +1591,8 @@
     renderPolyline: (stops, origin) => mapControllerInstance.renderPolyline(stops, origin),
     fitRouteBounds: (stops, origin) => mapControllerInstance.fitRouteBounds(stops, origin),
     renderRouteOnMap: (route) => mapControllerInstance.renderRouteOnMap(route),
+    enablePickLocationMode: (storeName, cb) => mapControllerInstance.enablePickLocationMode(storeName, cb),
+    disablePickLocationMode: () => mapControllerInstance.disablePickLocationMode(),
     invalidateSize: () => mapControllerInstance.invalidateSize(),
     zoomIn: () => mapControllerInstance.zoomIn(),
     zoomOut: () => mapControllerInstance.zoomOut(),

@@ -1714,3 +1714,486 @@ input:focus {
     to { transform: rotate(360deg); }
 }
 
+/* ==========================================================================
+   GESTOR DE VIAJES (TRIPS CARD)
+   ========================================================================== */
+.trips-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.trips-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.trips-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-main);
+}
+
+.trips-title i,
+.trips-title svg {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+}
+
+.btn-primary-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary);
+    background: transparent;
+    border: 1.5px solid var(--primary);
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-primary-outline:hover {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.btn-primary-outline i,
+.btn-primary-outline svg {
+    width: 14px;
+    height: 14px;
+}
+
+.trip-selector-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.trip-select-wrapper {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.trip-select-icon {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    height: 16px;
+    color: var(--primary);
+    pointer-events: none;
+}
+
+.trip-select {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface-elevated);
+    color: var(--text-main);
+    font-size: 0.88rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trip-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.trip-actions-btn-group {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-trip-action {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface-elevated);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-trip-action:hover {
+    color: var(--text-main);
+    border-color: var(--primary);
+    background: var(--card-bg);
+}
+
+.btn-trip-action.btn-trip-delete:hover {
+    color: var(--danger, #ef4444);
+    border-color: var(--danger, #ef4444);
+}
+
+.btn-trip-action i,
+.btn-trip-action svg {
+    width: 15px;
+    height: 15px;
+}
+
+.trip-meta-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding-top: 2px;
+}
+
+.trip-meta-badge {
+    font-weight: 600;
+    color: var(--primary);
+    background: rgba(79, 70, 229, 0.08);
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
+.trip-meta-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-link-action {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.15s ease;
+}
+
+.btn-link-action:hover {
+    color: var(--primary);
+}
+
+.meta-dot {
+    opacity: 0.5;
+}
+
+/* ==========================================================================
+   CHECKBOXES DE PARADAS Y ESTILOS DE INCLUSIÓN
+   ========================================================================== */
+.stop-checkbox-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 2px;
+    flex-shrink: 0;
+}
+
+.stop-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.route-stop-item.is-excluded {
+    opacity: 0.65;
+    background: var(--card-bg);
+    border-style: dashed;
+}
+
+.route-stop-item.is-excluded .stop-badge {
+    background: #94a3b8;
+    color: #f1f5f9;
+}
+
+.route-stop-item.is-excluded .stop-name {
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.stop-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stop-excluded-tag {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.stop-address-preview {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+.stop-address-preview .meta-icon {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+    color: var(--primary);
+}
+
+.stop-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.btn-edit-location {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.btn-edit-location:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: rgba(79, 70, 229, 0.08);
+}
+
+.btn-edit-location i,
+.btn-edit-location svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ==========================================================================
+   BANNER DE SELECCIÓN DIRECTA EN EL MAPA (PICKER BANNER)
+   ========================================================================== */
+.map-picker-banner {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 80px;
+    z-index: 550;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    color: #ffffff;
+    padding: 10px 16px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.map-picker-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.picker-pin-icon {
+    width: 20px;
+    height: 20px;
+    color: #ef4444;
+    animation: pinPulse 1.2s infinite;
+}
+
+@keyframes pinPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.25); }
+}
+
+.map-picking-crosshair,
+.map-picking-crosshair * {
+    cursor: crosshair !important;
+}
+
+/* ==========================================================================
+   MODAL DE AJUSTE EXACTO DE UBICACIÓN
+   ========================================================================== */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-backdrop[hidden] {
+    display: none !important;
+}
+
+.modal-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: var(--shadow-xl);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPop {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-title-wrap i,
+.modal-title-wrap svg {
+    width: 20px;
+    height: 20px;
+    color: var(--primary);
+}
+
+.modal-title-wrap h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close-btn:hover {
+    color: var(--text-main);
+    background: var(--bg-surface-elevated);
+}
+
+.modal-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.modal-coords-status {
+    background: var(--bg-surface-elevated);
+    border-radius: 10px;
+    padding: 10px 14px;
+    border: 1px dashed var(--border);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.modal-coords-status strong {
+    color: var(--text-main);
+}
+
+.modal-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-surface-elevated);
+}
+
+.btn-danger-outline {
+    background: transparent;
+    border: 1px solid var(--danger, #ef4444);
+    color: var(--danger, #ef4444);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-danger-outline:hover {
+    background: var(--danger, #ef4444);
+    color: #ffffff;
+}
+
