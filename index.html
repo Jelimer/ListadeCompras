@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.2.0">
 
     <!-- Leaflet 1.9.4 CSS con fallback seguro -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -60,15 +60,15 @@
 
         <!-- Selector de Vistas / Navigation Tabs (WAI-ARIA) -->
         <nav class="view-tabs" role="tablist" aria-label="Selector de vistas principales">
-            <button id="tab-list" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-list" type="button">
+            <button id="tab-list" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-list" type="button" data-view="list" onclick="if(window.switchAppView)window.switchAppView('list')">
                 <i data-lucide="shopping-cart" aria-hidden="true"></i>
                 <span>Lista de Compras</span>
             </button>
-            <button id="tab-stats" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-stats" type="button">
+            <button id="tab-stats" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-stats" type="button" data-view="stats" onclick="if(window.switchAppView)window.switchAppView('stats')">
                 <i data-lucide="bar-chart-2" aria-hidden="true"></i>
                 <span>Estadísticas Financieras</span>
             </button>
-            <button id="tab-map" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-map" type="button">
+            <button id="tab-map" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-map" type="button" data-view="map" onclick="if(window.switchAppView)window.switchAppView('map')">
                 <i data-lucide="map" aria-hidden="true"></i>
                 <span>Ruta en Mapa</span>
             </button>
@@ -261,15 +261,15 @@
 
         <!-- Bottom Navigation Bar Móvil (<640px) fija en zona del pulgar -->
         <nav class="bottom-nav" role="tablist" aria-label="Navegación móvil inferior">
-            <button id="bottom-tab-list" class="bottom-nav-btn active" role="tab" aria-selected="true" aria-controls="panel-list" type="button">
+            <button id="bottom-tab-list" class="bottom-nav-btn active" role="tab" aria-selected="true" aria-controls="panel-list" type="button" data-view="list" onclick="if(window.switchAppView)window.switchAppView('list')">
                 <i data-lucide="shopping-cart" aria-hidden="true"></i>
                 <span>Lista</span>
             </button>
-            <button id="bottom-tab-stats" class="bottom-nav-btn" role="tab" aria-selected="false" aria-controls="panel-stats" type="button">
+            <button id="bottom-tab-stats" class="bottom-nav-btn" role="tab" aria-selected="false" aria-controls="panel-stats" type="button" data-view="stats" onclick="if(window.switchAppView)window.switchAppView('stats')">
                 <i data-lucide="bar-chart-2" aria-hidden="true"></i>
                 <span>Estadísticas</span>
             </button>
-            <button id="bottom-tab-map" class="bottom-nav-btn" role="tab" aria-selected="false" aria-controls="panel-map" type="button">
+            <button id="bottom-tab-map" class="bottom-nav-btn" role="tab" aria-selected="false" aria-controls="panel-map" type="button" data-view="map" onclick="if(window.switchAppView)window.switchAppView('map')">
                 <i data-lucide="map-pin" aria-hidden="true"></i>
                 <span>Ruta</span>
             </button>
@@ -289,7 +289,7 @@
 
     <!-- Leaflet 1.9.4 JavaScript & Map Route Module -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="js/map-route.js"></script>
+    <script src="js/map-route.js?v=2.2.0"></script>
 
     <!-- Módulos Core UMD (Arquitectura Desacoplada M1-M4) -->
     <script src="js/storage.js"></script>
@@ -302,6 +302,6 @@
     <script src="js/ui-feedback.js"></script>
 
     <!-- Script de Inicialización y Gestión de UI -->
-    <script src="script.js"></script>
+    <script src="script.js?v=2.2.0"></script>
 </body>
 </html>

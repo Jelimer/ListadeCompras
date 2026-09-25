@@ -77,6 +77,138 @@ document.addEventListener('DOMContentLoaded', async () => {
       .trim();
   }
 
+  // --- 2.1. Funciones de Navegación y Conmutación de Vistas WAI-ARIA ---
+  function setPanelVisibility(panelEl, visible) {
+    if (!panelEl) return;
+    if (visible) {
+      panelEl.removeAttribute('hidden');
+      panelEl.hidden = false;
+      panelEl.classList.add('active');
+    } else {
+      panelEl.setAttribute('hidden', '');
+      panelEl.hidden = true;
+      panelEl.classList.remove('active');
+    }
+  }
+
+  function setTabSelected(tabEl, selected) {
+    if (!tabEl) return;
+    tabEl.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (selected) {
+      tabEl.classList.add('active');
+    } else {
+      tabEl.classList.remove('active');
+    }
+  }
+
+  function switchView(viewName) {
+    try {
+      const isList = viewName === 'list';
+      const isStats = viewName === 'stats';
+      const isMap = viewName === 'map';
+
+      // 1. Sincronización visual de pestañas superiores e inferiores
+      setTabSelected(elements.tabList, isList);
+      setTabSelected(elements.tabStats, isStats);
+      setTabSelected(elements.tabMap, isMap);
+
+      setTabSelected(elements.bottomTabList, isList);
+      setTabSelected(elements.bottomTabStats, isStats);
+      setTabSelected(elements.bottomTabMap, isMap);
+
+      // 2. Alternar visibilidad de paneles de contenido (inmediato)
+      setPanelVisibility(elements.panelList, isList);
+      setPanelVisibility(elements.panelStats, isStats);
+      setPanelVisibility(elements.panelMap, isMap);
+
+      // 3. Conmutar modo panorámico en contenedor
+      const appContainer = elements.container || document.querySelector('.container');
+      if (appContainer) {
+        if (isMap) {
+          appContainer.classList.add('map-panoramic-mode');
+        } else {
+          appContainer.classList.remove('map-panoramic-mode');
+        }
+      }
+
+      // 4. Anuncio accesible para lectores de pantalla
+      if (elements.ariaAnnouncer) {
+        const labels = { list: 'Lista de Compras', stats: 'Estadísticas Financieras', map: 'Ruta en Mapa' };
+        elements.ariaAnnouncer.textContent = `Mostrando vista: ${labels[viewName] || viewName}`;
+      }
+
+      // 5. Ajustes de Viewport en segundo plano protegidos
+      if (isMap) {
+        try {
+          if (typeof window.MapRouteService !== 'undefined' && MapRouteService.mapController) {
+            setTimeout(() => {
+              try { MapRouteService.mapController.invalidateSize(); } catch (_) {}
+            }, 60);
+          }
+          if (typeof updateMapRouteUI === 'function') {
+            updateMapRouteUI();
+          }
+        } catch (e) {
+          console.warn('[App] Error al actualizar UI de mapa:', e);
+        }
+      } else if (isStats) {
+        try {
+          if (chartController && typeof chartController.resize === 'function') {
+            setTimeout(() => {
+              try { chartController.resize(); } catch (_) {}
+            }, 60);
+          }
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.error('[App] Error al conmutar pestaña:', err);
+    }
+  }
+
+  // Exposición global para callbacks inline y fallback universal
+  window.switchAppView = switchView;
+
+  // Registro inmediato y directo de eventos de navegación
+  const navTabBindings = [
+    { btn: elements.tabList, view: 'list' },
+    { btn: elements.tabStats, view: 'stats' },
+    { btn: elements.tabMap, view: 'map' },
+    { btn: elements.bottomTabList, view: 'list' },
+    { btn: elements.bottomTabStats, view: 'stats' },
+    { btn: elements.bottomTabMap, view: 'map' }
+  ];
+
+  navTabBindings.forEach(({ btn, view }) => {
+    if (!btn) return;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      switchView(view);
+    });
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        switchView(view);
+      }
+    });
+  });
+
+  // Delegación de eventos global a nivel de documento para blindar cualquier clic en pestañas
+  document.addEventListener('click', (e) => {
+    const tabBtn = e.target && e.target.closest && e.target.closest('[data-view], [id^="tab-"], [id^="bottom-tab-"]');
+    if (tabBtn) {
+      let view = tabBtn.getAttribute('data-view');
+      if (!view) {
+        const id = tabBtn.id || '';
+        if (id.includes('list')) view = 'list';
+        else if (id.includes('stats')) view = 'stats';
+        else if (id.includes('map')) view = 'map';
+      }
+      if (view) {
+        switchView(view);
+      }
+    }
+  });
+
   // --- 3. Inicialización y Detección de Firebase Firestore ---
   let db = null;
   let itemsCollection = null;
@@ -358,22 +490,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- 7. Gestión del Tema (Claro / Oscuro) ---
   function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    if (elements.themeToggle) {
-      elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
-      elements.themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
-      elements.themeToggle.innerHTML = theme === 'dark' 
-        ? '<i data-lucide="sun" aria-hidden="true"></i>' 
-        : '<i data-lucide="moon" aria-hidden="true"></i>';
-      if (window.lucide) window.lucide.createIcons();
+    try {
+      document.documentElement.setAttribute('data-theme', theme);
+      if (elements.themeToggle) {
+        elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        elements.themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+        elements.themeToggle.innerHTML = theme === 'dark' 
+          ? '<i data-lucide="sun" aria-hidden="true"></i>' 
+          : '<i data-lucide="moon" aria-hidden="true"></i>';
+        if (window.lucide) window.lucide.createIcons();
+      }
+      if (store && typeof store.setTheme === 'function') {
+        store.setTheme(theme);
+      }
+      if (typeof window.MapRouteService !== 'undefined' && MapRouteService.setTheme) {
+        MapRouteService.setTheme(theme === 'dark');
+      }
+      renderUI();
+    } catch (e) {
+      console.warn('[App] Error al aplicar tema:', e);
     }
-    if (store && typeof store.setTheme === 'function') {
-      store.setTheme(theme);
-    }
-    if (typeof window.MapRouteService !== 'undefined' && MapRouteService.setTheme) {
-      MapRouteService.setTheme(theme === 'dark');
-    }
-    renderUI();
   }
 
   const savedTheme = localStorage.getItem('theme') || initialTheme || 'light';
@@ -1078,29 +1214,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- 18. Módulo de Rutas y Selector de Vistas WAI-ARIA ---
 
-  function setPanelVisibility(panelEl, visible) {
-    if (!panelEl) return;
-    if (visible) {
-      panelEl.removeAttribute('hidden');
-      panelEl.hidden = false;
-      panelEl.classList.add('active');
-    } else {
-      panelEl.setAttribute('hidden', '');
-      panelEl.hidden = true;
-      panelEl.classList.remove('active');
-    }
-  }
-
-  function setTabSelected(tabEl, selected) {
-    if (!tabEl) return;
-    tabEl.setAttribute('aria-selected', selected ? 'true' : 'false');
-    if (selected) {
-      tabEl.classList.add('active');
-    } else {
-      tabEl.classList.remove('active');
-    }
-  }
-
   // A. Actualización de Métricas y Renderizado de Ruta en el Mapa
   // A. Actualización de Métricas, Itinerario y Renderizado de Ruta en el Mapa
   let sortableInstance = null;
@@ -1323,80 +1436,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Actualizar lista interactiva de paradas del itinerario
     renderRouteStopsList(route);
   }
-
-  // B. Selector Ágil de Vistas (Conmutación Sincronizada Desktop & Mobile)
-  function switchView(viewName) {
-    const isList = viewName === 'list';
-    const isStats = viewName === 'stats';
-    const isMap = viewName === 'map';
-
-    // Conmutar modo panorámico para aprovechar todo el ancho y alto en mapa
-    const appContainer = elements.container || document.querySelector('.container');
-    if (appContainer) {
-      if (isMap) {
-        appContainer.classList.add('map-panoramic-mode');
-      } else {
-        appContainer.classList.remove('map-panoramic-mode');
-      }
-    }
-
-    // Sincronización Pestañas Desktop
-    setTabSelected(elements.tabList, isList);
-    setTabSelected(elements.tabStats, isStats);
-    setTabSelected(elements.tabMap, isMap);
-
-    // Sincronización Barra Inferior Móvil (Bottom Navigation)
-    setTabSelected(elements.bottomTabList, isList);
-    setTabSelected(elements.bottomTabStats, isStats);
-    setTabSelected(elements.bottomTabMap, isMap);
-
-    // Alternar Paneles de Contenido
-    setPanelVisibility(elements.panelList, isList);
-    setPanelVisibility(elements.panelStats, isStats);
-    setPanelVisibility(elements.panelMap, isMap);
-
-    // Anuncio WAI-ARIA
-    if (elements.ariaAnnouncer) {
-      const labels = { list: 'Lista de Compras', stats: 'Estadísticas Financieras', map: 'Ruta en Mapa' };
-      elements.ariaAnnouncer.textContent = `Mostrando vista: ${labels[viewName] || viewName}`;
-    }
-
-    // Ajuste de Viewport al mostrar mapa o gráfico
-    if (isMap) {
-      if (typeof window.MapRouteService !== 'undefined' && MapRouteService.mapController) {
-        setTimeout(() => {
-          MapRouteService.mapController.invalidateSize();
-        }, 60);
-      }
-      updateMapRouteUI();
-    } else if (isStats) {
-      if (chartController && typeof chartController.resize === 'function') {
-        setTimeout(() => {
-          chartController.resize();
-        }, 60);
-      }
-    }
-  }
-
-  const navTabBindings = [
-    { btn: elements.tabList, view: 'list' },
-    { btn: elements.tabStats, view: 'stats' },
-    { btn: elements.tabMap, view: 'map' },
-    { btn: elements.bottomTabList, view: 'list' },
-    { btn: elements.bottomTabStats, view: 'stats' },
-    { btn: elements.bottomTabMap, view: 'map' }
-  ];
-
-  navTabBindings.forEach(({ btn, view }) => {
-    if (!btn) return;
-    btn.addEventListener('click', () => switchView(view));
-    btn.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        switchView(view);
-      }
-    });
-  });
 
   // C. Inicialización de MapRouteService y Leaflet
   if (typeof window.MapRouteService !== 'undefined' && MapRouteService.initMap) {

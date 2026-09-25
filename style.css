@@ -950,10 +950,8 @@ input:focus {
     }
 
     .dashboard-grid {
-        display: grid;
-        grid-template-columns: 1fr 380px;
-        gap: 32px;
-        align-items: start;
+        display: block;
+        width: 100%;
     }
 
     .stats-panel {
@@ -962,6 +960,24 @@ input:focus {
         gap: 16px;
         position: sticky;
         top: 20px;
+    }
+
+    #panel-stats .stats-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        position: static;
+        width: 100%;
+    }
+
+    #panel-stats .chart-box {
+        grid-column: 1 / -1;
+        min-height: 420px;
+        height: auto;
+    }
+
+    #panel-stats .stats-actions {
+        grid-column: 1 / -1;
     }
 
     .chart-box {
@@ -1210,7 +1226,9 @@ input:focus {
 }
 
 /* Layout Panorámico de Mapa y Barra Lateral */
-.panel-map-layout {
+.panel-map-layout,
+.view-panel.panel-map-layout.active,
+.panel-map-layout:not([hidden]) {
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -1218,12 +1236,15 @@ input:focus {
 }
 
 @media (min-width: 900px) {
-    .panel-map-layout {
-        display: grid;
-        grid-template-columns: 400px 1fr;
+    .panel-map-layout,
+    .view-panel.panel-map-layout.active,
+    .panel-map-layout:not([hidden]) {
+        display: grid !important;
+        grid-template-columns: 420px 1fr !important;
         gap: 20px;
         align-items: stretch;
         min-height: calc(100vh - 180px);
+        width: 100%;
     }
 }
 
