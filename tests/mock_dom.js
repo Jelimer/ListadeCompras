@@ -768,6 +768,648 @@ function createMockSwal() {
   return swal;
 }
 
+// --- MOCK LEAFLET (L) ---
+function normalizeLatLng(latlng) {
+  if (!latlng) return { lat: 0, lng: 0 };
+  if (Array.isArray(latlng)) {
+    return { lat: Number(latlng[0]), lng: Number(latlng[1]) };
+  }
+  if (typeof latlng === 'object') {
+    const lat = latlng.lat !== undefined ? latlng.lat : (latlng.latitude !== undefined ? latlng.latitude : 0);
+    const lng = latlng.lng !== undefined ? latlng.lng : (latlng.lon !== undefined ? latlng.lon : (latlng.longitude !== undefined ? latlng.longitude : 0));
+    return { lat: Number(lat), lng: Number(lng) };
+  }
+  return { lat: 0, lng: 0 };
+}
+
+function haversineDistanceMeters(c1, c2) {
+  const p1 = normalizeLatLng(c1);
+  const p2 = normalizeLatLng(c2);
+  const R = 6371000; // metros
+  const toRad = Math.PI / 180;
+  const dLat = (p2.lat - p1.lat) * toRad;
+  const dLng = (p2.lng - p1.lng) * toRad;
+  const lat1 = p1.lat * toRad;
+  const lat2 = p2.lat * toRad;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+class MockLeafletPopup {
+  constructor(options = {}) {
+    this.options = options;
+    this._content = '';
+    this._latlng = null;
+    this._isOpen = false;
+  }
+  setContent(content) {
+    this._content = content;
+    return this;
+  }
+  getContent() {
+    return this._content;
+  }
+  setLatLng(latlng) {
+    this._latlng = normalizeLatLng(latlng);
+    return this;
+  }
+  getLatLng() {
+    return this._latlng;
+  }
+  openOn(map) {
+    this._isOpen = true;
+    if (map && map.openPopup) map.openPopup(this);
+    return this;
+  }
+  isOpen() {
+    return this._isOpen;
+  }
+}
+
+class MockLeafletLayer {
+  constructor() {
+    this._map = null;
+    this._popup = null;
+    this._eventListeners = new Map();
+  }
+  addTo(map) {
+    this._map = map;
+    if (map && typeof map.addLayer === 'function') {
+      map.addLayer(this);
+    }
+    return this;
+  }
+  remove() {
+    if (this._map && typeof this._map.removeLayer === 'function') {
+      this._map.removeLayer(this);
+    }
+    this._map = null;
+    return this;
+  }
+  bindPopup(content, options) {
+    if (content instanceof MockLeafletPopup) {
+      this._popup = content;
+    } else {
+      this._popup = new MockLeafletPopup(options);
+      this._popup.setContent(content);
+    }
+    return this;
+  }
+  unbindPopup() {
+    this._popup = null;
+    return this;
+  }
+  openPopup() {
+    if (this._popup) {
+      this._popup._isOpen = true;
+      this.fire('popupopen', { popup: this._popup });
+    }
+    return this;
+  }
+  closePopup() {
+    if (this._popup) {
+      this._popup._isOpen = false;
+      this.fire('popupclose', { popup: this._popup });
+    }
+    return this;
+  }
+  getPopup() {
+    return this._popup;
+  }
+  on(event, handler) {
+    if (!this._eventListeners.has(event)) this._eventListeners.set(event, []);
+    this._eventListeners.get(event).push(handler);
+    return this;
+  }
+  off(event, handler) {
+    if (!this._eventListeners.has(event)) return this;
+    if (!handler) {
+      this._eventListeners.delete(event);
+    } else {
+      this._eventListeners.set(event, this._eventListeners.get(event).filter(h => h !== handler));
+    }
+    return this;
+  }
+  fire(event, data = {}) {
+    const handlers = this._eventListeners.get(event) || [];
+    for (const h of handlers) {
+      h({ type: event, target: this, ...data });
+    }
+    return this;
+  }
+}
+
+class MockLeafletMarker extends MockLeafletLayer {
+  constructor(latlng, options = {}) {
+    super();
+    this._latlng = normalizeLatLng(latlng);
+    this.options = options;
+    this._icon = options.icon || null;
+  }
+  getLatLng() {
+    return this._latlng;
+  }
+  setLatLng(latlng) {
+    this._latlng = normalizeLatLng(latlng);
+    return this;
+  }
+  setIcon(icon) {
+    this._icon = icon;
+    return this;
+  }
+  getIcon() {
+    return this._icon;
+  }
+}
+
+class MockLeafletPolyline extends MockLeafletLayer {
+  constructor(latlngs, options = {}) {
+    super();
+    this._latlngs = latlngs || [];
+    this.options = options;
+  }
+  getLatLngs() {
+    return this._latlngs;
+  }
+  setLatLngs(latlngs) {
+    this._latlngs = latlngs || [];
+    return this;
+  }
+  setStyle(style) {
+    Object.assign(this.options, style);
+    return this;
+  }
+}
+
+class MockLeafletTileLayer extends MockLeafletLayer {
+  constructor(urlTemplate, options = {}) {
+    super();
+    this.urlTemplate = urlTemplate;
+    this.options = options;
+  }
+  setUrl(url) {
+    this.urlTemplate = url;
+    return this;
+  }
+}
+
+class MockLeafletMap {
+  constructor(container, options = {}) {
+    this.container = container;
+    this.options = options;
+    this._center = options.center ? normalizeLatLng(options.center) : { lat: 40.4168, lng: -3.7038 };
+    this._zoom = options.zoom || 13;
+    this._layers = [];
+    this._invalidatedCount = 0;
+    this._destroyed = false;
+    this._eventListeners = new Map();
+    this._bounds = null;
+    this.dragging = {
+      _enabled: options.dragging !== false,
+      enable: () => { this.dragging._enabled = true; },
+      disable: () => { this.dragging._enabled = false; },
+      enabled: () => this.dragging._enabled
+    };
+    this.touchZoom = { enable: () => {}, disable: () => {} };
+    this.doubleClickZoom = { enable: () => {}, disable: () => {} };
+    this.scrollWheelZoom = { enable: () => {}, disable: () => {} };
+  }
+  setView(latlng, zoom) {
+    this._center = normalizeLatLng(latlng);
+    if (zoom !== undefined) this._zoom = zoom;
+    return this;
+  }
+  getCenter() {
+    return this._center;
+  }
+  getZoom() {
+    return this._zoom;
+  }
+  fitBounds(bounds, options) {
+    this._bounds = bounds;
+    return this;
+  }
+  getBounds() {
+    return this._bounds;
+  }
+  addLayer(layer) {
+    if (!this._layers.includes(layer)) {
+      this._layers.push(layer);
+      layer._map = this;
+      this.fire('layeradd', { layer });
+    }
+    return this;
+  }
+  removeLayer(layer) {
+    const idx = this._layers.indexOf(layer);
+    if (idx !== -1) {
+      this._layers.splice(idx, 1);
+      layer._map = null;
+      this.fire('layerremove', { layer });
+    }
+    return this;
+  }
+  hasLayer(layer) {
+    return this._layers.includes(layer);
+  }
+  eachLayer(fn) {
+    this._layers.slice().forEach(fn);
+    return this;
+  }
+  invalidateSize() {
+    this._invalidatedCount++;
+    this.fire('resize');
+    return this;
+  }
+  remove() {
+    this._destroyed = true;
+    this._layers.forEach(l => { l._map = null; });
+    this._layers = [];
+    return this;
+  }
+  on(event, handler) {
+    if (!this._eventListeners.has(event)) this._eventListeners.set(event, []);
+    this._eventListeners.get(event).push(handler);
+    return this;
+  }
+  off(event, handler) {
+    if (!this._eventListeners.has(event)) return this;
+    if (!handler) {
+      this._eventListeners.delete(event);
+    } else {
+      this._eventListeners.set(event, this._eventListeners.get(event).filter(h => h !== handler));
+    }
+    return this;
+  }
+  fire(event, data = {}) {
+    const handlers = this._eventListeners.get(event) || [];
+    for (const h of handlers) {
+      h({ type: event, target: this, ...data });
+    }
+    return this;
+  }
+  openPopup(popup) {
+    if (popup) popup._isOpen = true;
+    return this;
+  }
+  closePopup(popup) {
+    if (popup) popup._isOpen = false;
+    return this;
+  }
+  getContainer() {
+    return typeof this.container === 'string' ? null : this.container;
+  }
+  getPanes() {
+    return {
+      mapPane: {},
+      tilePane: {},
+      markerPane: {},
+      popupPane: {}
+    };
+  }
+}
+
+function createMockLeaflet() {
+  return {
+    map: (container, options) => new MockLeafletMap(container, options),
+    marker: (latlng, options) => new MockLeafletMarker(latlng, options),
+    polyline: (latlngs, options) => new MockLeafletPolyline(latlngs, options),
+    tileLayer: (url, options) => new MockLeafletTileLayer(url, options),
+    popup: (options) => new MockLeafletPopup(options),
+    divIcon: (options) => ({ type: 'divIcon', ...options }),
+    icon: (options) => ({ type: 'icon', ...options }),
+    latLng: (lat, lng) => {
+      const pt = normalizeLatLng(lng !== undefined ? [lat, lng] : lat);
+      pt.distanceTo = (other) => haversineDistanceMeters(pt, other);
+      return pt;
+    },
+    latLngBounds: (coords) => ({
+      _coords: coords || [],
+      extend: function(c) {
+        if (Array.isArray(this._coords)) this._coords.push(c);
+        return this;
+      },
+      pad: function() { return this; },
+      isValid: function() { return Array.isArray(this._coords) && this._coords.length > 0; },
+      getCenter: function() { return { lat: 40.4168, lng: -3.7038 }; }
+    })
+  };
+}
+
+// --- MOCK GEOLOCATION API ---
+class MockGeolocation {
+  constructor() {
+    this._position = {
+      coords: {
+        latitude: 40.416775,
+        longitude: -3.703790,
+        accuracy: 10,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null
+      },
+      timestamp: Date.now()
+    };
+    this._mockError = null;
+    this._watchIdCounter = 1;
+    this._watches = new Map();
+  }
+
+  __setMockPosition(lat, lng, accuracy = 10) {
+    this._position = {
+      coords: {
+        latitude: Number(lat),
+        longitude: Number(lng),
+        accuracy: Number(accuracy),
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null
+      },
+      timestamp: Date.now()
+    };
+    this._mockError = null;
+    for (const [_, watch] of this._watches.entries()) {
+      if (typeof watch.success === 'function') {
+        watch.success(this._position);
+      }
+    }
+  }
+
+  setMockPosition(lat, lng, accuracy) {
+    return this.__setMockPosition(lat, lng, accuracy);
+  }
+
+  __setMockError(code = 1, message = 'User denied Geolocation') {
+    this._mockError = {
+      code,
+      message,
+      PERMISSION_DENIED: 1,
+      POSITION_UNAVAILABLE: 2,
+      TIMEOUT: 3
+    };
+  }
+
+  setMockError(code, message) {
+    return this.__setMockError(code, message);
+  }
+
+  getCurrentPosition(success, error, options) {
+    setTimeout(() => {
+      if (this._mockError) {
+        if (typeof error === 'function') error(this._mockError);
+      } else {
+        if (typeof success === 'function') success(this._position);
+      }
+    }, 1);
+  }
+
+  watchPosition(success, error, options) {
+    const id = this._watchIdCounter++;
+    this._watches.set(id, { success, error, options });
+    setTimeout(() => {
+      if (this._mockError) {
+        if (typeof error === 'function') error(this._mockError);
+      } else {
+        if (typeof success === 'function') success(this._position);
+      }
+    }, 1);
+    return id;
+  }
+
+  clearWatch(id) {
+    this._watches.delete(id);
+  }
+}
+
+// --- MOCK FETCH (NOMINATIM & PHOTON) ---
+const MOCK_STORE_DATABASE = {
+  mercadona: {
+    lat: 40.416775,
+    lon: -3.703790,
+    displayName: 'Mercadona, Calle Mayor 12, 28013 Madrid, España',
+    city: 'Madrid',
+    street: 'Calle Mayor'
+  },
+  carrefour: {
+    lat: 40.420100,
+    lon: -3.708900,
+    displayName: 'Carrefour Express, Gran Vía 45, 28013 Madrid, España',
+    city: 'Madrid',
+    street: 'Gran Vía'
+  },
+  lidl: {
+    lat: 40.425500,
+    lon: -3.705000,
+    displayName: 'Lidl, Calle Fuencarral 100, 28004 Madrid, España',
+    city: 'Madrid',
+    street: 'Calle Fuencarral'
+  },
+  dia: {
+    lat: 40.412000,
+    lon: -3.700000,
+    displayName: 'Supermercados Día, Calle Lavapiés 15, 28012 Madrid, España',
+    city: 'Madrid',
+    street: 'Calle Lavapiés'
+  },
+  alcampo: {
+    lat: 40.430000,
+    lon: -3.690000,
+    displayName: 'Alcampo, Paseo de la Castellana 20, 28046 Madrid, España',
+    city: 'Madrid',
+    street: 'Paseo de la Castellana'
+  },
+  eroski: {
+    lat: 40.415000,
+    lon: -3.715000,
+    displayName: 'Eroski City, Cuesta de San Vicente 10, 28008 Madrid, España',
+    city: 'Madrid',
+    street: 'Cuesta de San Vicente'
+  },
+  verduleria: {
+    lat: 40.418900,
+    lon: -3.701200,
+    displayName: 'Verdulería El Pinar, Calle del Arenal 8, 28013 Madrid, España',
+    city: 'Madrid',
+    street: 'Calle del Arenal'
+  },
+  panaderia: {
+    lat: 40.414000,
+    lon: -3.704000,
+    displayName: 'Panadería Artesana, Calle Mayor 20, 28013 Madrid, España',
+    city: 'Madrid',
+    street: 'Calle Mayor'
+  },
+  farmacia: {
+    lat: 40.417000,
+    lon: -3.706000,
+    displayName: 'Farmacia Central, Calle Arenal 5, 28013 Madrid, España',
+    city: 'Madrid',
+    street: 'Calle Arenal'
+  },
+  casa: {
+    lat: 40.415032,
+    lon: -3.707391,
+    displayName: 'Mi Casa, Plaza Mayor, Madrid, España',
+    city: 'Madrid',
+    street: 'Plaza Mayor'
+  },
+  origen: {
+    lat: 40.415032,
+    lon: -3.707391,
+    displayName: 'Punto de Partida, Madrid, España',
+    city: 'Madrid',
+    street: 'Centro'
+  }
+};
+
+class MockResponse {
+  constructor(data, status = 200, statusText = 'OK') {
+    this._data = data;
+    this.status = status;
+    this.statusText = statusText;
+    this.ok = status >= 200 && status < 300;
+  }
+  json() {
+    return Promise.resolve(this._data);
+  }
+  text() {
+    return Promise.resolve(typeof this._data === 'string' ? this._data : JSON.stringify(this._data));
+  }
+}
+
+function createMockFetch() {
+  const calls = [];
+  let failureMode = null;
+
+  const mockFetch = function (url, options = {}) {
+    const urlStr = String(url);
+    calls.push({ url: urlStr, options, timestamp: Date.now() });
+
+    // Verificar si se forzó fallo
+    if (failureMode) {
+      if (typeof failureMode === 'number') {
+        const text = failureMode === 429 ? 'Too Many Requests' : 'Internal Server Error';
+        return Promise.resolve(new MockResponse(text, failureMode, text));
+      }
+      if (failureMode instanceof Error) {
+        return Promise.reject(failureMode);
+      }
+      return Promise.reject(new Error('Network request failed'));
+    }
+
+    // Extraer query param 'q'
+    let query = '';
+    const qMatch = urlStr.match(/[?&]q=([^&]+)/);
+    if (qMatch) {
+      query = decodeURIComponent(qMatch[1].replace(/\+/g, ' ')).toLowerCase().trim();
+    }
+
+    // Comprobar casos de búsqueda vacía o sin resultados
+    const isNoResults = !query ||
+      query === 'vacio' ||
+      query === 'sin_resultados' ||
+      query === 'not_found' ||
+      query === 'empty' ||
+      query === 'error_404';
+
+    // Resolver base de datos de comercios conocidos o cálculo determinista
+    let storeMatch = null;
+    if (!isNoResults) {
+      for (const [key, data] of Object.entries(MOCK_STORE_DATABASE)) {
+        if (query.includes(key)) {
+          storeMatch = data;
+          break;
+        }
+      }
+      if (!storeMatch) {
+        // Generar coordenadas deterministas basadas en el hash de la cadena
+        let hash = 0;
+        for (let i = 0; i < query.length; i++) {
+          hash = (hash << 5) - hash + query.charCodeAt(i);
+          hash |= 0;
+        }
+        const absHash = Math.abs(hash);
+        const latOffset = (absHash % 500) / 10000;
+        const lonOffset = ((absHash >> 3) % 500) / 10000;
+        storeMatch = {
+          lat: 40.4000 + latOffset,
+          lon: -3.7000 - lonOffset,
+          displayName: `${query}, Madrid, España`,
+          city: 'Madrid',
+          street: query
+        };
+      }
+    }
+
+    // Formato Nominatim vs Photon
+    const isPhoton = urlStr.includes('photon.komoot.io');
+
+    if (isNoResults || !storeMatch) {
+      if (isPhoton) {
+        return Promise.resolve(new MockResponse({ type: 'FeatureCollection', features: [] }));
+      }
+      return Promise.resolve(new MockResponse([]));
+    }
+
+    if (isPhoton) {
+      const geoJson = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [storeMatch.lon, storeMatch.lat]
+            },
+            properties: {
+              osm_id: 100001,
+              osm_type: 'N',
+              osm_key: 'shop',
+              name: storeMatch.displayName.split(',')[0],
+              country: 'España',
+              city: storeMatch.city,
+              street: storeMatch.street
+            }
+          }
+        ]
+      };
+      return Promise.resolve(new MockResponse(geoJson));
+    }
+
+    // Nominatim OSM por defecto
+    const nominatimData = [
+      {
+        place_id: 200001,
+        licence: 'Data © OpenStreetMap contributors',
+        osm_type: 'node',
+        osm_id: 100001,
+        lat: String(storeMatch.lat),
+        lon: String(storeMatch.lon),
+        display_name: storeMatch.displayName,
+        class: 'shop',
+        type: 'supermarket',
+        importance: 0.7
+      }
+    ];
+    return Promise.resolve(new MockResponse(nominatimData));
+  };
+
+  mockFetch.__setFailure = (failure) => { failureMode = failure; };
+  mockFetch.setFailure = (failure) => { failureMode = failure; };
+  mockFetch.__clearFailure = () => { failureMode = null; };
+  mockFetch.clearFailure = () => { failureMode = null; };
+  mockFetch.__getCalls = () => calls;
+  mockFetch.getCalls = () => calls;
+  mockFetch.__resetCalls = () => { calls.length = 0; };
+  mockFetch.resetCalls = () => { calls.length = 0; };
+
+  return mockFetch;
+}
+
 // Factory to create isolated test environment
 function createTestEnvironment(customHtmlPath) {
   const htmlPath = customHtmlPath || path.resolve(__dirname, '../index.html');
@@ -776,6 +1418,9 @@ function createTestEnvironment(customHtmlPath) {
   const localStorage = new MockLocalStorage();
   const echarts = createMockEcharts();
   const Swal = createMockSwal();
+  const leaflet = createMockLeaflet();
+  const geolocation = new MockGeolocation();
+  const fetchMock = createMockFetch();
   const lucideIcons = [];
 
   const win = {
@@ -784,6 +1429,12 @@ function createTestEnvironment(customHtmlPath) {
     sessionStorage: new MockLocalStorage(),
     echarts: echarts,
     Swal: Swal,
+    L: leaflet,
+    navigator: {
+      onLine: true,
+      geolocation: geolocation
+    },
+    fetch: fetchMock,
     lucide: {
       createIcons: () => {
         lucideIcons.push(Date.now());
@@ -856,7 +1507,11 @@ function createTestEnvironment(customHtmlPath) {
     localStorage: localStorage,
     echarts: echarts,
     Swal: Swal,
-    DOMEvent: DOMEvent
+    DOMEvent: DOMEvent,
+    L: leaflet,
+    geolocation: geolocation,
+    navigator: win.navigator,
+    fetch: fetchMock
   };
 }
 
@@ -870,5 +1525,10 @@ module.exports = {
   createTestEnvironment,
   loadDocumentFromHTML,
   escapeHtmlText,
-  matchesSelector
+  matchesSelector,
+  normalizeLatLng,
+  createMockLeaflet,
+  MockGeolocation,
+  createMockFetch,
+  MOCK_STORE_DATABASE
 };

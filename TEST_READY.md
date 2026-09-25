@@ -1,82 +1,98 @@
-# TEST_READY — Suite E2E "Lista de Compra | PRO"
+# TEST_READY — Suite Integral "Lista de Compra | PRO"
 
-**Estado:** LISTO PARA EVALUAR IMPLEMENTACIONES  
-**Fecha de Publicación:** 2026-09-17T14:40:00Z  
-**Autor:** `test_writer_e2e_1` (E2E Testing Track)  
-**Comando de Ejecución:** `node tests/e2e_runner.js`
+**Estado:** LISTO PARA EVALUAR IMPLEMENTACIONES (M1, M2, M3, M4, M-MAP-1, M-MAP-2)  
+**Fecha de Actualización:** 2026-09-25T12:35:00Z  
+**Autor:** `test_writer_e2e_map` (Track E2E & Map Testing)  
+**Comando Principal de Ejecución:** `npm test`  
+**Comando Directo Suite de Rutas:** `node tests/map_routing.test.js`
 
 ---
 
 ## 1. Resumen Ejecutivo
 
-Se declara oficialmente completada y operativa la suite integral de pruebas de extremo a extremo (E2E) para el proyecto **Lista de Compra | PRO**.
+Se declara oficialmente ampliada, completada y operativa la suite integral de pruebas automatizadas para el proyecto **Lista de Compra | PRO**.
 
-La suite cuenta con **242 pruebas automatizadas y ejecutables** distribuidas en 4 capas (Tiers), cubriendo el 100% de las 20 características arquitectónicas (F01 a F20), casos límite numéricos y de seguridad, interacciones combinadas entre módulos y flujos de usuario reales de principio a fin.
+La suite cuenta actualmente con **388 pruebas automatizadas y ejecutables** con **100% de tasa de aprobación (0 fallos)**, integrando:
+1. Las 242 pruebas E2E de la arquitectura base (F01 a F20).
+2. Las 86 pruebas unitarias de persistencia offline-first y store reactivo de M1.
+3. Las **60 nuevas pruebas exhaustivas de Mapa y Optimizador de Rutas** (R1, R2, R3, R4 / F22-F28, F30), organizadas en los 4 Tiers de calidad requeridos.
 
 ---
 
-## 2. Inventario de Archivos Creados
+## 2. Inventario de Archivos de Pruebas
 
 | Archivo | Rol / Contenido | Tests Contenidos |
 |---------|-----------------|------------------|
 | `tests/e2e_runner.js` | Test runner automatizado en Node.js puro con reporting ANSI, filtros y modos de salida | — |
-| `tests/mock_dom.js` | Simulador DOM completo en memoria con soporte de eventos, LocalStorage, ECharts y SweetAlert2 | — |
+| `tests/mock_dom.js` | Simulador DOM completo en memoria con soporte de eventos, LocalStorage, ECharts, Leaflet, Geolocation y Fetch | — |
 | `tests/spec_helper.js` | Oráculos matemáticos en centavos enteros, sanitizador XSS, parseador RFC 4180 CSV y WCAG AA | — |
 | `tests/tier1_features.test.js` | **Tier 1: Cobertura por Característica** (F01-F20, >=5 tests por feature) | **106 tests** |
 | `tests/tier2_boundaries.test.js` | **Tier 2: Casos Límite y Esquinas** (Valores numéricos, corrupción, XSS, límites de presupuesto) | **104 tests** |
 | `tests/tier3_pairwise.test.js` | **Tier 3: Interacciones Cruzadas por Pares** (Mapeos cruzados entre subsistemas) | **22 tests** |
 | `tests/tier4_scenarios.test.js` | **Tier 4: Escenarios de Usuario del Mundo Real** (Jornadas completas de compra) | **10 tests** |
+| `tests/m1_unit.test.js` | **Pruebas Unitarias de Arquitectura M1** (StorageService, MockStorageDriver, Store, PubSub) | **86 tests** |
+| `tests/map_routing.test.js` | **Suite de Mapa y Optimizador de Rutas** (F22-F28, F30: Tiers 1, 2, 3 y 4) | **60 tests** |
+| `package.json` | Orquestación del pipeline de pruebas mediante script `npm test` | — |
 | `TEST_INFRA.md` | Documentación exhaustiva de arquitectura de pruebas, metodología y catálogo de pruebas | — |
 | `TEST_READY.md` | Declaración formal de preparación de suite (este documento) | — |
 
-**Total de Pruebas Automatizadas:** **242 tests**
+**Total de Pruebas Automatizadas:** **388 tests (100% aprobadas)**
 
 ---
 
-## 3. Guía de Ejecución para Agentes de Implementación (M1 - M4)
+## 3. Guía de Ejecución para Agentes de Implementación
 
-Los agentes implementadores de cada hito deben utilizar el runner para validar progresivamente sus avances:
+Los agentes implementadores (especialmente para los hitos **M-MAP-1** y **M-MAP-2**) deben utilizar los comandos siguientes para verificar progresivamente sus avances:
 
 ```bash
-# Ejecutar toda la suite
+# 1. Ejecutar toda la suite del proyecto (388 tests en total)
+npm test
+
+# 2. Ejecutar específicamente la nueva suite de Mapa y Enrutamiento (60 tests)
+node tests/map_routing.test.js
+
+# 3. Ejecutar las pruebas unitarias de persistencia M1 (86 tests)
+node tests/m1_unit.test.js
+
+# 4. Ejecutar la suite E2E general F01-F20 (242 tests)
 node tests/e2e_runner.js
 
-# Ejecutar por Tier específico según el avance
-node tests/e2e_runner.js --tier=1   # Validación de características individuales
-node tests/e2e_runner.js --tier=2   # Validación de robustez y casos límite
-node tests/e2e_runner.js --tier=3   # Validación de integración cruzada
-node tests/e2e_runner.js --tier=4   # Validación de flujos de usuario completos
-
-# Filtrar por característica en desarrollo (ej. M1: F01, F03, F04)
-node tests/e2e_runner.js --filter="F01"
-node tests/e2e_runner.js --filter="F04"
-node tests/e2e_runner.js --filter="XSS"
+# 5. Filtrar por Tier en e2e_runner:
+node tests/e2e_runner.js --tier=1
+node tests/e2e_runner.js --tier=2
+node tests/e2e_runner.js --tier=3
+node tests/e2e_runner.js --tier=4
 ```
 
 ---
 
-## 4. Estado de Calidad y Defectos de Implementación Detectados (Para Escalar)
+## 4. Desglose de Cobertura de la Suite de Mapa y Rutas (`tests/map_routing.test.js`)
 
-Al ejecutar la suite de especificación contra el código legacy preexistente, se han identificado de forma temprana las siguientes no conformidades que deben subsanarse en los hitos correspondientes:
+- **Tier 1: Cobertura por Característica (40 tests)**
+  * **F22 (5 tests)**: Renderizado de pines, popups con ítems pendientes, subtotales en centavos, exclusión de comercios 100% completados.
+  * **F23 (5 tests)**: Geocodificación Nominatim OSM, fallback a Photon Komoot ante HTTP 429, degradación suave sin crash, debounce y sanitización.
+  * **F24 (5 tests)**: Persistencia en LocalStorage `shopping_store_coords`, lectura desde caché con 0 llamadas a red, normalización de claves y timestamps.
+  * **F25 (5 tests)**: Origen GPS mediante `navigator.geolocation`, manejo de error de permisos (código 1), fallback a origen manual, persistencia en `shopping_route_origin`.
+  * **F26 (5 tests)**: Fórmula Haversine matemática exacta, distancia 0 en puntos idénticos, factor de sinuosidad urbana 1.25, velocidad promedio de 30 km/h, mínimo 1 minuto.
+  * **F27 (5 tests)**: Algoritmo heurístico TSP Nearest Neighbor, minimización de distancia acumulada, casos base de 0 y 1 tienda, desempate determinista.
+  * **F28 (5 tests)**: Formato universal `https://www.google.com/maps/dir/?api=1`, delimitador `%7C`, recorte estricto a máximo 9 waypoints intermedios, codificación URI.
+  * **F30 (5 tests)**: Tres pestañas accesibles (Lista, Gráficos, Mapa), WAI-ARIA (`tablist`, `tab`, `tabpanel`), conmutación de paneles, invalidación de tamaño en Leaflet (`invalidateSize()`), teclado Enter/Espacio.
 
-1. **Defecto en `style.css` (Línea 180) — Presencia de `minmax(340px, 1fr)` [Escalado a M2]**:
-   - Rompe el layout en dispositivos móviles estrechos (320px-360px), causando scroll horizontal no deseado.
-   - Resuelto en: Milestone M2 (F08).
+- **Tier 2: Casos Límite y Esquinas (10 tests)**
+  * `T2_B01` a `T2_B10`: 0 tiendas, 1 tienda, >10 tiendas con truncado seguro de waypoints, agrupación de tiendas duplicadas, caracteres reservados en nombres, fallo total de red, saturación de cuota de LocalStorage (`QuotaExceededError`), coordenadas límite (polos/antípodas), timeout GPS, subtotales extremos.
 
-2. **Defecto en `script.js` (Línea 2) — Invocación no protegida a Firebase [Escalado a M1]**:
-   - `firebase.initializeApp(firebaseConfig)` falla con `ReferenceError` si no hay internet o credenciales configuradas.
-   - Resuelto en: Milestone M1 (F01, F02, `js/storage.js`).
+- **Tier 3: Interacciones Cruzadas entre Subsistemas (7 tests)**
+  * `T3_P01` a `T3_P07`: Modificaciones en el Store que disparan actualización del mapa, toggle completado que retira pines, Deshacer (Undo) que restaura pines, sincronización de tema claro/oscuro con capas de teselas (CartoDB Positron / Dark Matter), cambio de origen que recalcula TSP, edición de nombre de tienda, importación de catálogo en lote.
 
-3. **Defecto en `script.js` (Línea 198) — Dependencia de LoremFlickr [Escalado a M2]**:
-   - Provoca llamadas de red externas no fiables para avatares de categoría.
-   - Resuelto en: Milestone M2 (F10, avatares SVG / Lucide locales).
-
-4. **Defecto en `script.js` (Línea 337) — Uso de `window.confirm()` nativo [Escalado a M4]**:
-   - Bloquea el hilo de ejecución principal y degrada la experiencia de usuario.
-   - Resuelto en: Milestone M4 (F20, SweetAlert2 y Toast con Deshacer).
+- **Tier 4: Escenarios de Usuario del Mundo Real (3 tests)**
+  * `T4_S01`: Jornada completa de compra urbana con 4 tiendas, origen GPS y exportación de ruta a Google Maps.
+  * `T4_S02`: Compra en sótano 100% offline aprovechando la caché local de coordenadas sin conexión a red.
+  * `T4_S03`: Compra peatonal rápida con tienda única e inicio manual.
 
 ---
 
-## 5. Conclusión
+## 5. Conclusión y Preparación para Implementación
 
-La suite se encuentra en estado **100% LISTA** para gobernar el desarrollo con enfoque TDD/BDD durante los Milestones M1, M2, M3, M4 y la certificación final M5.
+La suite de pruebas de Mapa y Enrutamiento se encuentra **100% LISTA Y VERIFICADA**.
+- No se han introducido regresiones en las 328 pruebas preexistentes.
+- Se proporciona a los implementadores de **M-MAP-1** y **M-MAP-2** un arnés de pruebas automatizado, rápido (~2 segundos) y de alta fidelidad para guiar el desarrollo guiado por pruebas (TDD).

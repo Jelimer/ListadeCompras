@@ -1,6 +1,6 @@
 # Infraestructura y Suite de Pruebas E2E — "Lista de Compra | PRO"
 
-Documento de referencia para la ejecución, arquitectura, metodología y catálogo de pruebas E2E automatizadas para la aplicación web **Lista de Compra | PRO**.
+Documento de referencia para la ejecución, arquitectura, metodología y catálogo de pruebas E2E y unitarias automatizadas para la aplicación web **Lista de Compra | PRO**.
 
 ---
 
@@ -11,13 +11,16 @@ La infraestructura de pruebas ha sido diseñada para ser **100% autónoma, ultra
 ```
 ListadeCompras-Git/
 ├── tests/
-│   ├── e2e_runner.js            # Runner CLI con aserciones, reporting ANSI y filtros por Tier
-│   ├── mock_dom.js              # Entorno DOM liviano, eventos, LocalStorage, ECharts y SweetAlert2
+│   ├── e2e_runner.js            # Runner CLI con aserciones, reporting ANSI y filtros por Tier (242 tests)
+│   ├── mock_dom.js              # Entorno DOM liviano, eventos, LocalStorage, ECharts, Leaflet, Geolocation y Fetch
 │   ├── spec_helper.js           # Oráculos matemáticos, sanitización XSS y contratos de interface
-│   ├── tier1_features.test.js   # Tier 1: Cobertura por característica (106 tests)
-│   ├── tier2_boundaries.test.js # Tier 2: Casos límite y esquinas (104 tests)
-│   ├── tier3_pairwise.test.js   # Tier 3: Interacciones cruzadas por pares (22 tests)
-│   └── tier4_scenarios.test.js  # Tier 4: Escenarios de usuario del mundo real (10 tests)
+│   ├── tier1_features.test.js   # Tier 1: Cobertura por característica F01-F20 (106 tests)
+│   ├── tier2_boundaries.test.js # Tier 2: Casos límite y esquinas F01-F20 (104 tests)
+│   ├── tier3_pairwise.test.js   # Tier 3: Interacciones cruzadas por pares F01-F20 (22 tests)
+│   ├── tier4_scenarios.test.js  # Tier 4: Escenarios de usuario del mundo real F01-F20 (10 tests)
+│   ├── m1_unit.test.js          # Pruebas unitarias de almacenamiento y estado M1 (86 tests)
+│   └── map_routing.test.js      # Suite de Mapa y Optimizador de Rutas F22-F28, F30 (60 tests)
+├── package.json                 # Script "test" orquestador de las 388 pruebas
 ├── TEST_INFRA.md                # Esta documentación técnica
 └── TEST_READY.md                # Declaración formal de preparación de suite
 ```
@@ -32,9 +35,13 @@ ListadeCompras-Git/
 2. **`tests/mock_dom.js`**:
    - Implementación completa de árbol DOM en memoria (`DOMDocument`, `DOMElement`, `DOMText`, `DOMEvent`).
    - Parsers HTML y fragmentos con soporte de jerarquías de selectores (`#id`, `.class`, `tag`, `[attr]`).
-   - Almacenamiento local aislado (`MockLocalStorage`) conforme a la especificación W3C Web Storage.
+   - Almacenamiento local aislado (`MockLocalStorage`) conforme a la especificación W3C Web Storage con soporte de cuota configurable y evento `storage`.
    - Emulación de APIs de navegador: `window.matchMedia`, `window.ResizeObserver`, `Blob`, `FileReader`, `URL.createObjectURL`.
-   - Stubs de control para librerías visuales: **Apache ECharts** (`init`, `setOption`, `resize`, `clear`), **SweetAlert2** (`Swal.fire`) y **Lucide Icons** (`createIcons`).
+   - **Mocks y Stubs Visuales y de Geoinformación**:
+     * **Leaflet.js Mock (`createMockLeaflet`)**: Simula `L.map`, `L.tileLayer`, `L.marker`, `L.polyline`, `L.divIcon`, `L.popup`, `L.latLng`, `L.latLngBounds`. Implementa métodos esenciales como `invalidateSize()`, `distanceTo()` con fórmula Haversine, `addTo()`, `bindPopup()`, `openPopup()`, `closePopup()`, `eachLayer()`, `fitBounds()`, `setView()`.
+     * **Geolocation API Mock (`MockGeolocation`)**: Emula `navigator.geolocation.getCurrentPosition()`, `watchPosition()` y `clearWatch()`, con inyección de coordenadas arbitrarias (`__setMockPosition`) y simulación controlada de errores W3C (`__setMockError` con códigos 1 = Denied, 2 = Unavailable, 3 = Timeout).
+     * **Fetch Mock para Geocodificación (`createMockFetch`)**: Emula peticiones HTTP a proveedores OSM (Nominatim) y Komoot (Photon), con soporte para respuestas exitosas, 429 Too Many Requests, 500 Server Error y Network Error, rastreo de invocaciones (`getCalls()`) y soporte para `AbortController`.
+     * **Apache ECharts** (`init`, `setOption`, `resize`, `clear`), **SweetAlert2** (`Swal.fire`) y **Lucide Icons** (`createIcons`).
 
 3. **`tests/spec_helper.js`**:
    - **`ReferenceAnalytics`**: Oráculo de cálculo aritmético monetario en centavos enteros para eliminar el desvío IEEE 754.
@@ -42,18 +49,38 @@ ListadeCompras-Git/
    - **`ReferenceExportImport`**: Validador y generador de payloads JSON v1.0 y CSV RFC 4180 con BOM UTF-8 (`\uFEFF`).
    - **`ReferenceWCAG`**: Motor matemático de luminancia relativa y ratio de contraste de color conforme a WCAG AA (4.5:1).
 
+4. **`tests/map_routing.test.js`**:
+   - Suite especializada para los requerimientos R1, R2, R3, R4 del módulo de mapas interactivos y optimización de rutas (F22 a F28, F30).
+   - Estructurada en 4 capas rigurosas (Tier 1 a Tier 4), sumando 60 casos de prueba independientes con oráculos matemáticos de Haversine, sinuosidad urbana 1.25, velocidad 30 km/h, algoritmo heurístico TSP (Nearest Neighbor), y oráculo de URLs de Google Maps con límite de 9 waypoints intermedios.
+
 ---
 
 ## 2. Instrucciones de Ejecución
 
-Para ejecutar la suite completa o tiers individuales:
+Para ejecutar la suite completa o suites/tiers individuales:
 
-### Ejecutar toda la suite (242 tests):
+### Ejecutar todas las pruebas del proyecto (388 tests):
+```bash
+npm test
+```
+*Ejecuta en secuencia: `tests/e2e_runner.js` (242 tests), `tests/m1_unit.test.js` (86 tests) y `tests/map_routing.test.js` (60 tests).*
+
+### Ejecutar exclusivamente la suite de Mapa y Enrutamiento (60 tests):
+```bash
+node tests/map_routing.test.js
+```
+
+### Ejecutar exclusivamente las pruebas unitarias M1 (86 tests):
+```bash
+node tests/m1_unit.test.js
+```
+
+### Ejecutar la suite E2E general F01-F20 (242 tests):
 ```bash
 node tests/e2e_runner.js
 ```
 
-### Ejecutar por Tier específico:
+### Ejecutar E2E general por Tier específico:
 ```bash
 node tests/e2e_runner.js --tier=1   # Solo Tier 1 (Cobertura F01-F20)
 node tests/e2e_runner.js --tier=2   # Solo Tier 2 (Casos Límite y Esquinas)
@@ -61,26 +88,16 @@ node tests/e2e_runner.js --tier=3   # Solo Tier 3 (Combinaciones Cruzadas)
 node tests/e2e_runner.js --tier=4   # Solo Tier 4 (Escenarios de Usuario)
 ```
 
-### Filtrar pruebas por nombre o característica:
+### Filtrar pruebas por nombre o característica en el runner E2E:
 ```bash
 node tests/e2e_runner.js --filter="F01"
 node tests/e2e_runner.js --filter="XSS"
 node tests/e2e_runner.js --filter="Presupuesto"
 ```
 
-### Modo Bail (detener en primer fallo):
-```bash
-node tests/e2e_runner.js --bail
-```
-
-### Salida estructurada en JSON (para CI/CD o agentes):
-```bash
-node tests/e2e_runner.js --json
-```
-
 ---
 
-## 3. Desglose de Capas de Pruebas (Tiers)
+## 3. Desglose de Capas de Pruebas: F01 a F20 (242 tests)
 
 ### Tier 1: Cobertura por Característica (106 tests)
 Garantiza que cada una de las 20 características arquitectónicas (F01-F20) definidas en `PROJECT.md` cuente con al menos 5 pruebas de camino feliz y equivalencia:
@@ -108,76 +125,110 @@ Garantiza que cada una de las 20 características arquitectónicas (F01-F20) def
 | **F19** | Atajos de Teclado (Enter / Escape) | 5 | Enter en itemInput agrega producto, retorno automático de foco, Escape cancela edición, Enter en cantidad, navegación Tab libre. |
 | **F20** | Diálogos Amigables y Undo Toast | 5 | SweetAlert2 en vez de `window.confirm`, cancelación preserva lista, snapshot de Undo, restauración con Deshacer, expiración de toast. |
 
----
-
 ### Tier 2: Casos Límite y Esquinas (104 tests)
-Pruebas de estrés, valores atípicos y robustez defensiva:
-- **B1: Precios Numéricos Extremos (15 tests)**: $0.00 exacto, negativos (-0.01, -100, -Infinity), `MAX_SAFE_INTEGER`, $999,999.99, decimales múltiples (0.001, 0.005, 19.9999), notación científica ("1e2"), NaN, null, booleanos y objetos.
-- **B2: Cantidades Numéricas Extremas (15 tests)**: 1 (mínimo), 0 (rechazado), negativas (-1, -999), decimales fraccionarios (0.5, 0.250 kg), 10,000 unidades, strings numéricos y con espacios, texto no numérico ("tres"), NaN, Infinity, null y especiales ("2x1").
-- **B3: Cadenas de Texto y Nombres Límite (15 tests)**: Nombre de 1 carácter, vacío, 100 espacios en blanco, ultra largo (5,000 chars), emojis simples (🍎), emojis ZWJ (👨‍👩‍👧‍👦), alfabetos cirílico/japonés/árabe, saltos de línea/tabs, espacios en categorías y ubicaciones, nombres con comillas, nombres numéricos, protección contra prototipos (`__proto__`, `constructor`).
-- **B4: Presupuesto Financiero Límite (14 tests)**: Presupuesto 0.00, negativo, decimales (123.45), 100% de uso exacto, sobrepaso al 101% y al 500%, barra de progreso topada al 100%, presupuesto de 1 millón, formatos con "$" y coma decimal "50,50", NaN, Infinity, protección de división por cero y reactividad en tiempo real.
-- **B5: Inyecciones de Seguridad y XSS (15 tests)**: Tags `<script>`, inyecciones en categorías y ubicaciones, `<iframe>`, `<img onerror>`, `<svg onload>`, pseudo-protocolo `javascript:`, prevención de doble escape, rupturas de comillas `">`, atributos de input `test" onfocus=`, plantillas `${alert(1)}`, carácter nulo `\0`, payloads políglotas XSS, filtros de búsqueda maliciosos y contaminación de prototipo.
-- **B6: Archivos de Importación Corruptos (15 tests)**: JSON sintácticamente roto, primitivos, sin campo `items`, items no array, versión no soportada, items vacíos, items sin `name`, CSV vacío, solo espacios, sin columna obligatoria `name`, filas con menos o más columnas, comillas sin cerrar, mezcla de saltos CRLF y LF, caracteres acentuados.
-- **B7: Estrés de Almacenamiento y Concurrencia (15 tests)**: Metacaracteres regex en búsqueda (`.*`, `[abc`, `(test`, `+?`), insensibilidad a acentos/mayúsculas, 50 adiciones en ráfaga rápida, fallo simulado de `QuotaExceededError`, contenido no array en LocalStorage, duplicidad de IDs, borrado y toggle en IDs inexistentes, cancelación de edición inválida, normalización de ubicaciones repetidas, idempotencia de colapso y limpieza de lista vacía.
-
----
+- **B1**: Precios numéricos extremos (15 tests).
+- **B2**: Cantidades numéricas extremas (15 tests).
+- **B3**: Cadenas de texto y nombres límite (15 tests).
+- **B4**: Presupuesto financiero límite (14 tests).
+- **B5**: Inyecciones de seguridad y XSS (15 tests).
+- **B6**: Archivos de importación corruptos (15 tests).
+- **B7**: Estrés de almacenamiento y concurrencia (15 tests).
 
 ### Tier 3: Combinaciones Entre Características (22 tests)
-Pruebas de interacción cruzada entre subsistemas:
-- **P01**: [F03 Store + F07 Dark Theme + F15 ECharts Theme]: Conmutar tema actualiza el store y recalibra colores de ECharts.
-- **P02**: [F04 Validación + F01 LocalStorage]: Input inválido no genera persistencia corrupta.
-- **P03**: [F11 DOM Granular + F13 Métricas]: Toggle de completado actualiza DOM y transfiere montos de pendiente a gastado atómicamente.
-- **P04**: [F17 Exportación CSV + F05 Prevención XSS]: Items con caracteres sanitizados se exportan a CSV cumpliendo RFC 4180.
-- **P05**: [F18 Importación JSON + F01 LocalStorage + F13 Métricas]: Importar archivo actualiza almacenamiento y recalcula presupuesto en un solo ciclo.
-- **P06**: [F03 Filtro Búsqueda + F03 Ocultar Comprados]: Intersección lógica exacta entre texto de búsqueda y switch de completados.
-- **P07**: [F20 Toast Undo + F13 Métricas + F01 LocalStorage]: Borrar producto descuenta métricas; Deshacer restaura producto, métricas y LocalStorage.
-- **P08**: [F19 Atajo Enter + F04 Validación + F11 DOM]: Enter con datos válidos agrega producto, limpia formulario y reenfoca `#itemInput`.
-- **P09**: [F19 Atajo Enter + F04 Validación]: Enter con nombre vacío rechaza sin añadir y muestra feedback.
-- **P10**: [F14 ECharts + F16 Estado Vacío + F11 DOM]: Añadir primer producto activa ECharts; borrarlo regresa a estado limpio.
-- **P11**: [F12 Precisión Centavos + F13 Métricas + F04 Validación]: Adición acumulativa masiva de decimales sin error de deriva IEEE 754.
-- **P12**: [F18 Importación CSV + F10 Avatares Locales]: Asignación automática de avatares locales tras importar catálogo mixto.
-- **P13**: [F08 Layout Mobile + F14 ECharts Responsive]: En ancho de 360px, tooltip mantiene `confine: true` sin salirse de la pantalla.
-- **P14**: [F01 LocalStorage + F02 Firebase Fallback]: Pérdida total de conexión conmuta a LocalStorage sin bloquear la experiencia de usuario.
-- **P15**: [F18 Importación Merge vs Overwrite]: Modo Merge adiciona conservando catálogo existente; modo Overwrite reemplaza.
-- **P16**: [F20 Limpiar Comprados + F20 Toast Undo]: Limpieza masiva de comprados y restauración en bloque con Deshacer.
-- **P17**: [F07 Dark Theme + F06 WCAG AA]: Verificación de ratio de contraste >= 4.5:1 en elementos de modo oscuro.
-- **P18**: [F03 Store + F14 ECharts Categories]: Modificar categoría de producto reubica dinámicamente las series de ECharts.
-- **P19**: [F09 Touch Targets + F08 Mobile]: Dimensiones táctiles mínimas preservadas en viewport móvil.
-- **P20**: [F17 Export JSON + F18 Import JSON (Roundtrip)]: Ciclo completo de exportación y reimportación garantiza fidelidad 100%.
-- **P21**: [F17 Export CSV + F18 Import CSV (Roundtrip)]: Exportar a CSV con BOM y reimportar conserva datos y precios exactos.
-- **P22**: [F03 Store PubSub + F19 Teclado Esc]: Cancelar edición con Escape no emite mutaciones erróneas y restaura estado previo.
+Interacciones cruzadas P01 a P22 (Store, LocalStorage, ECharts, XSS, Undo, etc.).
+
+### Tier 4: Escenarios de Usuario del Mundo Real (10 tests)
+Escenarios de jornada completa S01 a S10.
 
 ---
 
-### Tier 4: Escenarios de Usuario del Mundo Real (10 escenarios completos)
-1. **S01 — Compra Semanal Familiar Completa**: Presupuesto de $150, 12 productos en 3 supermercados ("Mercadona", "Carrefour", "Verdulería"), compra y marcado gradual de 7 productos en tienda, recálculo continuo de métricas gastado/pendiente, limpieza final de comprados.
-2. **S02 — Gestión Estricta de Presupuesto con Alerta de Sobrepaso**: Presupuesto de $50, adición de items hasta $49.50 (99%), item excedente que lleva a $59.50 (119%), alerta visual de exceso y corrección de cantidad para volver a saldo positivo ($44.50).
-3. **S03 — Organización por Pasillos y Colapso de Secciones**: Lista organizada en pasillos, colapso de sección completada con persistencia en LocalStorage, y búsqueda rápida de producto en pasillo pendiente.
-4. **S04 — Flujo de Respaldo y Migración entre Dispositivos**: Exportación a JSON `lista-compras.json` en ordenador, simulación de nuevo dispositivo limpio, importación y restauración de datos, categorías y presupuesto al 100%.
-5. **S05 — Recuperación tras Error Accidental con Deshacer (Undo Flow)**: Borrado accidental de 8 items completados con "Limpiar Comprados", toast de advertencia con botón Deshacer, restauración dentro de la ventana de tiempo conservando estados.
-6. **S06 — Preparación de Receta Especial con Cantidades Fraccionadas**: Ingredientes pesados en decimales (1.25 kg de ternera a $24.80/kg, 0.35 kg chalotas, vino y mantequilla), validando cálculo matemático exacto en centavos ($46.47 total).
-7. **S07 — Uso Rápido en Movilidad con Atajos de Teclado y Búsqueda**: Adición de 5 productos usando exclusivamente `Enter` en formulario con retorno continuo de foco a `#itemInput`, seguido de búsqueda en tiempo real de "leche".
-8. **S08 — Interrupción Offline y Continuidad de Sesión**: Entrada a supermercado sin cobertura, adición y marcado de productos 100% en LocalStorage, recarga de página/sesión comprobando persistencia íntegra de cambios.
-9. **S09 — Colaboración Externa mediante Importación de CSV**: Recepción de lista compartida por un tercero en formato CSV, importación en modo "Combinar (Merge)" integrando nuevos items sin alterar lista preexistente.
-10. **S10 — Ciclo de Vida Nocturno (Dark Mode Shopping Journey)**: Compra nocturna en entorno oscuro, activación de modo oscuro, verificación de contraste visual WCAG AA, sincronización de ECharts en oscuro y persistencia sin parpadeo blanco (FOUC).
+## 4. Desglose de Suite Mapa y Optimizador de Rutas: F22-F28, F30 (60 tests)
+
+El archivo `tests/map_routing.test.js` implementa 60 pruebas rigurosas organizadas en 4 capas según los requerimientos R1, R2, R3 y R4:
+
+### Tier 1: Cobertura por Característica (40 tests — 5 tests por feature)
+- **F22: Marcadores y Popups de Comercio (5 tests)**
+  * `T1_F22_1`: Renderizado de marcadores para cada comercio con productos pendientes.
+  * `T1_F22_2`: Exclusión de comercios donde todos los productos están completados.
+  * `T1_F22_3`: Popup contiene la lista de ítems pendientes y sus cantidades.
+  * `T1_F22_4`: Popup calcula el subtotal monetario con precisión entera de centavos.
+  * `T1_F22_5`: Apertura y cierre de popups en MockLeaflet preserva el estado de capas.
+- **F23: Geocodificación Defensiva (5 tests)**
+  * `T1_F23_1`: Geocodificación exitosa con Nominatim retorna lat, lon y displayName.
+  * `T1_F23_2`: Fallback transparente a Photon cuando Nominatim retorna 429 Too Many Requests.
+  * `T1_F23_3`: Manejo defensivo cuando ambos servicios fallan sin lanzar excepción no capturada.
+  * `T1_F23_4`: Debounce y cancelación de peticiones con AbortController.
+  * `T1_F23_5`: Rechazo de entradas vacías o caracteres no imprimibles sin llamada a red.
+- **F24: Persistencia y Caché Local de Coordenadas (5 tests)**
+  * `T1_F24_1`: Persistencia de coordenadas en LocalStorage bajo clave `shopping_store_coords`.
+  * `T1_F24_2`: La segunda consulta a una tienda previamente geocodificada usa caché (0 llamadas de red).
+  * `T1_F24_3`: Normalización de nombres de tienda para búsqueda en caché (espacios, mayúsculas).
+  * `T1_F24_4`: Cada registro de coordenadas incluye timestamp de actualización.
+  * `T1_F24_5`: Guardado manual de coordenadas sobrescribe o actualiza la entrada existente.
+- **F25: Origen y Geolocalización GPS (5 tests)**
+  * `T1_F25_1`: Obtención de posición de origen mediante `navigator.geolocation.getCurrentPosition`.
+  * `T1_F25_2`: Manejo de error de permisos GPS (`PERMISSION_DENIED = 1`) degradando suavemente.
+  * `T1_F25_3`: Fallback a ingreso manual de dirección de salida.
+  * `T1_F25_4`: Persistencia del punto de partida en `shopping_route_origin`.
+  * `T1_F25_5`: Modificación del origen recalcula la distancia y tiempo estimado.
+- **F26: Estimación Haversine, Sinuosidad y Tiempo de Viaje (5 tests)**
+  * `T1_F26_1`: Cálculo exacto de Haversine contra coordenadas de referencia conocidas (lat/lon).
+  * `T1_F26_2`: Distancia cero entre dos coordenadas exactamente idénticas.
+  * `T1_F26_3`: Aplicación exacta del factor de sinuosidad urbana 1.25.
+  * `T1_F26_4`: Estimación de tiempo a 30 km/h: 15 km = 30 minutos.
+  * `T1_F26_5`: Mínimo de 1 minuto para distancias mayores a cero.
+- **F27: Optimizador de Rutas TSP (Nearest Neighbor) (5 tests)**
+  * `T1_F27_1`: Algoritmo Nearest Neighbor ordena secuencialmente por proximidad.
+  * `T1_F27_2`: Minimización de distancia total acumulada frente a orden arbitrario.
+  * `T1_F27_3`: Con 0 tiendas pendientes retorna ruta vacía con 0 km y 0 minutos.
+  * `T1_F27_4`: Con 1 sola tienda retorna trayecto directo sin iteración redundante.
+  * `T1_F27_5`: Desempate determinista por orden alfabético si dos tiendas equidistan.
+- **F28: Generador Universal de URL de Google Maps (5 tests)**
+  * `T1_F28_1`: Formato con `api=1`, `origin`, `destination` y `travelmode=driving`.
+  * `T1_F28_2`: Inclusión de waypoints intermedios separados por `%7C` (`|`).
+  * `T1_F28_3`: Recorte seguro a máximo 9 waypoints intermedios en la URL.
+  * `T1_F28_4`: Codificación estricta URI sin caracteres reservados no escapados.
+  * `T1_F28_5`: Caso directo de 1 parada: sin parámetro waypoints en la URL.
+- **F30: Selector de Vistas / Navigation Tabs (5 tests)**
+  * `T1_F30_1`: Tres pestañas accesibles en el selector de vistas (Lista, Gráficos, Mapa).
+  * `T1_F30_2`: Roles y atributos WAI-ARIA (`tablist`, `tab`, `tabpanel`, `aria-selected`).
+  * `T1_F30_3`: Conmutación a vista de mapa oculta otros paneles y activa `view-map`.
+  * `T1_F30_4`: Invocación de `invalidateSize()` en Leaflet al activar la pestaña del mapa.
+  * `T1_F30_5`: Accesibilidad de teclado (Enter, Espacio) para conmutar pestañas.
+
+### Tier 2: Casos Límite y Esquinas (10 tests)
+- `T2_B01`: 0 tiendas con compras pendientes -> 0 paradas, 0.0 km, 0 min, URL vacía.
+- `T2_B02`: 1 sola tienda -> recorrido directo origen a destino sin waypoints.
+- `T2_B03`: Más de 10 tiendas distintas -> recorte seguro a 9 waypoints intermedios.
+- `T2_B04`: Tiendas duplicadas en la lista -> agrupación bajo el mismo nodo de parada.
+- `T2_B05`: Nombres de comercios con caracteres conflictivos en URI son sanitizados.
+- `T2_B06`: Simulación de fallo en geocodificación (cero resultados o error 500).
+- `T2_B07`: Saturación de LocalStorage (`QuotaExceededError`) no arroja error fatal.
+- `T2_B08`: Coordenadas geográficas límite (antípodas, polos, cruce de hemisferio).
+- `T2_B09`: Timeout o fallo de señal GPS en Geolocation API.
+- `T2_B10`: Subtotales y precios extremos en popup de tienda (0.01 y 99999.99).
+
+### Tier 3: Interacciones Cruzadas entre Subsistemas (7 tests)
+- `T3_P01`: [Store items:changed + Mapa]: Adición de producto en tienda nueva añade parada al mapa.
+- `T3_P02`: [Store toggleCompleted + Mapa]: Completar ítems de una tienda remueve su parada.
+- `T3_P03`: [Store undoLastAction + Mapa]: Deshacer completado restaura la parada en el mapa.
+- `T3_P04`: [Tema Claro/Oscuro + Tiles Leaflet]: Alternar `data-theme` modifica capa de teselas.
+- `T3_P05`: [Origen GPS/Manual + TSP]: Cambiar el origen altera dinámicamente la secuencia de ruta.
+- `T3_P06`: [Edición de Tienda + Persistencia]: Cambiar tienda de un producto actualiza las paradas.
+- `T3_P07`: [Importación de Lista + Mapa]: Importar lote con múltiples tiendas activa los pines.
+
+### Tier 4: Escenarios de Usuario Reales (3 tests)
+- `T4_S01`: Jornada completa de compra urbana con 4 tiendas, GPS y Google Maps URL.
+- `T4_S02`: Compra en sótano sin conexión (100% offline con caché local de tiendas).
+- `T4_S03`: Compra peatonal rápida con tienda única y punto de partida manual.
 
 ---
 
-## 4. Defectos de Implementación Detectados en el Código Legacy (Para Escalar)
+## 5. Resumen Consolidado de Pruebas
 
-Durante la ejecución de las pruebas contra la base de código inicial existente, la suite ha detectado y aislado los siguientes defectos que deben ser resueltos en los milestones correspondientes:
-
-1. **Defecto F08 (M2) — Presencia de `minmax(340px, 1fr)` en `style.css` (Línea 180)**:
-   - *Observación*: En `style.css` la regla `.shopping-list` define `grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));`.
-   - *Impacto*: En pantallas móviles estrechas (320px a 360px), el ancho mínimo forzado de 340px desborda el viewport y genera scroll horizontal involuntario, violando el criterio de aceptación R2 y la especificación F08.
-   - *Acción requerida*: Modificar la regla en Milestone M2 para usar un layout fluido (ej. `minmax(min(100%, 280px), 1fr)` o maquetación mobile-first basada en flex-column).
-
-2. **Defecto F01/F02 (M1) — Dependencia Dura de Firebase en `script.js` (Línea 2)**:
-   - *Observación*: En `script.js`, el inicio de la aplicación ejecuta directamente `firebase.initializeApp(firebaseConfig)` y `db.collection('shoppingItems')` sin bloques de protección `try/catch` ni comprobación de disponibilidad.
-   - *Impacto*: Si no se cargan las librerías remotas de Firebase o no hay conexión a internet, la aplicación lanza un `ReferenceError: firebase is not defined` impidiendo el uso local.
-   - *Acción requerida*: Modularizar la persistencia en `js/storage.js` durante Milestone M1 con soporte LocalStorage offline-first transparente.
-
-3. **Defecto F10 (M2) — Enlace a CDN externa LoremFlickr en `script.js` (Línea 198)**:
-   - *Observación*: `script.js` genera imágenes con `https://loremflickr.com/150/150/${encodeURIComponent(cat.toLowerCase())}`.
-   - *Impacto*: Falla completamente en modo offline y genera lentitud en la carga.
-   - *Acción requerida*: Reemplazar por avatares SVG locales o iconos temáticos de Lucide en Milestone M2.
+| Archivo de Prueba | Ámbito y Enfoque | Tests Ejecutados |
+|-------------------|------------------|------------------|
+| `tests/e2e_runner.js` | Suite E2E F01-F20 (Tiers 1, 2, 3 y 4) | **242** |
+| `tests/m1_unit.test.js` | Pruebas Unitarias de Arquitectura M1 (StorageService, Store, etc.) | **86** |
+| `tests/map_routing.test.js` | Suite de Mapa y Optimizador de Rutas R1-R4 (F22-F28, F30) | **60** |
+| **TOTAL GENERAL** | **Suite Completa del Proyecto** | **388 tests (100% verde)** |

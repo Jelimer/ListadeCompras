@@ -26,6 +26,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 
+    <!-- Leaflet 1.9.4 CSS con fallback seguro -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
     <!-- Librerías de Visualización -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
@@ -55,91 +58,186 @@
             </div>
         </header>
 
-        <!-- Formulario Superior de Ingesta -->
-        <section class="input-section" role="form" aria-label="Añadir nuevo producto">
-            <div class="input-wrapper input-wrapper-item">
-                <i data-lucide="package" class="input-icon" aria-hidden="true"></i>
-                <label for="itemInput" class="sr-only">Nombre del producto</label>
-                <input type="text" id="itemInput" placeholder="Producto" aria-label="Nombre del producto" autocomplete="off" required>
-            </div>
-            <div class="input-wrapper input-wrapper-qty">
-                <i data-lucide="hash" class="input-icon" aria-hidden="true"></i>
-                <label for="quantityInput" class="sr-only">Cantidad</label>
-                <input type="number" id="quantityInput" placeholder="Cant." value="1" min="0.01" step="any" aria-label="Cantidad">
-            </div>
-            <div class="input-wrapper input-wrapper-price">
-                <i data-lucide="dollar-sign" class="input-icon" aria-hidden="true"></i>
-                <label for="unitPriceInput" class="sr-only">Precio Unitario</label>
-                <input type="number" id="unitPriceInput" placeholder="Precio Unit." min="0" step="0.01" aria-label="Precio Unitario">
-            </div>
-            <div class="input-wrapper input-wrapper-loc">
-                <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
-                <label for="locationInput" class="sr-only">Lugar o Supermercado</label>
-                <input type="text" id="locationInput" placeholder="Lugar / Super" list="location-suggestions" aria-label="Lugar o Supermercado" autocomplete="off">
-                <datalist id="location-suggestions"></datalist>
-            </div>
-            <div class="input-wrapper input-wrapper-cat">
-                <i data-lucide="tag" class="input-icon" aria-hidden="true"></i>
-                <label for="categoryInput" class="sr-only">Categoría</label>
-                <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions" aria-label="Categoría" autocomplete="off">
-                <datalist id="category-suggestions"></datalist>
-            </div>
-            <button id="addItemButton" class="btn btn-primary" type="button" aria-label="Añadir producto a la lista">
-                <i data-lucide="plus-circle" aria-hidden="true"></i>
-                <span>Añadir</span>
+        <!-- Selector de Vistas / Navigation Tabs (WAI-ARIA) -->
+        <nav class="view-tabs" role="tablist" aria-label="Selector de vistas principales">
+            <button id="tab-list" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-list" type="button">
+                <i data-lucide="shopping-cart" aria-hidden="true"></i>
+                <span>Lista de Compras</span>
             </button>
-        </section>
+            <button id="tab-stats" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-stats" type="button">
+                <i data-lucide="bar-chart-2" aria-hidden="true"></i>
+                <span>Estadísticas Financieras</span>
+            </button>
+            <button id="tab-map" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-map" type="button">
+                <i data-lucide="map" aria-hidden="true"></i>
+                <span>Ruta en Mapa</span>
+            </button>
+        </nav>
 
-        <!-- Dashboard Grid Principal -->
+        <!-- Contenedor Principal de Paneles -->
         <main id="main-content" class="dashboard-grid" role="main">
-            <!-- Columna Izquierda: Lista y Herramientas -->
-            <div class="main-content">
-                <div class="toolbar-section" role="toolbar" aria-label="Herramientas de filtrado y búsqueda">
-                    <div class="input-wrapper toolbar-search">
-                        <i data-lucide="search" class="input-icon" aria-hidden="true"></i>
-                        <label for="searchInput" class="sr-only">Buscar en toda la lista</label>
-                        <input type="search" id="searchInput" placeholder="Buscar en toda la lista..." aria-label="Buscar productos">
+            <!-- Panel 1: Lista de Compras y Formulario -->
+            <section id="panel-list" class="view-panel active" role="tabpanel" aria-labelledby="tab-list" tabindex="0">
+                <!-- Formulario Superior de Ingesta -->
+                <section class="input-section" role="form" aria-label="Añadir nuevo producto">
+                    <div class="input-wrapper input-wrapper-item">
+                        <i data-lucide="package" class="input-icon" aria-hidden="true"></i>
+                        <label for="itemInput" class="sr-only">Nombre del producto</label>
+                        <input type="text" id="itemInput" placeholder="Producto" aria-label="Nombre del producto" autocomplete="off" required>
                     </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="hideCompletedSwitch" role="switch" aria-checked="false">
-                        <label for="hideCompletedSwitch">Ocultar Comprados</label>
+                    <div class="input-wrapper input-wrapper-qty">
+                        <i data-lucide="hash" class="input-icon" aria-hidden="true"></i>
+                        <label for="quantityInput" class="sr-only">Cantidad</label>
+                        <input type="number" id="quantityInput" placeholder="Cant." value="1" min="0.01" step="any" aria-label="Cantidad">
                     </div>
-                </div>
-
-                <div id="shoppingListContainer" class="shopping-list-container" role="region" aria-live="polite" aria-label="Lista de compras agrupada por ubicación">
-                    <!-- Los grupos de productos se inyectan dinámicamente aquí -->
-                </div>
-            </div>
-
-            <!-- Columna Derecha: Panel de Estadísticas y Presupuesto -->
-            <aside class="stats-panel" aria-label="Resumen financiero y estadísticas">
-                <div class="stat-card">
-                    <label for="budgetInput" class="stat-label">Presupuesto</label>
-                    <input type="number" id="budgetInput" class="budget-minimal-input" placeholder="0.00" min="0" step="0.01" aria-label="Presupuesto disponible">
-                </div>
-                
-                <div class="stat-card">
-                    <span class="stat-label">Total Pendiente</span>
-                    <span id="grandTotalValue" class="stat-value" aria-live="polite">$0.00</span>
-                    <div class="progress-container">
-                        <div id="budgetProgressBar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-valuetext="0% consumido" aria-label="Progreso del presupuesto"></div>
+                    <div class="input-wrapper input-wrapper-price">
+                        <i data-lucide="dollar-sign" class="input-icon" aria-hidden="true"></i>
+                        <label for="unitPriceInput" class="sr-only">Precio Unitario</label>
+                        <input type="number" id="unitPriceInput" placeholder="Precio Unit." min="0" step="0.01" aria-label="Precio Unitario">
                     </div>
-                    <span id="budgetStats" class="budget-stats" aria-live="polite"></span>
-                </div>
-
-                <div class="stat-card chart-box">
-                    <span class="stat-label">Unidades por Categoría</span>
-                    <div id="categoryChart" class="chart-canvas" role="img" aria-label="Gráfico interactivo de unidades pendientes por categoría y ubicación"></div>
-                </div>
-
-                <div class="stats-actions">
-                    <button id="resetListButton" class="btn btn-secondary btn-block" type="button" aria-label="Limpiar todos los productos marcados como comprados">
-                        <i data-lucide="trash-2" aria-hidden="true"></i>
-                        <span>Limpiar Comprados</span>
+                    <div class="input-wrapper input-wrapper-loc">
+                        <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
+                        <label for="locationInput" class="sr-only">Lugar o Supermercado</label>
+                        <input type="text" id="locationInput" placeholder="Lugar / Super" list="location-suggestions" aria-label="Lugar o Supermercado" autocomplete="off">
+                        <datalist id="location-suggestions"></datalist>
+                    </div>
+                    <div class="input-wrapper input-wrapper-cat">
+                        <i data-lucide="tag" class="input-icon" aria-hidden="true"></i>
+                        <label for="categoryInput" class="sr-only">Categoría</label>
+                        <input type="text" id="categoryInput" placeholder="Categoría" list="category-suggestions" aria-label="Categoría" autocomplete="off">
+                        <datalist id="category-suggestions"></datalist>
+                    </div>
+                    <button id="addItemButton" class="btn btn-primary" type="button" aria-label="Añadir producto a la lista">
+                        <i data-lucide="plus-circle" aria-hidden="true"></i>
+                        <span>Añadir</span>
                     </button>
+                </section>
+
+                <div class="main-content">
+                    <div class="toolbar-section" role="toolbar" aria-label="Herramientas de filtrado y búsqueda">
+                        <div class="input-wrapper toolbar-search">
+                            <i data-lucide="search" class="input-icon" aria-hidden="true"></i>
+                            <label for="searchInput" class="sr-only">Buscar en toda la lista</label>
+                            <input type="search" id="searchInput" placeholder="Buscar en toda la lista..." aria-label="Buscar productos">
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" id="hideCompletedSwitch" role="switch" aria-checked="false">
+                            <label for="hideCompletedSwitch">Ocultar Comprados</label>
+                        </div>
+                    </div>
+
+                    <div id="shoppingListContainer" class="shopping-list-container" role="region" aria-live="polite" aria-label="Lista de compras agrupada por ubicación">
+                        <!-- Los grupos de productos se inyectan dinámicamente aquí -->
+                    </div>
                 </div>
-            </aside>
+            </section>
+
+            <!-- Panel 2: Estadísticas Financieras -->
+            <section id="panel-stats" class="view-panel" role="tabpanel" aria-labelledby="tab-stats" tabindex="0" hidden>
+                <aside class="stats-panel" aria-label="Resumen financiero y estadísticas">
+                    <div class="stat-card">
+                        <label for="budgetInput" class="stat-label">Presupuesto</label>
+                        <input type="number" id="budgetInput" class="budget-minimal-input" placeholder="0.00" min="0" step="0.01" aria-label="Presupuesto disponible">
+                    </div>
+                    
+                    <div class="stat-card">
+                        <span class="stat-label">Total Pendiente</span>
+                        <span id="grandTotalValue" class="stat-value" aria-live="polite">$0.00</span>
+                        <div class="progress-container">
+                            <div id="budgetProgressBar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-valuetext="0% consumido" aria-label="Progreso del presupuesto"></div>
+                        </div>
+                        <span id="budgetStats" class="budget-stats" aria-live="polite"></span>
+                    </div>
+
+                    <div class="stat-card chart-box">
+                        <span class="stat-label">Unidades por Categoría</span>
+                        <div id="categoryChart" class="chart-canvas" role="img" aria-label="Gráfico interactivo de unidades pendientes por categoría y ubicación"></div>
+                    </div>
+
+                    <div class="stats-actions">
+                        <button id="resetListButton" class="btn btn-secondary btn-block" type="button" aria-label="Limpiar todos los productos marcados como comprados">
+                            <i data-lucide="trash-2" aria-hidden="true"></i>
+                            <span>Limpiar Comprados</span>
+                        </button>
+                    </div>
+                </aside>
+            </section>
+
+            <!-- Panel 3: Ruta en Mapa -->
+            <section id="panel-map" class="view-panel" role="tabpanel" aria-labelledby="tab-map" tabindex="0" hidden>
+                <div class="map-controls-card">
+                    <div class="origin-input-row">
+                        <label for="manual-origin-input" class="stat-label">Punto de Partida</label>
+                        <div class="origin-inputs-container">
+                            <div class="input-wrapper origin-input-wrapper">
+                                <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
+                                <input type="text" id="manual-origin-input" placeholder="Escribe tu punto de salida..." aria-label="Punto de partida manual" autocomplete="off">
+                            </div>
+                            <button id="btn-set-manual-origin" class="btn btn-secondary" type="button" aria-label="Fijar origen manual">
+                                <i data-lucide="check" aria-hidden="true"></i>
+                                <span>Fijar origen</span>
+                            </button>
+                            <button id="btn-gps-origin" class="btn btn-secondary" type="button" aria-label="Usar mi ubicación GPS" title="Usar mi ubicación GPS actual">
+                                <i data-lucide="crosshair" aria-hidden="true"></i>
+                                <span>Usar mi ubicación GPS</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta resumen de ruta -->
+                    <div id="route-summary-card" class="route-summary-card">
+                        <div class="route-metric-item">
+                            <i data-lucide="milestone" class="metric-icon" aria-hidden="true"></i>
+                            <div>
+                                <span class="metric-label">Distancia estimada</span>
+                                <strong id="route-distance" class="metric-value">0.0 km</strong>
+                            </div>
+                        </div>
+                        <div class="route-metric-divider" aria-hidden="true"></div>
+                        <div class="route-metric-item">
+                            <i data-lucide="clock" class="metric-icon" aria-hidden="true"></i>
+                            <div>
+                                <span class="metric-label">Tiempo estimado</span>
+                                <strong id="route-duration" class="metric-value">0 min</strong>
+                            </div>
+                        </div>
+                        <div class="route-metric-divider" aria-hidden="true"></div>
+                        <div class="route-metric-item">
+                            <i data-lucide="store" class="metric-icon" aria-hidden="true"></i>
+                            <div>
+                                <span class="metric-label">Paradas de compra</span>
+                                <strong id="route-stops" class="metric-value">0 paradas</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botón prominente de Google Maps -->
+                    <a id="btn-open-google-maps" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block btn-open-gmaps" aria-label="Abrir ruta en Google Maps">
+                        <i data-lucide="navigation" aria-hidden="true"></i>
+                        <span>Abrir ruta en Google Maps</span>
+                    </a>
+                </div>
+
+                <!-- Contenedor interactivo del mapa Leaflet -->
+                <div id="map-container" class="map-view-container" style="min-height: 380px;" role="region" aria-label="Mapa interactivo con la ruta de compras"></div>
+            </section>
         </main>
+
+        <!-- Bottom Navigation Bar Móvil (<640px) fija en zona del pulgar -->
+        <nav class="bottom-nav" role="tablist" aria-label="Navegación móvil inferior">
+            <button id="bottom-tab-list" class="bottom-nav-btn active" role="tab" aria-selected="true" aria-controls="panel-list" type="button">
+                <i data-lucide="shopping-cart" aria-hidden="true"></i>
+                <span>Lista</span>
+            </button>
+            <button id="bottom-tab-stats" class="bottom-nav-btn" role="tab" aria-selected="false" aria-controls="panel-stats" type="button">
+                <i data-lucide="bar-chart-2" aria-hidden="true"></i>
+                <span>Estadísticas</span>
+            </button>
+            <button id="bottom-tab-map" class="bottom-nav-btn" role="tab" aria-selected="false" aria-controls="panel-map" type="button">
+                <i data-lucide="map-pin" aria-hidden="true"></i>
+                <span>Ruta</span>
+            </button>
+        </nav>
     </div>
 
     <!-- Región en vivo para anuncios textuales accesibles (Screen Readers) -->
@@ -152,6 +250,10 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <script src="firebase-config.js"></script>
+
+    <!-- Leaflet 1.9.4 JavaScript & Map Route Module -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="js/map-route.js"></script>
 
     <!-- Módulos Core UMD (Arquitectura Desacoplada M1-M4) -->
     <script src="js/storage.js"></script>

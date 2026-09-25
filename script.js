@@ -27,7 +27,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     budgetStats: document.getElementById('budgetStats'),
     grandTotalValue: document.getElementById('grandTotalValue'),
     resetListButton: document.getElementById('resetListButton'),
-    shoppingListContainer: document.getElementById('shoppingListContainer')
+    shoppingListContainer: document.getElementById('shoppingListContainer'),
+
+    // Selector de Vistas y Paneles WAI-ARIA
+    tabList: document.getElementById('tab-list'),
+    tabStats: document.getElementById('tab-stats'),
+    tabMap: document.getElementById('tab-map'),
+    bottomTabList: document.getElementById('bottom-tab-list'),
+    bottomTabStats: document.getElementById('bottom-tab-stats'),
+    bottomTabMap: document.getElementById('bottom-tab-map'),
+    panelList: document.getElementById('panel-list'),
+    panelStats: document.getElementById('panel-stats'),
+    panelMap: document.getElementById('panel-map'),
+    ariaAnnouncer: document.getElementById('ariaAnnouncer'),
+
+    // Controles y Tarjeta de Resumen de Ruta
+    mapContainer: document.getElementById('map-container'),
+    manualOriginInput: document.getElementById('manual-origin-input'),
+    btnSetManualOrigin: document.getElementById('btn-set-manual-origin'),
+    btnGpsOrigin: document.getElementById('btn-gps-origin'),
+    routeSummaryCard: document.getElementById('route-summary-card'),
+    routeDistance: document.getElementById('route-distance'),
+    routeDuration: document.getElementById('route-duration'),
+    routeStops: document.getElementById('route-stops'),
+    btnOpenGoogleMaps: document.getElementById('btn-open-google-maps')
   };
 
   // --- 2. Acceso a Módulos Auxiliares ---
@@ -319,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // --- 7. Gestión del Tema (Claro / Oscuro) ---
-  const applyTheme = (theme) => {
+  function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     if (elements.themeToggle) {
       elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
@@ -332,8 +355,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (store && typeof store.setTheme === 'function') {
       store.setTheme(theme);
     }
+    if (typeof window.MapRouteService !== 'undefined' && MapRouteService.setTheme) {
+      MapRouteService.setTheme(theme === 'dark');
+    }
     renderUI();
-  };
+  }
 
   const savedTheme = localStorage.getItem('theme') || initialTheme || 'light';
   applyTheme(savedTheme);
@@ -348,7 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // --- 8. Renderizado de la Interfaz de Usuario ---
-  const renderUI = () => {
+  function renderUI() {
     const state = store.getState();
     const items = state.items || [];
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -418,6 +444,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // E. Lista de Productos
     renderShoppingList(state);
+
+    // F. Actualización del Módulo de Rutas y Mapa
+    updateMapRouteUI();
   };
 
   const normalizeSearchText = (str) => String(str === null || str === undefined ? '' : str).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -1031,6 +1060,243 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof store.on === 'function') {
     store.on('state:changed', () => {
       renderUI();
+    });
+  }
+
+  // --- 18. Módulo de Rutas y Selector de Vistas WAI-ARIA ---
+
+  function setPanelVisibility(panelEl, visible) {
+    if (!panelEl) return;
+    if (visible) {
+      panelEl.removeAttribute('hidden');
+      panelEl.hidden = false;
+      panelEl.classList.add('active');
+    } else {
+      panelEl.setAttribute('hidden', '');
+      panelEl.hidden = true;
+      panelEl.classList.remove('active');
+    }
+  }
+
+  function setTabSelected(tabEl, selected) {
+    if (!tabEl) return;
+    tabEl.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (selected) {
+      tabEl.classList.add('active');
+    } else {
+      tabEl.classList.remove('active');
+    }
+  }
+
+  // A. Actualización de Métricas y Renderizado de Ruta en el Mapa
+  function updateMapRouteUI() {
+    if (typeof window.MapRouteService === 'undefined' || !MapRouteService.calculateOptimalRoute) return;
+    const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
+    const currentOrigin = (typeof MapRouteService.getOrigin === 'function') ? MapRouteService.getOrigin() : null;
+    const route = MapRouteService.calculateOptimalRoute(items, currentOrigin);
+
+    if (typeof MapRouteService.renderRouteOnMap === 'function') {
+      MapRouteService.renderRouteOnMap(route);
+    }
+
+    // Actualizar métricas de la tarjeta resumen
+    if (elements.routeDistance) {
+      elements.routeDistance.textContent = `${(route.totalDistanceKm || 0).toFixed(1)} km`;
+    }
+    if (elements.routeDuration) {
+      elements.routeDuration.textContent = `${route.estimatedDurationMinutes || 0} min`;
+    }
+    if (elements.routeStops) {
+      const stopCount = (route.orderedStops && route.orderedStops.length) || 0;
+      elements.routeStops.textContent = `${stopCount} ${stopCount === 1 ? 'parada' : 'paradas'}`;
+    }
+
+    // Actualizar botón de Google Maps
+    if (elements.btnOpenGoogleMaps) {
+      if (route.googleMapsUrl && route.orderedStops && route.orderedStops.length > 0) {
+        elements.btnOpenGoogleMaps.href = route.googleMapsUrl;
+        elements.btnOpenGoogleMaps.classList.remove('disabled');
+        elements.btnOpenGoogleMaps.removeAttribute('aria-disabled');
+      } else {
+        elements.btnOpenGoogleMaps.href = '#';
+        elements.btnOpenGoogleMaps.classList.add('disabled');
+        elements.btnOpenGoogleMaps.setAttribute('aria-disabled', 'true');
+      }
+    }
+  }
+
+  // B. Selector Ágil de Vistas (Conmutación Sincronizada Desktop & Mobile)
+  function switchView(viewName) {
+    const isList = viewName === 'list';
+    const isStats = viewName === 'stats';
+    const isMap = viewName === 'map';
+
+    // Sincronización Pestañas Desktop
+    setTabSelected(elements.tabList, isList);
+    setTabSelected(elements.tabStats, isStats);
+    setTabSelected(elements.tabMap, isMap);
+
+    // Sincronización Barra Inferior Móvil (Bottom Navigation)
+    setTabSelected(elements.bottomTabList, isList);
+    setTabSelected(elements.bottomTabStats, isStats);
+    setTabSelected(elements.bottomTabMap, isMap);
+
+    // Alternar Paneles de Contenido
+    setPanelVisibility(elements.panelList, isList);
+    setPanelVisibility(elements.panelStats, isStats);
+    setPanelVisibility(elements.panelMap, isMap);
+
+    // Anuncio WAI-ARIA
+    if (elements.ariaAnnouncer) {
+      const labels = { list: 'Lista de Compras', stats: 'Estadísticas Financieras', map: 'Ruta en Mapa' };
+      elements.ariaAnnouncer.textContent = `Mostrando vista: ${labels[viewName] || viewName}`;
+    }
+
+    // Ajuste de Viewport al mostrar mapa o gráfico
+    if (isMap) {
+      if (typeof window.MapRouteService !== 'undefined' && MapRouteService.mapController) {
+        setTimeout(() => {
+          MapRouteService.mapController.invalidateSize();
+        }, 60);
+      }
+      updateMapRouteUI();
+    } else if (isStats) {
+      if (chartController && typeof chartController.resize === 'function') {
+        setTimeout(() => {
+          chartController.resize();
+        }, 60);
+      }
+    }
+  }
+
+  const navTabBindings = [
+    { btn: elements.tabList, view: 'list' },
+    { btn: elements.tabStats, view: 'stats' },
+    { btn: elements.tabMap, view: 'map' },
+    { btn: elements.bottomTabList, view: 'list' },
+    { btn: elements.bottomTabStats, view: 'stats' },
+    { btn: elements.bottomTabMap, view: 'map' }
+  ];
+
+  navTabBindings.forEach(({ btn, view }) => {
+    if (!btn) return;
+    btn.addEventListener('click', () => switchView(view));
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        switchView(view);
+      }
+    });
+  });
+
+  // C. Inicialización de MapRouteService y Leaflet
+  if (typeof window.MapRouteService !== 'undefined' && MapRouteService.initMap) {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    MapRouteService.initMap('map-container', { isDark });
+  }
+
+  // D. Conexión del Botón GPS
+  if (elements.btnGpsOrigin) {
+    elements.btnGpsOrigin.addEventListener('click', async () => {
+      if (typeof window.MapRouteService === 'undefined' || !MapRouteService.getCurrentLocation) return;
+      const originalHtml = elements.btnGpsOrigin.innerHTML;
+      elements.btnGpsOrigin.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Detectando...</span>`;
+      if (window.lucide) window.lucide.createIcons();
+
+      try {
+        const pos = await MapRouteService.getCurrentLocation({ timeout: 10000 });
+        if (elements.manualOriginInput && pos) {
+          elements.manualOriginInput.value = pos.address || 'Mi Ubicación actual (GPS)';
+        }
+        updateMapRouteUI();
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast('Ubicación GPS establecida como origen', 'success');
+        }
+      } catch (err) {
+        console.warn('[App] Error al obtener GPS:', err);
+        if (FeedbackModule.showToast) {
+          FeedbackModule.showToast('No se pudo obtener la ubicación GPS', 'warning');
+        }
+      } finally {
+        elements.btnGpsOrigin.innerHTML = originalHtml;
+        if (window.lucide) window.lucide.createIcons();
+      }
+    });
+  }
+
+  // E. Conexión del Origen Manual
+  if (elements.btnSetManualOrigin && elements.manualOriginInput) {
+    const handleSetManualOrigin = async () => {
+      const text = (elements.manualOriginInput.value || '').trim();
+      if (!text) {
+        if (FeedbackModule.showToast) FeedbackModule.showToast('Escribe una dirección o punto de partida', 'warning');
+        elements.manualOriginInput.focus();
+        return;
+      }
+
+      if (typeof window.MapRouteService === 'undefined') return;
+
+      const originalHtml = elements.btnSetManualOrigin.innerHTML;
+      elements.btnSetManualOrigin.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Fijando...</span>`;
+      if (window.lucide) window.lucide.createIcons();
+
+      try {
+        const resolved = await MapRouteService.geocodeAddress(text, { immediate: true });
+        if (resolved && MapRouteService.isValidCoordinates(resolved)) {
+          MapRouteService.saveOrigin({
+            lat: resolved.lat,
+            lng: resolved.lng,
+            address: resolved.displayName || text,
+            type: 'manual'
+          });
+          updateMapRouteUI();
+          if (FeedbackModule.showToast) {
+            FeedbackModule.showToast('Origen fijado correctamente', 'success');
+          }
+        } else {
+          if (FeedbackModule.showToast) {
+            FeedbackModule.showToast('No se encontraron coordenadas para esa dirección', 'warning');
+          }
+        }
+      } catch (e) {
+        console.warn('[App] Error al geocodificar origen:', e);
+      } finally {
+        elements.btnSetManualOrigin.innerHTML = originalHtml;
+        if (window.lucide) window.lucide.createIcons();
+      }
+    };
+
+    elements.btnSetManualOrigin.addEventListener('click', handleSetManualOrigin);
+    elements.manualOriginInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSetManualOrigin();
+      }
+    });
+  }
+
+  // Precargar dirección de origen en el campo manual si ya existe
+  if (elements.manualOriginInput && typeof window.MapRouteService !== 'undefined' && MapRouteService.getOrigin) {
+    const savedOrig = MapRouteService.getOrigin();
+    if (savedOrig && savedOrig.address && savedOrig.type !== 'default') {
+      elements.manualOriginInput.value = savedOrig.address;
+    }
+  }
+
+  // F. Geocodificación Defensiva en Segundo Plano al escribir en locationInput
+  if (elements.locationInput) {
+    let locDebounceTimer = null;
+    const triggerBgGeocode = () => {
+      const loc = (elements.locationInput.value || '').trim();
+      if (loc.length >= 2 && typeof window.MapRouteService !== 'undefined' && MapRouteService.geocodeAddress) {
+        MapRouteService.geocodeAddress(loc).catch(() => {});
+      }
+    };
+
+    elements.locationInput.addEventListener('blur', triggerBgGeocode);
+    elements.locationInput.addEventListener('input', () => {
+      clearTimeout(locDebounceTimer);
+      locDebounceTimer = setTimeout(triggerBgGeocode, 500);
     });
   }
 
