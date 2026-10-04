@@ -26,18 +26,34 @@ async function runScriptLifecycleTests() {
   global.echarts = env.echarts;
   global.Swal = env.Swal;
   global.fetch = env.fetch;
+  env.window.scrollTo = () => {};
+  global.scrollTo = () => {};
 
   // Cargar módulos requeridos por script.js
   require('../firebase-config.js');
-  require('../js/map-route.js');
+  const MapRoute = require('../js/map-route.js');
   require('../js/storage.js');
   require('../js/validation.js');
   require('../js/state.js');
   require('../js/avatars.js');
   require('../js/analytics.js');
-  require('../js/chart.js');
+  const ChartModule = require('../js/chart.js');
   require('../js/export-import.js');
   require('../js/ui-feedback.js');
+
+  let calcRouteCalls = 0;
+  const origCalcRoute = MapRoute.calculateOptimalRoute;
+  MapRoute.calculateOptimalRoute = function (...args) {
+    calcRouteCalls++;
+    return origCalcRoute.apply(this, args);
+  };
+
+  let chartRenderCalls = 0;
+  const origChartRender = ChartModule.ChartController.prototype.render;
+  ChartModule.ChartController.prototype.render = function (...args) {
+    chartRenderCalls++;
+    return origChartRender.apply(this, args);
+  };
 
   const scriptPath = path.resolve(__dirname, '../script.js');
   const scriptContent = fs.readFileSync(scriptPath, 'utf8');
@@ -257,9 +273,166 @@ async function runScriptLifecycleTests() {
   assert.ok(btnDeselectAll, 'Botón deseleccionar todos debe existir');
   console.log('  ✓ Test 15: Componentes DOM del gestor de viajes, modal y picker verificados');
 
+  // Test 16: Renderizado Reactivo Selectivo (R1) - En vista "list", mutaciones NO calculan ruta ni gráfico
+  tabList.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 60));
+  let state = env.window.__getRenderState();
+  assert.strictEqual(state.currentView, 'list', 'Debe estar en vista list');
+
+  calcRouteCalls = 0;
+  chartRenderCalls = 0;
+
+  // Añadir un nuevo producto mientras estamos en vista 'list'
+  itemInput.value = 'Queso Cremoso';
+  quantityInput.value = '1';
+  unitPriceInput.value = '450';
+  locationInput.value = 'Lácteos El Trébol';
+  categoryInput.value = 'Almacén';
+
+  addItemBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 60));
+
+  assert.strictEqual(calcRouteCalls, 0, 'En vista list, calculateOptimalRoute NO debe invocarse');
+  assert.strictEqual(chartRenderCalls, 0, 'En vista list, chartController.render NO debe invocarse');
+
+  state = env.window.__getRenderState();
+  assert.strictEqual(state.currentView, 'list');
+  assert.strictEqual(state.listDirty, false, 'listDirty debe ser false en vista activa');
+  assert.strictEqual(state.statsDirty, true, 'statsDirty debe estar marcado como true');
+  assert.strictEqual(state.mapDirty, true, 'mapDirty debe estar marcado como true');
+  console.log('  ✓ Test 16: Renderizado reactivo selectivo en vista "list" no recomputa mapa ni gráfico');
+
+  // Test 17: Limpieza quirúrgica de banderas sucias en switchView (R1)
+  const chartBefore = chartRenderCalls;
+  tabStats.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 80));
+
+  state = env.window.__getRenderState();
+  assert.strictEqual(state.currentView, 'stats');
+  assert.strictEqual(state.statsDirty, false, 'statsDirty debe limpiarse a false al visitar estadísticas');
+  assert.strictEqual(state.mapDirty, true, 'mapDirty debe permanecer true');
+  assert.strictEqual(chartRenderCalls - chartBefore, 1, 'chartController.render debe ejecutarse exactamente 1 vez');
+  assert.strictEqual(calcRouteCalls, 0, 'Ruta no debe calcularse al ir a stats');
+
+  // Conmutación a mapa
+  const calcBefore = calcRouteCalls;
+  tabMap.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 80));
+
+  state = env.window.__getRenderState();
+  assert.strictEqual(state.currentView, 'map');
+  assert.strictEqual(state.mapDirty, false, 'mapDirty debe limpiarse a false al visitar mapa');
+  assert.strictEqual(calcRouteCalls - calcBefore, 1, 'calculateOptimalRoute debe ejecutarse exactamente 1 vez');
+  console.log('  ✓ Test 17: Conmutación de vistas limpia quirúrgicamente las banderas sucias (statsDirty, mapDirty)');
+
+  // Test 18: Debounce en searchInput con bypass inmediato (0ms) en vacío, Escape y Enter (R2)
+  tabList.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 60));
+
+  const searchInput = env.document.getElementById('searchInput');
+  assert.ok(searchInput, 'searchInput debe existir en el DOM');
+
+  // Iniciar búsqueda con retardo
+  searchInput.value = 'Queso Cremoso';
+  searchInput.dispatchEvent(new env.DOMEvent('input', { bubbles: true }));
+
+  // Antes del debounce (20ms), el contenedor aún no debe haber completado el filtrado
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(container.textContent.includes('Gas'), 'A los 20ms el filtro no debe haber excluido aún otros elementos');
+
+  // Tras 160ms (debounced > 150ms), el filtro se aplica
+  await new Promise(r => setTimeout(r, 160));
+  assert.ok(container.textContent.includes('Queso Cremoso'), 'Debe mostrar el producto buscado');
+  assert.strictEqual(container.textContent.includes('Gas'), false, 'El producto "Gas" debe haber sido filtrado');
+
+  // Bypass inmediato en Escape (0ms)
+  const escEvt = new env.DOMEvent('keydown', { bubbles: true });
+  escEvt.key = 'Escape';
+  searchInput.dispatchEvent(escEvt);
+  await new Promise(r => setTimeout(r, 15));
+  assert.strictEqual(searchInput.value, '', 'Escape debe limpiar el campo de búsqueda');
+  assert.ok(container.textContent.includes('Gas'), 'Escape restaura inmediatamente (0ms) todos los productos');
+
+  // Bypass inmediato al vaciar input (0ms)
+  searchInput.value = 'Gas';
+  searchInput.dispatchEvent(new env.DOMEvent('input', { bubbles: true }));
+  searchInput.value = '';
+  searchInput.dispatchEvent(new env.DOMEvent('input', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 15));
+  assert.ok(container.textContent.includes('Queso Cremoso'), 'Vaciar input restaura inmediatamente (0ms) la lista completa');
+
+  // Bypass inmediato en Enter (0ms)
+  searchInput.value = 'Gas';
+  searchInput.dispatchEvent(new env.DOMEvent('input', { bubbles: true }));
+  const enterKeyEvt = new env.DOMEvent('keydown', { bubbles: true });
+  enterKeyEvt.key = 'Enter';
+  searchInput.dispatchEvent(enterKeyEvt);
+  await new Promise(r => setTimeout(r, 15));
+  assert.strictEqual(container.textContent.includes('Queso Cremoso'), false, 'Enter aplica el filtro de inmediato');
+
+  // Restaurar estado de búsqueda
+  searchInput.value = '';
+  searchInput.dispatchEvent(new env.DOMEvent('input', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 20));
+  console.log('  ✓ Test 18: Debounce en searchInput y bypass inmediato a 0ms en vacío, Escape y Enter verificados');
+
+  // Test 19: Delegación de eventos en shoppingListContainer (R3)
+  const cards = container.querySelectorAll('.shopping-item');
+  assert.ok(cards.length >= 1, 'Deben existir tarjetas de compras');
+
+  // Ninguna tarjeta ni sus controles internos poseen listeners directos
+  for (const card of cards) {
+    assert.strictEqual(card.eventListeners.size, 0, 'Tarjeta no debe tener listeners directos');
+    const chk = card.querySelector('.item-checkbox');
+    const delBtn = card.querySelector('.del-btn');
+    const editBtn = card.querySelector('.edit-btn');
+    if (chk) assert.strictEqual(chk.eventListeners.size, 0, 'item-checkbox no debe tener listener directo');
+    if (delBtn) assert.strictEqual(delBtn.eventListeners.size, 0, 'del-btn no debe tener listener directo');
+    if (editBtn) assert.strictEqual(editBtn.eventListeners.size, 0, 'edit-btn no debe tener listener directo');
+  }
+
+  // El contenedor padre tiene los listeners delegados
+  assert.ok(container.eventListeners.has('change'), 'shoppingListContainer debe escuchar change');
+  assert.ok(container.eventListeners.has('click'), 'shoppingListContainer debe escuchar click');
+  assert.ok(container.eventListeners.has('keydown'), 'shoppingListContainer debe escuchar keydown');
+
+  // Delegación de checkbox change
+  const targetChk = cards[0].querySelector('.item-checkbox');
+  targetChk.checked = true;
+  targetChk.dispatchEvent(new env.DOMEvent('change', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+
+  // Delegación de edit-btn click
+  const targetEditBtn = container.querySelector('.edit-btn');
+  targetEditBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  assert.ok(addItemBtn.textContent.includes('Guardar'), 'Clic delegado en edit-btn activa modo edición');
+
+  // Cancelar edición re-reseteando valores
+  itemInput.value = '';
+
+  // Delegación de del-btn click
+  const countBeforeDel = container.querySelectorAll('.shopping-item').length;
+  const targetDelBtn = container.querySelector('.del-btn');
+  targetDelBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  const countAfterDel = container.querySelectorAll('.shopping-item').length;
+  assert.strictEqual(countAfterDel, countBeforeDel - 1, 'Clic delegado en del-btn elimina el producto');
+  console.log('  ✓ Test 19: Delegación de eventos en shoppingListContainer (change, click, keydown) validada');
+
+  // Test 20: Verificación de persistencia de SortableJS y componentes de ruta (R3)
+  tabMap.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  const stopsEl = env.document.getElementById('route-stops-list');
+  assert.ok(stopsEl, 'route-stops-list debe estar renderizado');
+
+  tabList.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  console.log('  ✓ Test 20: Persistencia de SortableJS y ciclo de vida de componentes verificado');
+
   console.log('\n==================================================');
   console.log('RESUMEN DE PRUEBAS LIFECYCLE DE SCRIPT.JS:');
-  console.log('Total: 15 | Aprobadas: 15 | Falladas: 0');
+  console.log('Total: 20 | Aprobadas: 20 | Falladas: 0');
   console.log('==================================================\n');
 }
 

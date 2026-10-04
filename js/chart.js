@@ -63,6 +63,12 @@
       }, delay);
     }
 
+    resize() {
+      if (this.instance && !this.instance.disposed) {
+        this.instance.resize();
+      }
+    }
+
     render(breakdown = {}, allPendingItems = [], isDark = false) {
       if (!this.instance || this.instance.disposed) return;
 

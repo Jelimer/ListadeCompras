@@ -3,7 +3,7 @@
  * Orquestador Principal y Controlador de UI para Lista de Compra | PRO.
  * Integración bidireccional en tiempo real con Firebase Firestore + Resiliencia Offline-First.
  */
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
   // --- 1. Referencias al DOM ---
@@ -86,15 +86,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     container: document.querySelector('.container')
   };
 
-  // --- 2. Acceso a Módulos Auxiliares ---
-  const ValidationModule = window.ShoppingValidation || window.ValidationModule || {};
-  const AvatarsModule = window.ShoppingAvatars || {};
-  const AnalyticsModule = window.ShoppingAnalytics || window.AnalyticsService || {};
-  const ChartModule = window.ShoppingChart || {};
-  const ExportImportModule = window.ShoppingExportImport || window.ExportImportService || {};
-  const FeedbackModule = window.ShoppingFeedback || window.UIFeedback || {};
-  const StoreClass = window.Store || (window.ShoppingStore && window.ShoppingStore.Store) || (window.ShoppingState && window.ShoppingState.Store);
-  const MapRouteService = (typeof window !== 'undefined' && (window.MapRouteService || window.MapRoute)) || (typeof global !== 'undefined' && (global.MapRouteService || global.MapRoute)) || {};
+  // --- 2. Acceso a Módulos Auxiliares (Soporte Navegador y Runner Node.js) ---
+  function safeRequire(filename) {
+    if (typeof require !== 'function') return null;
+    const candidates = [
+      `./js/${filename}`,
+      `../js/${filename}`
+    ];
+    try {
+      if (typeof process !== 'undefined' && process.cwd) {
+        const pathModule = require('path');
+        candidates.push(pathModule.resolve(process.cwd(), 'js', filename));
+      }
+    } catch (_) {}
+    for (const cand of candidates) {
+      try {
+        const mod = require(cand);
+        if (mod) return mod;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  const ValidationModule = window.ShoppingValidation || window.ValidationModule || (typeof global !== 'undefined' && (global.ShoppingValidation || global.ValidationModule)) || safeRequire('validation.js') || {};
+  const AvatarsModule = window.ShoppingAvatars || (typeof global !== 'undefined' && global.ShoppingAvatars) || safeRequire('avatars.js') || {};
+  const AnalyticsModule = window.ShoppingAnalytics || window.AnalyticsService || (typeof global !== 'undefined' && (global.ShoppingAnalytics || global.AnalyticsService)) || safeRequire('analytics.js') || {};
+  const ChartModule = window.ShoppingChart || (typeof global !== 'undefined' && global.ShoppingChart) || safeRequire('chart.js') || {};
+  const ExportImportModule = window.ShoppingExportImport || window.ExportImportService || (typeof global !== 'undefined' && (global.ShoppingExportImport || global.ExportImportService)) || safeRequire('export-import.js') || {};
+  const FeedbackModule = window.ShoppingFeedback || window.UIFeedback || (typeof global !== 'undefined' && (global.ShoppingFeedback || global.UIFeedback)) || safeRequire('ui-feedback.js') || {};
+  const stateReq = safeRequire('state.js');
+  const StoreClass = window.Store || (window.ShoppingStore && window.ShoppingStore.Store) || (window.ShoppingState && window.ShoppingState.Store) || (typeof global !== 'undefined' && (global.Store || (global.ShoppingStore && global.ShoppingStore.Store) || (global.ShoppingState && global.ShoppingState.Store))) || (stateReq && (stateReq.Store || stateReq)) || null;
+  const MapRouteService = (typeof window !== 'undefined' && (window.MapRouteService || window.MapRoute)) || (typeof global !== 'undefined' && (global.MapRouteService || global.MapRoute)) || safeRequire('map-route.js') || {};
 
   function normalizeSearchText(str) {
     return String(str === null || str === undefined ? '' : str)
@@ -104,7 +126,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       .trim();
   }
 
-  // --- 2.1. Funciones de Navegación y Conmutación de Vistas WAI-ARIA ---
+  // --- 2.1. Estado de Navegación Reactiva y Dirty Flags (R1) ---
+  let currentView = 'list';
+  let listDirty = false;
+  let statsDirty = true;
+  let mapDirty = true;
+
+  // --- 2.2. Funciones de Navegación y Conmutación de Vistas WAI-ARIA ---
   function setPanelVisibility(panelEl, visible) {
     if (!panelEl) return;
     if (visible) {
@@ -130,11 +158,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function switchView(viewName) {
     try {
+      const validViews = ['list', 'stats', 'map'];
+      if (!validViews.includes(viewName)) {
+        return;
+      }
+
+      currentView = viewName;
       const isList = viewName === 'list';
       const isStats = viewName === 'stats';
       const isMap = viewName === 'map';
 
-      // 1. Sincronización visual de pestañas superiores e inferiores
+      // 1. Sincronización visual de pestañas superiores e inferiores (WAI-ARIA)
       setTabSelected(elements.tabList, isList);
       setTabSelected(elements.tabStats, isStats);
       setTabSelected(elements.tabMap, isMap);
@@ -164,36 +198,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         elements.ariaAnnouncer.textContent = `Mostrando vista: ${labels[viewName] || viewName}`;
       }
 
-      // 5. Ajustes de Viewport en segundo plano protegidos
-      if (isMap) {
-        try {
-          if (typeof window.MapRouteService !== 'undefined' && MapRouteService.mapController) {
-            setTimeout(() => {
-              try { MapRouteService.mapController.invalidateSize(); } catch (_) {}
-            }, 60);
-          }
-          if (typeof updateMapRouteUI === 'function') {
-            updateMapRouteUI();
-          }
-        } catch (e) {
-          console.warn('[App] Error al actualizar UI de mapa:', e);
+      // 5. Renderizado Quirúrgico bajo demanda y Ajuste de Viewport
+      const state = (store && typeof store.getState === 'function') ? store.getState() : {};
+      const items = state.items || [];
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+      if (isList) {
+        if (listDirty && typeof renderListView === 'function') {
+          renderListView(state, items);
         }
       } else if (isStats) {
+        if (statsDirty && typeof renderStatsView === 'function') {
+          renderStatsView(state, items, isDark);
+        }
         try {
-          if (chartController && typeof chartController.resize === 'function') {
+          if (chartController) {
             setTimeout(() => {
-              try { chartController.resize(); } catch (_) {}
+              try {
+                if (typeof chartController.resize === 'function') {
+                  chartController.resize();
+                } else if (chartController.instance && typeof chartController.instance.resize === 'function') {
+                  chartController.instance.resize();
+                }
+              } catch (_) {}
             }, 60);
           }
         } catch (_) {}
+      } else if (isMap) {
+        if (mapDirty && typeof renderMapView === 'function') {
+          renderMapView();
+        }
+        try {
+          if (typeof window.MapRouteService !== 'undefined') {
+            if (typeof MapRouteService.invalidateSize === 'function') {
+              MapRouteService.invalidateSize();
+            }
+            if (MapRouteService.mapController) {
+              setTimeout(() => {
+                try { MapRouteService.mapController.invalidateSize(); } catch (_) {}
+              }, 60);
+            }
+          }
+        } catch (e) {
+          console.warn('[App] Error al invalidar tamaño del mapa:', e);
+        }
       }
     } catch (err) {
       console.error('[App] Error al conmutar pestaña:', err);
     }
   }
 
-  // Exposición global para callbacks inline y fallback universal
+  // Exposición global para callbacks inline y utilidades de prueba
   window.switchAppView = switchView;
+  window.renderAppUI = (...args) => renderUI(...args);
+  window.__getRenderState = () => ({
+    currentView,
+    listDirty,
+    statsDirty,
+    mapDirty
+  });
 
   // Registro inmediato y directo de eventos de navegación
   const navTabBindings = [
@@ -279,182 +342,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     initialCollapsed = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
   } catch (_) {}
 
-  const StorageModule = window.ShoppingStorage || window.StorageService || null;
+  const storageReq = safeRequire('storage.js');
+  const StorageModule = window.ShoppingStorage || window.StorageService || (typeof global !== 'undefined' && (global.ShoppingStorage || global.StorageService)) || (storageReq && (storageReq.StorageService || storageReq.ShoppingStorage || storageReq)) || null;
 
-  const store = StoreClass 
-    ? new StoreClass({
-        items: initialItems,
-        budget: initialBudget,
-        theme: initialTheme,
-        locationOrder: initialLocationOrder,
-        collapsedGroups: initialCollapsed,
-        filter: { search: '', searchQuery: '', hideCompleted: false },
-        filters: { search: '', searchQuery: '', hideCompleted: false },
-        uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed }
-      }, StorageModule)
-    : {
-        state: { 
-          items: initialItems, 
-          budget: initialBudget,
-          theme: initialTheme,
-          locationOrder: initialLocationOrder,
-          collapsedGroups: initialCollapsed,
-          editingItemId: null,
-          filter: { search: '', searchQuery: '', hideCompleted: false }, 
-          filters: { search: '', searchQuery: '', hideCompleted: false }, 
-          uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed } 
-        },
-        getState() { return this.state; },
-        getItems() { return this.state.items; },
-        getItemById(id) { return (this.state.items || []).find(i => i.id === id) || null; },
-        getFilter() { return { ...this.state.filter }; },
-        getFilters() { return { ...(this.state.filters || this.state.filter) }; },
-        getBudget() { return this.state.budget; },
-        subscribe(listener) { return () => {}; },
-        on(event, handler) { return () => {}; },
-        setEditingItem(id) { this.state.editingItemId = id ? String(id) : null; },
-        reorderLocations(newOrder) {
-          if (!Array.isArray(newOrder)) return;
-          this.state.locationOrder = [...newOrder.map(String)];
-          if (this.state.uiPreferences) this.state.uiPreferences.locationOrder = this.state.locationOrder;
-        },
-        toggleGroupCollapse(location) {
-          const loc = String(location || 'General');
-          const set = new Set(this.state.collapsedGroups || []);
-          let isCollapsed = false;
-          if (set.has(loc)) {
-            set.delete(loc);
-          } else {
-            set.add(loc);
-            isCollapsed = true;
-          }
-          this.state.collapsedGroups = Array.from(set);
-          if (this.state.uiPreferences) this.state.uiPreferences.collapsedGroups = this.state.collapsedGroups;
-          return isCollapsed;
-        },
-        getGroupedItems() {
-          const activeFilter = this.state.filters || this.state.filter || {};
-          const query = normalizeSearchText(activeFilter.searchQuery || activeFilter.search || '');
-          const hideCompleted = Boolean(activeFilter.hideCompleted);
-          const tokens = query ? query.split(/\s+/).filter(Boolean) : [];
-          const grouped = {};
+  if (!StoreClass) {
+    throw new Error('[App] ShoppingState StoreClass no está disponible en window. Asegúrate de incluir js/state.js antes de script.js.');
+  }
 
-          (this.state.items || []).forEach(it => {
-            const haystack = normalizeSearchText(`${it.name || ''} ${it.location || ''} ${it.category || ''}`);
-            const matchSearch = tokens.length === 0 || tokens.every(token => haystack.includes(token));
-            const matchHide = !hideCompleted || !it.completed;
-            if (matchSearch && matchHide) {
-              const loc = (it.location || 'General').trim() || 'General';
-              if (!grouped[loc]) grouped[loc] = [];
-              grouped[loc].push(it);
-            }
-          });
-
-          Object.keys(grouped).forEach(loc => {
-            grouped[loc].sort((a, b) => {
-              if (a.completed !== b.completed) return a.completed ? 1 : -1;
-              return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
-            });
-          });
-
-          const order = (this.state.uiPreferences && this.state.uiPreferences.locationOrder) || this.state.locationOrder || [];
-          const sortedLocations = Object.keys(grouped).sort((a, b) => {
-            const ia = order.indexOf(a);
-            const ib = order.indexOf(b);
-            if (ia === -1 && ib === -1) return a.localeCompare(b, 'es', { sensitivity: 'base' });
-            return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
-          });
-
-          const result = {};
-          sortedLocations.forEach(loc => {
-            result[loc] = grouped[loc];
-          });
-          return result;
-        },
-        hydrate(data) {
-          const parseNum = (val, def = 0) => {
-            if (typeof val === 'string') val = val.trim().replace(',', '.');
-            const n = parseFloat(val);
-            return (!isNaN(n) && isFinite(n)) ? n : def;
-          };
-          const normalizeItem = (it) => ({
-            ...it,
-            id: it.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-            name: String(it.name || 'Sin nombre'),
-            quantity: parseNum(it.quantity, 1) > 0 ? parseNum(it.quantity, 1) : 1,
-            unitPrice: parseNum(it.unitPrice, 0) >= 0 ? parseNum(it.unitPrice, 0) : 0,
-            location: String(it.location || 'General'),
-            category: String(it.category || 'General'),
-            completed: Boolean(it.completed)
-          });
-
-          if (Array.isArray(data)) {
-            this.state.items = data.filter(it => it && typeof it === 'object').map(normalizeItem);
-          } else if (data && typeof data === 'object' && Array.isArray(data.items)) {
-            this.state.items = data.items.filter(it => it && typeof it === 'object').map(normalizeItem);
-            if (typeof data.budget === 'number') this.state.budget = data.budget;
-          } else if (data && typeof data === 'object') {
-            Object.assign(this.state, data);
-          }
-        },
-        addItem(item) {
-          const id = item.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-          let rawQty = typeof item.quantity === 'string' ? item.quantity.trim().replace(',', '.') : item.quantity;
-          let rawPrice = typeof item.unitPrice === 'string' ? item.unitPrice.trim().replace(',', '.') : item.unitPrice;
-          const q = parseFloat(rawQty);
-          const p = parseFloat(rawPrice);
-          const newItem = { 
-            ...item, 
-            id, 
-            quantity: (!isNaN(q) && isFinite(q) && q > 0) ? q : 1,
-            unitPrice: (!isNaN(p) && isFinite(p) && p >= 0) ? p : 0,
-            location: String(item.location || 'General'),
-            category: String(item.category || 'General'),
-            completed: Boolean(item.completed) 
-          };
-          this.state.items.unshift(newItem);
-          return newItem;
-        },
-        updateItem(id, data) {
-          const it = (this.state.items || []).find(i => i.id === id);
-          if (it) Object.assign(it, data);
-          return it;
-        },
-        deleteItem(id) {
-          const idx = (this.state.items || []).findIndex(i => i.id === id);
-          if (idx !== -1) return this.state.items.splice(idx, 1)[0];
-          return null;
-        },
-        toggleCompleted(id) {
-          const it = (this.state.items || []).find(i => i.id === id);
-          if (it) it.completed = !it.completed;
-          return it;
-        },
-        clearCompleted() {
-          this.state.items = (this.state.items || []).filter(i => !i.completed);
-        },
-        setFilter(f) { 
-          if (!f || typeof f !== 'object') return;
-          let nextSearch = undefined;
-          if (f.searchQuery !== undefined) {
-            nextSearch = f.searchQuery === null ? '' : String(f.searchQuery);
-          } else if (f.search !== undefined) {
-            nextSearch = f.search === null ? '' : String(f.search);
-          }
-          if (nextSearch !== undefined) {
-            this.state.filter.search = nextSearch;
-            this.state.filter.searchQuery = nextSearch;
-            this.state.filters.search = nextSearch;
-            this.state.filters.searchQuery = nextSearch;
-          }
-          if (f.hideCompleted !== undefined) {
-            const hide = Boolean(f.hideCompleted);
-            this.state.filter.hideCompleted = hide;
-            this.state.filters.hideCompleted = hide;
-          }
-        },
-        setBudget(b) { this.state.budget = b; }
-      };
+  const store = new StoreClass({
+    items: initialItems,
+    budget: initialBudget,
+    theme: initialTheme,
+    locationOrder: initialLocationOrder,
+    collapsedGroups: initialCollapsed,
+    filter: { search: '', searchQuery: '', hideCompleted: false },
+    filters: { search: '', searchQuery: '', hideCompleted: false },
+    uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed }
+  }, StorageModule);
 
   // --- 5. Sincronización en Tiempo Real con Firebase Firestore ---
   if (isFirebaseActive && itemsCollection) {
@@ -499,8 +403,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           localStorage.setItem('shopping_items', JSON.stringify(remoteItems));
         } catch (_) {}
-
-        renderUI();
       },
       err => {
         console.warn('[App] Error en listener Firestore:', err.message);
@@ -525,7 +427,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         elements.themeToggle.innerHTML = theme === 'dark' 
           ? '<i data-lucide="sun" aria-hidden="true"></i>' 
           : '<i data-lucide="moon" aria-hidden="true"></i>';
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons(elements.themeToggle ? { root: elements.themeToggle } : undefined);
       }
       if (store && typeof store.setTheme === 'function') {
         store.setTheme(theme);
@@ -551,13 +453,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // --- 8. Renderizado de la Interfaz de Usuario ---
-  function renderUI() {
-    const state = store.getState();
-    const items = state.items || [];
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  // --- 8. Renderizado Desacoplado y Reactivo (R1) ---
 
-    // A. Analíticas Financieras
+  // 8.1 Métricas Universales Agregadas (siempre activas, ligeras)
+  function renderUniversalMetrics(state, items) {
     let metrics = { totalPending: 0, totalSpent: 0, totalOverall: 0, budgetRemaining: 0, budgetPercentage: 0 };
     if (AnalyticsModule.calculateMetrics) {
       metrics = AnalyticsModule.calculateMetrics(items, state.budget);
@@ -567,7 +466,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       metrics.totalPending = Math.round(pending * 100) / 100;
     }
 
-    // B. Tarjetas de Estadísticas
     if (elements.grandTotalValue) {
       elements.grandTotalValue.textContent = `$${metrics.totalPending.toFixed(2)}`;
     }
@@ -599,17 +497,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         elements.budgetStats.style.color = 'var(--text-muted)';
       }
     }
+  }
 
-    // C. Gráfico de Categorías en Apache ECharts
-    if (chartController) {
-      let breakdown = {};
-      if (AnalyticsModule.getCategoryBreakdown) {
-        breakdown = AnalyticsModule.getCategoryBreakdown(items);
-      }
-      chartController.render(breakdown, items, isDark);
-    }
-
-    // D. Sugerencias de Autocompletado
+  // 8.2 Vista de Lista de Compras
+  function renderListView(state, items) {
     const distinctLocs = [...new Set(items.map(it => (it.location || '').trim()).filter(Boolean))].sort();
     const distinctCats = [...new Set(items.map(it => (it.category || '').trim()).filter(Boolean))].sort();
 
@@ -620,11 +511,65 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.categorySuggestions.innerHTML = distinctCats.map(c => `<option value="${c}">`).join('');
     }
 
-    // E. Lista de Productos
     renderShoppingList(state);
+    listDirty = false;
+  }
 
-    // F. Actualización del Módulo de Rutas y Mapa
-    updateMapRouteUI();
+  // 8.3 Vista de Estadísticas Financieras
+  function renderStatsView(state, items, isDark) {
+    if (chartController) {
+      let breakdown = {};
+      if (AnalyticsModule.getCategoryBreakdown) {
+        breakdown = AnalyticsModule.getCategoryBreakdown(items);
+      }
+      chartController.render(breakdown, items, isDark);
+    }
+    statsDirty = false;
+  }
+
+  // 8.4 Vista de Ruta y Mapa
+  function renderMapView() {
+    if (typeof updateMapRouteUI === 'function') {
+      updateMapRouteUI();
+    }
+    mapDirty = false;
+  }
+
+  // 8.5 Orquestador de Renderizado Selectivo por Vista Activa
+  function renderUI(options = {}) {
+    const forceAll = Boolean(options && (options.forceAll || options === true) || (typeof window !== 'undefined' && window.__FORCE_FULL_RENDER__));
+    const state = (store && typeof store.getState === 'function') ? store.getState() : {};
+    const items = state.items || [];
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // 1. Métricas universales: actualización ligera incondicional
+    renderUniversalMetrics(state, items);
+
+    // 2. Renderizado total forzado (para tests o sincronizaciones completas)
+    if (forceAll) {
+      renderListView(state, items);
+      renderStatsView(state, items, isDark);
+      renderMapView();
+      listDirty = false;
+      statsDirty = false;
+      mapDirty = false;
+      return;
+    }
+
+    // 3. Renderizado selectivo granular por pestaña activa
+    if (currentView === 'list') {
+      renderListView(state, items);
+      statsDirty = true;
+      mapDirty = true;
+    } else if (currentView === 'stats') {
+      renderStatsView(state, items, isDark);
+      listDirty = true;
+      mapDirty = true;
+    } else if (currentView === 'map') {
+      renderMapView();
+      listDirty = true;
+      statsDirty = true;
+    }
   }
 
   function renderShoppingList(state) {
@@ -662,7 +607,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <p style="font-size: 0.85rem; margin-top: 4px;">Añade productos usando el formulario superior para comenzar.</p>
         </div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons(elements.shoppingListContainer ? { root: elements.shoppingListContainer } : undefined);
       return;
     }
 
@@ -693,22 +638,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <span class="group-count-badge">${itemsInGroup.length} ${itemsInGroup.length === 1 ? 'ítem' : 'ítems'}</span>
       `;
 
-      const toggleCollapse = () => {
-        if (typeof store.toggleGroupCollapse === 'function') {
-          store.toggleGroupCollapse(loc);
-        } else {
-          groupDiv.classList.toggle('collapsed');
-        }
-      };
-
-      header.addEventListener('click', toggleCollapse);
-      header.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          toggleCollapse();
-        }
-      });
-
       const listDiv = document.createElement('div');
       listDiv.className = 'shopping-list';
 
@@ -721,7 +650,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.shoppingListContainer.appendChild(groupDiv);
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons(elements.shoppingListContainer ? { root: elements.shoppingListContainer } : undefined);
   }
 
   function createItemCard(item) {
@@ -742,7 +671,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     card.innerHTML = `
       ${avatarMarkup}
-      <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} aria-label="Marcar ${safeName} como comprado">
+      <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} data-id="${item.id}" aria-label="Marcar ${safeName} como comprado">
       <div class="item-info">
         <span class="item-name" title="${safeName}">${safeName}</span>
         <div class="item-sub">
@@ -753,86 +682,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
       <div class="item-price">$${totalItemPrice.toFixed(2)}</div>
       <div class="item-actions">
-        <button type="button" class="btn-icon edit-btn" aria-label="Editar producto ${safeName}" title="Editar">
+        <button type="button" class="btn-icon edit-btn" data-id="${item.id}" aria-label="Editar producto ${safeName}" title="Editar">
           <i data-lucide="edit-3"></i>
         </button>
-        <button type="button" class="btn-icon btn-danger del-btn" aria-label="Eliminar producto ${safeName}" title="Eliminar">
+        <button type="button" class="btn-icon btn-danger del-btn" data-id="${item.id}" aria-label="Eliminar producto ${safeName}" title="Eliminar">
           <i data-lucide="trash-2"></i>
         </button>
       </div>
     `;
-
-    // Marcar/Desmarcar como comprado
-    const chk = card.querySelector('.item-checkbox');
-    chk.addEventListener('change', async () => {
-      let nextCompleted = !item.completed;
-      if (typeof store.toggleCompleted === 'function') {
-        const toggled = store.toggleCompleted(item.id);
-        if (toggled) nextCompleted = toggled.completed;
-      } else {
-        item.completed = nextCompleted;
-        renderUI();
-      }
-
-      if (isFirebaseActive && itemsCollection) {
-        try {
-          await itemsCollection.doc(item.id).set({ 
-            completed: nextCompleted,
-            updatedAt: Date.now()
-          }, { merge: true });
-        } catch (e) {
-          console.warn('[App] Error al actualizar estado en Firebase:', e);
-        }
-      }
-    });
-
-    // Iniciar edición
-    const editBtn = card.querySelector('.edit-btn');
-    editBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startEditingItem(item);
-    });
-
-    // Eliminar con Toast de Deshacer
-    const delBtn = card.querySelector('.del-btn');
-    delBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const removedSnapshot = { ...item };
-
-      if (typeof store.deleteItem === 'function') {
-        store.deleteItem(item.id);
-      } else {
-        store.state.items = (store.state.items || []).filter(i => i.id !== item.id);
-        renderUI();
-      }
-
-      if (isFirebaseActive && itemsCollection) {
-        try {
-          await itemsCollection.doc(item.id).delete();
-        } catch (err) {
-          console.warn('[App] Error al eliminar de Firebase:', err);
-        }
-      }
-
-      if (FeedbackModule.showUndoToast) {
-        FeedbackModule.showUndoToast(`"${removedSnapshot.name}" eliminado`, async () => {
-          if (typeof store.undoLastAction === 'function') {
-            store.undoLastAction();
-          } else {
-            store.state.items.push(removedSnapshot);
-            renderUI();
-          }
-
-          if (isFirebaseActive && itemsCollection) {
-            try {
-              await itemsCollection.doc(removedSnapshot.id).set(removedSnapshot);
-            } catch (err) {
-              console.warn('[App] Error al restaurar en Firebase:', err);
-            }
-          }
-        });
-      }
-    });
 
     return card;
   }
@@ -853,7 +710,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (elements.addItemButton) {
       elements.addItemButton.innerHTML = `<i data-lucide="check-circle"></i><span>Guardar</span>`;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons(elements.addItemButton ? { root: elements.addItemButton } : undefined);
     }
 
     elements.itemInput.focus();
@@ -868,7 +725,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearInputs();
     if (elements.addItemButton) {
       elements.addItemButton.innerHTML = `<i data-lucide="plus-circle"></i><span>Añadir</span>`;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons(elements.addItemButton ? { root: elements.addItemButton } : undefined);
     }
   }
 
@@ -927,7 +784,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             store.updateItem(editId, updateData);
           }
           cancelEditing();
-          renderUI();
           await itemsCollection.doc(editId).set(updateData, { merge: true });
           if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado en Firebase', 'success');
         } else {
@@ -950,7 +806,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           clearInputs();
           if (elements.itemInput) elements.itemInput.focus();
-          renderUI();
 
           const firestorePayload = {
             ...newItemData,
@@ -980,7 +835,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearInputs();
         if (elements.itemInput) elements.itemInput.focus();
       }
-      renderUI();
     }
   }
 
@@ -1004,35 +858,175 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // --- 12. Filtros y Búsqueda ---
+  // --- 11.1 Delegación de Eventos en Lista de Compras (R3) ---
+  if (elements.shoppingListContainer) {
+    // 1. Delegación de cambio (checkbox comprado)
+    elements.shoppingListContainer.addEventListener('change', async (e) => {
+      const chk = e.target.closest('.item-checkbox');
+      if (!chk) return;
+      const card = chk.closest('.shopping-item');
+      const itemId = (card && card.dataset.id) || chk.dataset.id;
+      if (!itemId) return;
+
+      let nextCompleted = chk.checked;
+      if (typeof store.toggleCompleted === 'function') {
+        const toggled = store.toggleCompleted(itemId);
+        if (toggled) nextCompleted = toggled.completed;
+      }
+
+      if (isFirebaseActive && itemsCollection) {
+        try {
+          await itemsCollection.doc(itemId).set({
+            completed: nextCompleted,
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (err) {
+          console.warn('[App] Error al actualizar estado en Firebase:', err);
+        }
+      }
+    });
+
+    // 2. Delegación de clics (editar, eliminar, colapsar grupo)
+    elements.shoppingListContainer.addEventListener('click', async (e) => {
+      // A. Botón Editar
+      const editBtn = e.target.closest('.edit-btn');
+      if (editBtn) {
+        e.stopPropagation();
+        const card = editBtn.closest('.shopping-item');
+        const itemId = card ? card.dataset.id : editBtn.dataset.id;
+        const item = store.getItemById ? store.getItemById(itemId) : (store.getItems && store.getItems().find(i => i.id === itemId));
+        if (item) startEditingItem(item);
+        return;
+      }
+
+      // B. Botón Eliminar
+      const delBtn = e.target.closest('.del-btn');
+      if (delBtn) {
+        e.stopPropagation();
+        const card = delBtn.closest('.shopping-item');
+        const itemId = card ? card.dataset.id : delBtn.dataset.id;
+        const item = store.getItemById ? store.getItemById(itemId) : (store.getItems && store.getItems().find(i => i.id === itemId));
+        if (!item) return;
+
+        const removedSnapshot = { ...item };
+        if (typeof store.deleteItem === 'function') {
+          store.deleteItem(itemId);
+        }
+
+        if (isFirebaseActive && itemsCollection) {
+          try {
+            await itemsCollection.doc(itemId).delete();
+          } catch (err) {
+            console.warn('[App] Error al eliminar de Firebase:', err);
+          }
+        }
+
+        if (FeedbackModule.showUndoToast) {
+          FeedbackModule.showUndoToast(`"${removedSnapshot.name}" eliminado`, async () => {
+            if (typeof store.undoLastAction === 'function') {
+              store.undoLastAction();
+            } else if (typeof store.addItem === 'function') {
+              store.addItem(removedSnapshot);
+            }
+
+            if (isFirebaseActive && itemsCollection) {
+              try {
+                await itemsCollection.doc(removedSnapshot.id).set(removedSnapshot);
+              } catch (err) {
+                console.warn('[App] Error al restaurar en Firebase:', err);
+              }
+            }
+          });
+        }
+        return;
+      }
+
+      // C. Encabezado de Grupo (Colapsar / Expandir)
+      const header = e.target.closest('.group-header');
+      if (header) {
+        const groupDiv = header.closest('.location-group');
+        const loc = groupDiv ? groupDiv.dataset.location : null;
+        if (loc && typeof store.toggleGroupCollapse === 'function') {
+          store.toggleGroupCollapse(loc);
+        }
+        return;
+      }
+    });
+
+    // 3. Accesibilidad de teclado para grupos
+    elements.shoppingListContainer.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const header = e.target.closest('.group-header');
+        if (header) {
+          e.preventDefault();
+          const groupDiv = header.closest('.location-group');
+          const loc = groupDiv ? groupDiv.dataset.location : null;
+          if (loc && typeof store.toggleGroupCollapse === 'function') {
+            store.toggleGroupCollapse(loc);
+          }
+        }
+      }
+    });
+  }
+
+  // --- 12. Filtros y Búsqueda (R2) ---
   if (elements.searchInput) {
-    const onSearchChange = (e) => {
-      const val = e.target.value || '';
+    let searchDebounceTimer = null;
+    const SEARCH_DEBOUNCE_MS = 150;
+
+    const applySearchFilter = (val) => {
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+      }
       store.setFilter({ search: val, searchQuery: val });
-      renderUI();
     };
-    elements.searchInput.addEventListener('input', onSearchChange);
-    elements.searchInput.addEventListener('search', onSearchChange);
+
+    elements.searchInput.addEventListener('input', (e) => {
+      const val = e.target.value || '';
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+      }
+      if (!val.trim()) {
+        applySearchFilter('');
+        return;
+      }
+      searchDebounceTimer = setTimeout(() => {
+        applySearchFilter(val);
+      }, SEARCH_DEBOUNCE_MS);
+    });
+
+    elements.searchInput.addEventListener('search', (e) => {
+      applySearchFilter(e.target.value || '');
+    });
+
+    elements.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        elements.searchInput.value = '';
+        applySearchFilter('');
+      } else if (e.key === 'Enter') {
+        applySearchFilter(elements.searchInput.value || '');
+      }
+    });
   }
 
   if (elements.hideCompletedSwitch) {
     elements.hideCompletedSwitch.addEventListener('change', (e) => {
       store.setFilter({ hideCompleted: e.target.checked });
-      renderUI();
     });
   }
 
-  // --- 13. Presupuesto Reactivo ---
+  // --- 13. Presupuesto Reactivo (R2) ---
   if (elements.budgetInput) {
     elements.budgetInput.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value) || 0;
-      store.setBudget(val);
       localStorage.setItem('budget', String(val));
-      renderUI();
+      store.setBudget(val);
     });
   }
 
-  // --- 14. Limpiar Comprados ---
+  // --- 14. Limpiar Comprados (R2) ---
   if (elements.resetListButton) {
     elements.resetListButton.addEventListener('click', async () => {
       const state = store.getState();
@@ -1049,7 +1043,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (typeof store.clearCompleted === 'function') {
         store.clearCompleted();
       }
-      renderUI();
 
       if (isFirebaseActive && db && itemsCollection) {
         try {
@@ -1077,7 +1070,6 @@ document.addEventListener('DOMContentLoaded', async () => {
               else store.state.items.push(it);
             });
           }
-          renderUI();
 
           if (isFirebaseActive && db && itemsCollection) {
             try {
@@ -1178,12 +1170,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (typeof store.hydrate === 'function') store.hydrate(result.items);
           else store.state.items = result.items;
         } else {
-          result.items.forEach(it => {
-            if (typeof store.addItem === 'function') store.addItem(it);
-            else store.state.items.push(it);
-          });
+          // Modo append: hidratar lote unificado para emitir un solo evento reactivo
+          if (typeof store.hydrate === 'function') {
+            const currentItems = (typeof store.getItems === 'function') ? store.getItems() : (store.state.items || []);
+            store.hydrate([...result.items, ...currentItems]);
+          } else {
+            result.items.forEach(it => {
+              if (typeof store.addItem === 'function') store.addItem(it);
+              else store.state.items.push(it);
+            });
+          }
         }
-        renderUI();
 
         if (isFirebaseActive && db && itemsCollection) {
           try {
@@ -1241,9 +1238,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- 18. Módulo de Rutas y Selector de Vistas WAI-ARIA ---
 
-  // A. Actualización de Métricas y Renderizado de Ruta en el Mapa
   // A. Actualización de Métricas, Itinerario y Renderizado de Ruta en el Mapa
-  let sortableInstance = null;
+  let stopsSortableInstance = null;
 
   function renderRouteStopsList(route) {
     if (!elements.routeStopsList) return;
@@ -1378,7 +1374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.routeStopsList.appendChild(stopDiv);
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons(elements.routeStopsList ? { root: elements.routeStopsList } : undefined);
 
     // Inicializar SortableJS o drag & drop nativo para paradas activas
     initStopsDragAndDrop(elements.routeStopsList, activeStopsList);
@@ -1434,10 +1430,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function initStopsDragAndDrop(container, stops) {
     if (window.Sortable && typeof window.Sortable.create === 'function') {
-      if (sortableInstance && typeof sortableInstance.destroy === 'function') {
-        try { sortableInstance.destroy(); } catch (_) {}
-      }
-      sortableInstance = window.Sortable.create(container, {
+      if (stopsSortableInstance) return;
+      stopsSortableInstance = window.Sortable.create(container, {
         animation: 180,
         handle: '.stop-drag-handle',
         filter: '.route-origin-item, .is-excluded',
@@ -1794,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const origHtml = elements.btnSearchStoreAddress.innerHTML;
       elements.btnSearchStoreAddress.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Buscando...</span>`;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons(elements.btnSearchStoreAddress ? { root: elements.btnSearchStoreAddress } : undefined);
 
       try {
         const resolved = await MapRouteService.geocodeAddress(addressText, { immediate: true });
@@ -1819,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('[App] Error al geocodificar dirección de tienda:', err);
       } finally {
         elements.btnSearchStoreAddress.innerHTML = origHtml;
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons(elements.btnSearchStoreAddress ? { root: elements.btnSearchStoreAddress } : undefined);
       }
     };
 
@@ -1919,7 +1913,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (typeof window.MapRouteService === 'undefined' || !MapRouteService.getCurrentLocation) return;
       const originalHtml = elements.btnGpsOrigin.innerHTML;
       elements.btnGpsOrigin.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Detectando...</span>`;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons(elements.btnGpsOrigin ? { root: elements.btnGpsOrigin } : undefined);
 
       try {
         const pos = await MapRouteService.getCurrentLocation({ timeout: 10000 });
@@ -1937,7 +1931,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } finally {
         elements.btnGpsOrigin.innerHTML = originalHtml;
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons(elements.btnGpsOrigin ? { root: elements.btnGpsOrigin } : undefined);
       }
     });
   }
@@ -1956,7 +1950,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const originalHtml = elements.btnSetManualOrigin.innerHTML;
       elements.btnSetManualOrigin.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Fijando...</span>`;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons(elements.btnSetManualOrigin ? { root: elements.btnSetManualOrigin } : undefined);
 
       try {
         const resolved = await MapRouteService.geocodeAddress(text, { immediate: true });
@@ -1980,7 +1974,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('[App] Error al geocodificar origen:', e);
       } finally {
         elements.btnSetManualOrigin.innerHTML = originalHtml;
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons(elements.btnSetManualOrigin ? { root: elements.btnSetManualOrigin } : undefined);
       }
     };
 
@@ -2061,4 +2055,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Primer renderizado
   renderUI();
+  if (window.lucide) window.lucide.createIcons();
 });

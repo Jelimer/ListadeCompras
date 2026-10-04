@@ -299,7 +299,7 @@ class DOMElement extends DOMNode {
   }
 
   dispatchEvent(event) {
-    event.target = this;
+    if (!event.target) event.target = this;
     event.currentTarget = this;
     const listeners = this.eventListeners.get(event.type) || [];
     for (const l of listeners) {
@@ -441,7 +441,7 @@ class DOMDocument extends DOMNode {
   }
 
   dispatchEvent(event) {
-    event.target = this;
+    if (!event.target) event.target = this;
     event.currentTarget = this;
     const listeners = this.eventListeners.get(event.type) || [];
     for (const l of listeners) l.call(this, event);
