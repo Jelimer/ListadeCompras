@@ -638,6 +638,10 @@
       return updated;
     }
 
+    toggleItem(id) {
+      return this.toggleCompleted(id);
+    }
+
     clearCompleted() {
       const completed = this.state.items.filter(i => i.completed);
       if (completed.length === 0) return [];

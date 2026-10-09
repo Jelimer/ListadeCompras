@@ -54,9 +54,23 @@
       }
     }
 
+    init(echartsLib) {
+      if (this.instance && !this.instance.disposed) return this.instance;
+      if (echartsLib) {
+        this.echartsLibrary = echartsLib;
+      } else if (!this.echartsLibrary) {
+        this.echartsLibrary = (typeof window !== 'undefined' ? window.echarts : null) || (typeof global !== 'undefined' ? global.echarts : null);
+      }
+      this._init();
+      return this.instance;
+    }
+
     handleResizeDebounced(delay = 100) {
       if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
       this._resizeTimeout = setTimeout(() => {
+        if (!this.instance || this.instance.disposed) {
+          this.init();
+        }
         if (this.instance && !this.instance.disposed) {
           this.instance.resize();
         }
@@ -64,12 +78,18 @@
     }
 
     resize() {
+      if (!this.instance || this.instance.disposed) {
+        this.init();
+      }
       if (this.instance && !this.instance.disposed) {
         this.instance.resize();
       }
     }
 
     render(breakdown = {}, allPendingItems = [], isDark = false) {
+      if (!this.instance || this.instance.disposed) {
+        this.init();
+      }
       if (!this.instance || this.instance.disposed) return;
 
       const locations = Object.keys(breakdown).sort();

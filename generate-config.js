@@ -44,3 +44,12 @@ if (typeof module !== 'undefined' && module.exports) {
 fs.writeFileSync('firebase-config.js', configFileContent);
 
 console.log('firebase-config.js generated successfully.');
+
+// Generación de iconos PWA estáticos en fase de build
+try {
+    const { writeAndVerifyIcon } = require('./scripts/generate_pwa_icons.js');
+    writeAndVerifyIcon('icon-192.png', 192, 192);
+    writeAndVerifyIcon('icon-512.png', 512, 512);
+} catch (e) {
+    // Tolerante si no está presente
+}

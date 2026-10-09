@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lista de Compra | PRO</title>
 
+    <!-- Metadatos y Enlaces PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
     <!-- Anti-FOUC: Inicialización síncrona de tema antes de la primera pintura de pantalla -->
     <script>
         (function () {
@@ -40,14 +47,10 @@
     <link rel="dns-prefetch" href="https://www.gstatic.com">
 
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2.4.0">
+    <link rel="stylesheet" href="style.css?v=2.5.0">
 
-    <!-- Leaflet 1.9.4 CSS con fallback seguro -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-
-    <!-- Librerías de Visualización -->
+    <!-- Librerías de Iconografía -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 </head>
 <body>
     <!-- Enlace accesible de salto al contenido -->
@@ -57,10 +60,22 @@
         <!-- Encabezado Principal -->
         <header role="banner">
             <div class="brand">
-                <h1>Lista de Compra</h1>
+                <div class="brand-title-row">
+                    <h1>Lista de Compra</h1>
+                    <div id="networkStatusBadge" class="network-badge online" role="status" aria-live="polite">
+                        <span class="badge-dot"></span>
+                        <span class="badge-text">Online</span>
+                    </div>
+                </div>
                 <p class="brand-subtitle">Gestión avanzada de suministros</p>
             </div>
             <div class="header-actions">
+                <button id="shareButton" class="icon-button" type="button" aria-label="Compartir lista" title="Compartir lista por WhatsApp o copiar">
+                    <i data-lucide="share-2" aria-hidden="true"></i>
+                </button>
+                <button id="printButton" class="icon-button" type="button" aria-label="Imprimir lista" title="Imprimir o guardar en PDF">
+                    <i data-lucide="printer" aria-hidden="true"></i>
+                </button>
                 <button id="exportButton" class="icon-button" type="button" aria-label="Exportar lista" title="Exportar lista (JSON / CSV)">
                     <i data-lucide="download" aria-hidden="true"></i>
                 </button>
@@ -144,6 +159,14 @@
 
                     <div id="shoppingListContainer" class="shopping-list-container" role="region" aria-live="polite" aria-label="Lista de compras agrupada por ubicación">
                         <!-- Los grupos de productos se inyectan dinámicamente aquí -->
+                    </div>
+
+                    <!-- Resumen exclusivo para impresión / guardado en PDF (F14 & F15) -->
+                    <div id="printListSummary" class="print-list-summary" aria-hidden="true">
+                        <div class="print-summary-content">
+                            <span class="print-summary-title">Total Estimado de Compra:</span>
+                            <span id="printGrandTotalValue" class="print-summary-value">$0.00</span>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -395,9 +418,9 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <script src="firebase-config.js"></script>
 
-    <!-- Leaflet 1.9.4 JavaScript & Map Route Module -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="js/map-route.js?v=2.4.0"></script>
+    <!-- Cargador Dinámico Asíncrono de Librerías (Lazy Loading M2) -->
+    <script src="js/resource-loader.js?v=2.5.0"></script>
+    <script src="js/map-route.js?v=2.5.0"></script>
 
     <!-- Módulos Core UMD (Arquitectura Desacoplada M1-M4) -->
     <script src="js/storage.js"></script>
@@ -408,8 +431,9 @@
     <script src="js/chart.js"></script>
     <script src="js/export-import.js"></script>
     <script src="js/ui-feedback.js"></script>
+    <script src="js/share.js?v=2.5.0"></script>
 
     <!-- Script de Inicialización y Gestión de UI -->
-    <script src="script.js?v=2.4.0"></script>
+    <script src="script.js?v=2.5.0"></script>
 </body>
 </html>

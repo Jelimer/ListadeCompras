@@ -1,180 +1,85 @@
-# Project: Lista de Compra | PRO — Módulo de Mapas y Optimizador de Rutas
+# Project: Lista de Compra | PRO - PWA, Lazy Loading, Share/Print & Offline Resilience
 
-## Architecture Overview
-Arquitectura modular desacoplada en capas para aplicación web vanilla de alto rendimiento, 100% offline-first, accesible (WCAG AA/AAA) y adaptable a dispositivos móviles desde 360px hasta pantallas panorámicas.
-
-```
-                           ┌─────────────────────────────────────────┐
-                           │               index.html                │
-                           │  - Navigation Tabs (Lista/Stats/Ruta)   │
-                           │  - Leaflet Container & Route Controls   │
-                           └────────────────────┬────────────────────┘
-                                                │
-         ┌──────────────────────────────────────┼──────────────────────────────────────┐
-         │                                      │                                      │
-┌────────▼──────────────┐             ┌─────────▼───────────┐               ┌──────────▼──────────┐
-│       UI / DOM        │             │  Core State & Logic │               │  Persistence Layer  │
-│  - script.js (App)    │◄───────────►│  - state.js (Store) │◄─────────────►│  - storage.js       │
-│  - chart.js (ECharts) │             │  - validation.js    │               │    (LocalStorage +  │
-│  - ui-feedback.js     │             │  - analytics.js     │               │     Firestore sync) │
-│  - style.css          │             │  - export-import.js │               └─────────────────────┘
-└───────────────────────┘             └─────────┬───────────┘
-                                                │
-                                      ┌─────────▼───────────┐
-                                      │   Map & Route Core  │
-                                      │  - js/map-route.js  │
-                                      │    * Leaflet Ctrl   │
-                                      │    * Geocoding API  │
-                                      │    * TSP Optimizer  │
-                                      │    * Google Maps URL│
-                                      │    * Coords Cache   │
-                                      └─────────────────────┘
-```
-
-## Feature Inventory
-| # | Feature | Description | Milestone | Source | Status |
-|---|---------|-------------|-----------|--------|:------:|
-| F01 | LocalStorage Offline-First | Persistencia primaria local inmediata e independiente de Firebase | M1 | Preexistente | DONE |
-| F02 | Sincronización Opcional Firebase | Adaptador seguro con try/catch que no bloquea la app si no hay conexión | M1 | Preexistente | DONE |
-| F03 | Estado Centralizado y Eventos | Store centralizado de productos y filtros con patrón pub/sub limpio | M1 | Preexistente | DONE |
-| F04 | Validaciones Numéricas y Lógicas | Precios >= 0, cantidades > 0, sanitización contra XSS y categoría 'General' unificada | M1 | Preexistente | DONE |
-| F05 | Prevención de Inyección XSS | Sanitización y escape HTML en inputs de usuario (`escapeHtml`) | M1 | Preexistente | DONE |
-| F06 | Paleta de Tokens WCAG AA | Colores con contraste superior a 4.5:1 en modo claro y modo oscuro | M2 | Preexistente | DONE |
-| F07 | Modo Oscuro Persistente | Alternancia instantánea, persistencia en LocalStorage y detección de `prefers-color-scheme` | M2 | Preexistente | DONE |
-| F08 | Layout Mobile-First (desde 360px) | Eliminación de `minmax(340px, 1fr)`, cero scroll horizontal en 360px-480px | M2 | Preexistente | DONE |
-| F09 | Touch Targets Accesibles (44px) | Botones de edición/borrado y checkboxes con áreas táctiles mínimas de 44x44px | M2 | Preexistente | DONE |
-| F10 | Avatares Locales SVG / Lucide | Sustitución de LoremFlickr por avatares locales temáticos 100% offline | M2 | Preexistente | DONE |
-| F11 | Renderizado DOM Granular | Eliminación de `innerHTML = ''` destructivo, actualización quirúrgica por nodo | M3 | Preexistente | DONE |
-| F12 | Precisión Aritmética de Centavos | Cálculos monetarios en centavos enteros para evitar deriva de flotantes IEEE 754 | M3 | Preexistente | DONE |
-| F13 | Segregación de Métricas | Cálculo y actualización de Total Pendiente, Total Gastado y Presupuesto Real | M3 | Preexistente | DONE |
-| F14 | ECharts Adaptativo y Responsive | `confine: true` en tooltips, leyenda scroll, truncamiento elíptico en eje Y | M3 | Preexistente | DONE |
-| F15 | Sincronización Tema ECharts | Adaptación automática del gráfico según modo claro/oscuro con ResizeObserver debounced | M3 | Preexistente | DONE |
-| F16 | Estado Vacío en ECharts | Visualización amigable cuando no hay compras pendientes | M3 | Preexistente | DONE |
-| F17 | Exportación JSON y CSV | Descarga estructurada con esquema versionado y CSV RFC 4180 con BOM UTF-8 | M4 | Preexistente | DONE |
-| F18 | Importación JSON y CSV | Validación estricta de estructura con opción de sobrescribir o combinar | M4 | Preexistente | DONE |
-| F19 | Atajos de Teclado (Enter / Escape) | Adición rápida con Enter y retorno de foco; cancelación de edición con Esc | M4 | Preexistente | DONE |
-| F20 | Diálogos Amigables y Undo Toast | Reemplazo de `confirm()` por SweetAlert2 y toast con botón Deshacer (6-8 seg) | M4 | Preexistente | DONE |
-| F21 | Leaflet 1.9.4 & OSM/CartoDB Tiles | Vista interactiva con CartoDB Positron (claro) y Dark Matter (oscuro) | M-MAP-2 | Survey (Exp 2) | DONE |
-| F22 | Marcadores y Popups de Comercio | Pines personalizados con lista de ítems pendientes, cantidades y total estimado | M-MAP-1 | Survey (Exp 2) | DONE |
-| F23 | Geocodificación Defensiva | Nominatim OSM + Photon con debounce de 450ms, AbortController y fallback seguro | M-MAP-1 | Survey (Exp 2) | DONE |
-| F24 | Caché Local de Coordenadas | Persistencia en `shopping_store_coords` para 0 peticiones de red duplicadas | M-MAP-1 | Survey (Exp 1 & 3) | DONE |
-| F25 | Origen y Geolocalización | `navigator.geolocation` con permisos/timeout + ingreso manual de dirección | M-MAP-1 | Survey (Exp 2 & 3) | DONE |
-| F26 | Estimación Haversine y Tiempo | Distancia esférica corregida (sinuosidad 1.25) y tiempo estimado a 30 km/h | M-MAP-1 | Survey (Exp 2) | DONE |
-| F27 | Optimizador de Rutas TSP | Algoritmo Nearest Neighbor desde origen visitando tiendas con compras pendientes | M-MAP-1 | Survey (Exp 2) | DONE |
-| F28 | URL Universal Google Maps | Generador de enlace de navegación universal con origen, destino y waypoints | M-MAP-1 | Survey (Exp 2) | DONE |
-| F29 | Evaluación de Persistencia | Documento formal comparando Firestore vs Dexie, Supabase y Cloudflare D1/KV | M-MAP-1 | Survey (Exp 3) | DONE |
-| F30 | Selector Ágil de Vistas (Tabs) | Pestañas accesibles (Lista / Estadísticas / Ruta en Mapa) en móvil y desktop | M-MAP-2 | Survey (Exp 3) | DONE |
-| F31 | Ergonomía Mobile-First (360px+) | Bottom Bar en zona del pulgar, mapa `clamp(350px, 45vh, 450px)`, scroll trap fix | M-MAP-2 | Survey (Exp 3) | DONE |
-| F32 | Accesibilidad WCAG AA/AAA | Contraste mínimo 4.5:1 y 7:1 en popups, controles del mapa y pestañas | M-MAP-2 | Survey (Exp 3) | DONE |
-| F33 | Suite de Pruebas E2E / Unitarias | Mocks de Leaflet y Geo en mock_dom.js, 60 tests nuevos y 388/388 aprobados (0 fallos) | E2E | Survey (Exp 1 & 3) | DONE |
-| F34 | Despliegue en Git (`master`) | Commit 44193da y push a origin/master para compilación/despliegue en Vercel | M-MAP-3 | Survey (Exp 3) | DONE |
-
-## Milestones
-
-| # | Name | Scope | Dependencies | Status | Key Outputs |
-|---|------|-------|-------------|--------|-------------|
-| E2E | E2E Testing Track: Mocks y Suite de Pruebas | Extensión de `tests/mock_dom.js` (Leaflet, Geolocation), pruebas de geocodificación, ruteo, TSP, persistencia y UI | none | DONE | 60 tests en `tests/map_routing.test.js`, `TEST_INFRA.md`, `TEST_READY.md` (388 tests totales) |
-| M-MAP-1 | Persistencia y Módulo Core Map & Route | Documento de persistencia R3, módulo `js/map-route.js` con geocodificación, TSP, Haversine, Google Maps URL y caché local | none | DONE | `DOCS_PERSISTENCE_EVALUATION.md`, `js/map-route.js` |
-| M-MAP-2 | Integración UI/UX, Selector de Vistas y Mapa | Inyección de Leaflet en `index.html`, maquetación de tabs accesibles, panel de ruta, controles mobile-first y estilos en `style.css` | M-MAP-1 | DONE | `index.html`, `style.css`, `script.js` |
-| M-MAP-3 | Verificación Final, 100% Tests y Despliegue Git | Ejecución y aprobación de suite ampliada (388 pruebas), 2 Reviewers, 2 Challengers, Auditoría Forense CLEAN y push a `master` | E2E, M-MAP-1, M-MAP-2 | DONE | Gate PASS, Commit `44193da` en `master` |
-
-## Interface Contracts
-
-### Store (js/state.js) ↔ Storage (js/storage.js)
-```typescript
-interface ShoppingItem {
-  id: string;
-  name: string;
-  quantity: number;      // > 0
-  unitPrice: number;     // >= 0
-  category: string;      // default: 'General'
-  location: string;      // default: 'General'
-  completed: boolean;    // default: false
-  timestamp: number;     // Date.now()
-}
-
-interface StoreCoordinate {
-  lat: number;
-  lng: number;
-  displayName?: string;
-  updatedAt: number;
-}
-
-interface CoordinateCache {
-  [storeNameLower: string]: StoreCoordinate;
-}
-
-interface RouteOrigin {
-  type: 'gps' | 'manual' | 'default';
-  lat: number;
-  lng: number;
-  address?: string;
-}
-```
-
-### Map & Route Core (js/map-route.js)
-```typescript
-interface StoreRouteStop {
-  storeName: string;
-  lat: number;
-  lng: number;
-  pendingItems: ShoppingItem[];
-  itemCount: number;
-  estimatedTotal: number;
-}
-
-interface RouteCalculationResult {
-  origin: RouteOrigin;
-  orderedStops: StoreRouteStop[];
-  totalDistanceKm: number;
-  estimatedDurationMinutes: number;
-  googleMapsUrl: string;
-}
-
-interface MapRouteService {
-  initMap(containerId: string, options?: { isDark?: boolean }): any;
-  setTheme(isDark: boolean): void;
-  geocodeAddress(address: string): Promise<StoreCoordinate | null>;
-  getStoredCoordinates(): CoordinateCache;
-  saveStoreCoordinate(storeName: string, coord: StoreCoordinate): void;
-  getOrigin(): RouteOrigin;
-  setOrigin(origin: RouteOrigin): void;
-  calculateOptimalRoute(items: ShoppingItem[], origin?: RouteOrigin): RouteCalculationResult;
-  generateGoogleMapsUrl(origin: RouteOrigin, stops: StoreRouteStop[]): string;
-  renderRouteOnMap(route: RouteCalculationResult): void;
-  destroy(): void;
-}
-```
+## Architecture
+- **Frontend Core**: Vanilla JavaScript (ES6+), HTML5 semántico, CSS3 modular con variables y diseño responsivo.
+- **PWA & Offline Shell**: `manifest.json` para metadatos de instalación, `icons/` para iconos temáticos, y Service Worker (`sw.js`) con estrategia Stale-While-Revalidate para activos locales y Cache-First / Runtime Caching para CDNs.
+- **On-Demand Resource Loader**: Módulo `js/resource-loader.js` (UMD) para cargar dinámicamente Apache ECharts y Leaflet bajo demanda con deduplicación por singleton de promesas y soporte SRI.
+- **Sharing & Print Subsystem**: Módulo `js/share.js` (UMD) con algoritmo de formato por comercios, API cascada (`navigator.share` -> WhatsApp Web -> Portapapeles -> Toast), y reglas de medios `@media print` en `style.css`.
+- **Testing Architecture**: Suite basada en `node:assert` puro en Node.js con emulación DOM en `tests/mock_dom.js`, ampliada con `tests/pwa_share_lazy.test.js`.
 
 ## Code Layout
 ```
-ListadeCompras-Git/
-├── index.html                   # HTML semántico con Navigation Tabs, Leaflet CDN y controles de ruta
-├── style.css                    # Tokens CSS, bottom navigation, mobile-first (360px+), temas WCAG AAA
-├── DOCS_PERSISTENCE_EVALUATION.md # Informe técnico R3 (Firestore vs Dexie vs Supabase vs D1)
+/
+├── index.html                  # Shell principal de la aplicación, metadatos PWA y enlaces lazy
+├── style.css                   # Estilos visuales, badges de conectividad y reglas @media print
+├── script.js                   # Controlador de ciclo de vida UI, navegación y conmutación de vistas
+├── manifest.json               # Manifiesto de aplicación web progresiva (PWA)
+├── sw.js                       # Service Worker con caché offline (SWR y Cache-First)
+├── icons/                      # Iconos vectoriales y mapas de bits para PWA
+│   ├── icon.svg
+│   ├── icon-192.png
+│   └── icon-512.png
 ├── js/
-│   ├── state.js                 # Centralized reactive Store (Pub/Sub)
-│   ├── storage.js               # Local-first persistence (LocalStorage + Firebase sync)
-│   ├── validation.js            # Input validation & sanitization
-│   ├── analytics.js             # Financial & category calculations
-│   ├── chart.js                 # ECharts controller
-│   ├── map-route.js             # Core de mapas, geocodificación, TSP y navegación Google Maps
-│   ├── export-import.js         # JSON v1.0 & CSV export/import
-│   ├── ui-feedback.js           # SweetAlert2 & Toast notifications
-│   └── script.js                # App bootstrap, view switching, event delegation & map wiring
+│   ├── state.js                # Gestión reactiva de estado y persistencia
+│   ├── storage.js              # Capa de almacenamiento offline-first y sincronización
+│   ├── chart.js                # Controlador de visualizaciones financieras con ECharts
+│   ├── map-route.js            # Algoritmos de ruteo TSP y controlador de mapas Leaflet
+│   ├── resource-loader.js      # Cargador dinámico asíncrono para librerías pesadas
+│   └── share.js                # Formateador de compras y orquestador de compartir
 ├── tests/
-│   ├── e2e_runner.js            # Automated test runner (242 tests)
-│   ├── m1_unit.test.js          # Unit tests (86 tests)
-│   ├── map_routing.test.js      # Pruebas del módulo de mapa y rutas (60 tests)
-│   ├── mock_dom.js              # Mock DOM en memoria (Leaflet, Geolocation, Fetch)
-│   ├── spec_helper.js           # Oráculos matemáticos, Haversine y helpers de aserción
-│   ├── tier1_features.test.js   # Tier 1: Cobertura por característica (F01-F32)
-│   ├── tier2_boundaries.test.js # Tier 2: Casos límite y esquinas
-│   ├── tier3_pairwise.test.js   # Tier 3: Interacciones cruzadas
-│   ├── tier4_scenarios.test.js  # Tier 4: Escenarios de usuario reales
-│   ├── adversarial_map_stress.test.js   # Arnés adversarial (25 tests)
-│   └── adversarial_challenger2.test.js  # Arnés adversarial reactividad (12 tests)
-├── TEST_INFRA.md                # Metodología y catálogo de pruebas
-├── TEST_READY.md                # Señal de preparación de suite (388 tests pasando al 100%)
-└── PROJECT.md                   # Especificación arquitectónica global
+│   ├── mock_dom.js             # Entorno simulado de navegador para Node.js
+│   ├── e2e_runner.js           # Ejecutor principal de pruebas
+│   ├── pwa_share_lazy.test.js  # Nueva suite de pruebas para PWA, Lazy Loading y Share
+│   └── ...                     # Suites preexistentes (446 pruebas)
+└── vercel.json                 # Configuración de despliegue en Vercel
 ```
+
+## Feature Inventory
+Every feature from the Survey phase appears here with its assigned milestone:
+| # | Feature | Description | Milestone | Source |
+|---|---------|-------------|-----------|--------|
+| F01 | Web Manifest | `manifest.json` con metadatos PWA (name, short_name, theme_color, background_color, display standalone, start_url) | M1 | survey_explorer_2 |
+| F02 | Iconos PWA | Iconos temáticos vectoriales y PNG (`icon.svg`, `icon-192.png`, `icon-512.png`) | M1 | survey_explorer_2 |
+| F03 | Enlace PWA en HTML | Enlace `<link rel="manifest">` y `<meta name="theme-color">` en `index.html` | M1 | survey_explorer_2 |
+| F04 | Service Worker Cache | `sw.js` con estrategia Stale-While-Revalidate para activos locales y Cache-First para CDNs externos | M1 | survey_explorer_2 |
+| F05 | Registro Seguro SW | Registro en `script.js` con guardas defensivas para evitar excepciones en Node.js y navegadores antiguos | M1 | survey_explorer_2 |
+| F06 | Indicador Conectividad | Detección online/offline en tiempo real y componente visual `#networkStatusBadge` (WCAG AA) | M1 | survey_explorer_2 |
+| F07 | Desacoplamiento CDN | Retiro de etiquetas bloqueantes `<script>` y `<link>` de ECharts y Leaflet en `index.html` manteniendo `preconnect` | M2 | survey_explorer_1 |
+| F08 | Resource Loader | Módulo UMD `js/resource-loader.js` con promesas, singleton y SRI para cargar scripts y CSS | M2 | survey_explorer_1 |
+| F09 | Lazy Loading ECharts | Carga bajo demanda de ECharts al acceder a "Estadísticas Financieras" con indicador visual de carga | M2 | survey_explorer_1 |
+| F10 | Lazy Loading Leaflet | Carga bajo demanda de Leaflet al acceder a "Ruta en Mapa" o "Seleccionar en mapa" | M2 | survey_explorer_1 |
+| F11 | Compatibilidad Tests Node | Inicialización inmediata si `window.echarts` o `window.L` ya están presentes en memoria | M2 | survey_explorer_1 |
+| F12 | Formateador de Compras | Módulo `js/share.js` para texto formateado por tiendas con cantidades, precios y subtotales | M3 | survey_spec_miner_3 |
+| F13 | Botón Compartir en Cascada | Botón `#shareButton` con `navigator.share`, fallback a WhatsApp web, portapapeles y toast | M3 | survey_spec_miner_3 |
+| F14 | Botón Imprimir | Botón `#printButton` en cabecera para disparar `window.print()` | M3 | survey_spec_miner_3 |
+| F15 | Reglas `@media print` | Ocultar botones/interacciones, forzar blanco/negro puro, desplegar tiendas y evitar cortes de página | M3 | survey_spec_miner_3 |
+| F16 | Suite de Pruebas PWA/Lazy/Share | `tests/pwa_share_lazy.test.js` con aserciones formales para todas las nuevas capacidades | M4 | survey_spec_miner_3 |
+| F17 | Enlace en package.json | Incorporar la nueva suite al comando `npm test` | M4 | survey_spec_miner_3 |
+| F18 | Mantenimiento Cero Regresiones | 100% de éxito en las 446 pruebas existentes + nuevas pruebas (>460 pruebas aprobadas) | M4 | survey_spec_miner_3 |
+| F19 | Despliegue Git en Master | Commit estructurado y `git push origin master` para despliegue automático en Vercel | M4 | parent_orchestrator |
+
+## Milestones
+| # | Name | Scope | Dependencies | Status |
+|---|------|-------|-------------|--------|
+| M1 | PWA & Service Worker Offline Resilience | F01, F02, F03, F04, F05, F06 | none | DONE |
+| M2 | Lazy Loading ECharts & Leaflet | F07, F08, F09, F10, F11 | M1 | DONE |
+| M3 | WhatsApp Share & Clean Print/PDF CSS | F12, F13, F14, F15 | M2 | DONE |
+| M4 | Test Suite Expansion, Zero Regressions & Git Deploy | F16, F17, F18, F19 | M3 | DONE |
+
+## Interface Contracts
+### PWA / Connectivity Contract
+- Elemento DOM: `<div id="networkStatusBadge" class="network-badge online" role="status" aria-live="polite">`
+- Eventos escuchados: `window.addEventListener('online', ...)`, `window.addEventListener('offline', ...)`
+- Registro SW: `navigator.serviceWorker.register('/sw.js', { scope: '/' })` dentro de guarda `if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.register === 'function')`
+
+### ResourceLoader Contract (`js/resource-loader.js`)
+- `ResourceLoader.loadScript(url, options = {}) -> Promise<HTMLScriptElement>`
+- `ResourceLoader.loadStyle(url, options = {}) -> Promise<HTMLLinkElement>`
+- `ResourceLoader.loadECharts() -> Promise<echarts>`
+- `ResourceLoader.loadLeaflet() -> Promise<L>`
+- Retorna resolución síncrona si `(typeof window !== 'undefined' && (window.echarts || window.L))` ya existen.
+
+### ShareModule Contract (`js/share.js`)
+- `ShareModule.formatShoppingList(items, options = {}) -> string`
+- `ShareModule.shareList(items, options = {}) -> Promise<{ success: boolean, method: string }>`
+- Botón DOM: `#shareButton` y `#printButton` en `.header-actions`.

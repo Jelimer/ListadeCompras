@@ -192,6 +192,71 @@ h1 {
     margin-top: 2px;
 }
 
+.brand-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* Indicador de Conectividad PWA (WCAG AA) */
+.network-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    transition: all 0.25s ease;
+    user-select: none;
+    border: 1px solid transparent;
+}
+
+.network-badge .badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.network-badge.online {
+    background-color: rgba(16, 185, 129, 0.12);
+    color: #047857;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+[data-theme="dark"] .network-badge.online {
+    background-color: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.35);
+}
+
+.network-badge.online .badge-dot {
+    background-color: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.network-badge.offline {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+[data-theme="dark"] .network-badge.offline {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.4);
+}
+
+.network-badge.offline .badge-dot {
+    background-color: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+
 .header-actions {
     display: flex;
     align-items: center;
@@ -2196,4 +2261,391 @@ input:focus {
     background: var(--danger, #ef4444);
     color: #ffffff;
 }
+
+/* ==========================================================================
+   PLACEHOLDERS ACCESIBLES Y LAZY LOADING (MILIESTONE 2)
+   ========================================================================== */
+.chart-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    height: 100%;
+    width: 100%;
+    gap: 12px;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.chart-placeholder.chart-loading i,
+.map-overlay-placeholder.map-loading i {
+    width: 28px;
+    height: 28px;
+    color: var(--primary);
+}
+
+.map-overlay-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--card-bg);
+    z-index: 400; /* Debajo de los controles flotantes z-index: 500 */
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    color: var(--text-main);
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+/* ==========================================================================
+   MODO DE IMPRESIÓN Y GUARDADO EN PDF (@media print) — MILESTONE 3 (F14 & F15)
+   Optimizado para hojas A4 / Carta, ahorro de tinta y alto contraste B/N
+   ========================================================================== */
+
+/* Reseteo en pantalla: ocultar resumen exclusivo de impresión */
+.print-list-summary {
+    display: none;
+}
+
+@media print {
+    /* 1. Configuración de página e higiene de márgenes */
+    @page {
+        margin: 12mm 15mm;
+        size: auto;
+    }
+
+    /* 2. Reseteo radical de fondos, sombras y colores de tema */
+    *,
+    *::before,
+    *::after {
+        background: transparent !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    :root,
+    [data-theme="dark"],
+    [data-theme="light"],
+    html,
+    body {
+        --bg-body: #ffffff !important;
+        --card-bg: #ffffff !important;
+        --bg-surface-elevated: #ffffff !important;
+        --bg-input: #ffffff !important;
+        --text-main: #000000 !important;
+        --text-secondary: #111111 !important;
+        --text-muted: #444444 !important;
+        --border: #cccccc !important;
+        --border-subtle: #e5e5e5 !important;
+        --border-strong: #000000 !important;
+        --primary: #000000 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 10pt !important;
+        line-height: 1.3 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        overflow: visible !important;
+    }
+
+    .container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+    }
+
+    /* 3. Elementos a ocultar completamente en impresión */
+    .skip-link,
+    #networkStatusBadge,
+    .header-actions,
+    .view-tabs,
+    .bottom-nav,
+    .input-section,
+    .toolbar-section,
+    #panel-stats,
+    #panel-map,
+    .item-actions,
+    .collapse-icon,
+    .location-group .group-title [data-lucide="grip-vertical"],
+    .modal-backdrop,
+    .swal2-container,
+    .toast-container,
+    #ariaAnnouncer,
+    .product-avatar,
+    .product-img,
+    .btn {
+        display: none !important;
+    }
+
+    /* 4. Forzar visualización de la lista de compras independientemente de la pestaña activa */
+    #panel-list,
+    #panel-list[hidden] {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .main-content {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* 5. Cabecera limpia y profesional */
+    header {
+        border-bottom: 2px solid #000000 !important;
+        padding-bottom: 6px !important;
+        margin-bottom: 14px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: flex-end !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .brand-title-row {
+        gap: 0 !important;
+    }
+
+    h1 {
+        font-size: 16pt !important;
+        color: #000000 !important;
+        font-weight: 800 !important;
+        line-height: 1.1 !important;
+    }
+
+    .brand-subtitle {
+        font-size: 8.5pt !important;
+        color: #444444 !important;
+        margin-top: 2px !important;
+    }
+
+    /* 6. Contenedor de grupos y tiendas */
+    .shopping-list-container {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+
+    .location-group {
+        border: 1px solid #000000 !important;
+        border-radius: 4px !important;
+        background: #ffffff !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        margin-bottom: 12px !important;
+        overflow: visible !important;
+    }
+
+    /* Desplegar tiendas colapsadas para que todos los productos se impriman */
+    .location-group.collapsed .shopping-list {
+        display: grid !important;
+    }
+
+    .group-header {
+        background: #f1f5f9 !important;
+        border-bottom: 1px solid #000000 !important;
+        padding: 6px 10px !important;
+        color: #000000 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        cursor: default !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    .group-title h2 {
+        font-size: 10.5pt !important;
+        color: #000000 !important;
+        font-weight: 800 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        margin: 0 !important;
+    }
+
+    .group-count-badge {
+        font-size: 8pt !important;
+        color: #000000 !important;
+        font-weight: 700 !important;
+        background: #ffffff !important;
+        border: 1px solid #000000 !important;
+        padding: 1px 5px !important;
+        border-radius: 3px !important;
+    }
+
+    .shopping-list {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 3px !important;
+        padding: 6px 8px !important;
+    }
+
+    /* 7. Tarjeta de producto compacta y ergonómica para impresión */
+    .shopping-item {
+        background: #ffffff !important;
+        border-bottom: 1px dashed #cccccc !important;
+        border-top: none !important;
+        border-left: none !important;
+        border-right: none !important;
+        border-radius: 0 !important;
+        padding: 4px 2px !important;
+        display: grid !important;
+        grid-template-columns: auto 1fr auto !important;
+        grid-template-rows: auto !important;
+        grid-template-areas: "check info price" !important;
+        align-items: center !important;
+        gap: 8px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        color: #000000 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    .shopping-item:last-child {
+        border-bottom: none !important;
+    }
+
+    /* Checkbox físico de alta nitidez en papel */
+    .item-checkbox {
+        grid-area: check !important;
+        width: 14px !important;
+        height: 14px !important;
+        min-width: 14px !important;
+        min-height: 14px !important;
+        margin: 0 !important;
+        border: 1.5px solid #000000 !important;
+        border-radius: 2px !important;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        background: #ffffff !important;
+        cursor: default !important;
+        position: relative !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .item-checkbox:checked::after {
+        content: "✓" !important;
+        font-size: 11px !important;
+        font-weight: 900 !important;
+        color: #000000 !important;
+        line-height: 1 !important;
+        position: absolute !important;
+        top: -1px !important;
+        left: 1px !important;
+    }
+
+    .item-info {
+        grid-area: info !important;
+        gap: 1px !important;
+    }
+
+    .item-name {
+        font-size: 9pt !important;
+        font-weight: 700 !important;
+        color: #000000 !important;
+        line-height: 1.2 !important;
+        -webkit-line-clamp: unset !important;
+        overflow: visible !important;
+        word-break: break-word !important;
+    }
+
+    .item-sub {
+        font-size: 7.5pt !important;
+        color: #444444 !important;
+        font-weight: 600 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+
+    .item-category-tag {
+        font-size: 7pt !important;
+        color: #333333 !important;
+        border: 1px solid #999999 !important;
+        padding: 0 3px !important;
+        border-radius: 2px !important;
+        background: #f8fafc !important;
+    }
+
+    .item-price {
+        grid-area: price !important;
+        font-size: 9.5pt !important;
+        font-weight: 800 !important;
+        color: #000000 !important;
+        text-align: right !important;
+        white-space: nowrap !important;
+    }
+
+    .shopping-item.completed {
+        opacity: 0.65 !important;
+    }
+
+    .shopping-item.completed .item-name {
+        text-decoration: line-through !important;
+        color: #555555 !important;
+    }
+
+    /* 8. Resumen y Total Global al final de la lista impresa */
+    .print-list-summary {
+        display: block !important;
+        margin-top: 14px !important;
+        padding: 8px 10px !important;
+        border-top: 2px solid #000000 !important;
+        border-bottom: 2px solid #000000 !important;
+        background: #f8fafc !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .print-summary-content {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 16px !important;
+    }
+
+    .print-summary-title {
+        font-size: 10pt !important;
+        font-weight: 700 !important;
+        color: #000000 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+    }
+
+    .print-summary-value {
+        font-size: 13pt !important;
+        font-weight: 900 !important;
+        color: #000000 !important;
+    }
+}
+
+
 

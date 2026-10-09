@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput: document.getElementById('searchInput'),
     hideCompletedSwitch: document.getElementById('hideCompletedSwitch'),
     themeToggle: document.getElementById('themeToggle'),
+    shareButton: document.getElementById('shareButton'),
+    printButton: document.getElementById('printButton'),
+    printListSummary: document.getElementById('printListSummary'),
+    printGrandTotalValue: document.getElementById('printGrandTotalValue'),
     exportButton: document.getElementById('exportButton'),
     importButton: document.getElementById('importButton'),
     importFileInput: document.getElementById('importFileInput'),
@@ -114,6 +118,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const ChartModule = window.ShoppingChart || (typeof global !== 'undefined' && global.ShoppingChart) || safeRequire('chart.js') || {};
   const ExportImportModule = window.ShoppingExportImport || window.ExportImportService || (typeof global !== 'undefined' && (global.ShoppingExportImport || global.ExportImportService)) || safeRequire('export-import.js') || {};
   const FeedbackModule = window.ShoppingFeedback || window.UIFeedback || (typeof global !== 'undefined' && (global.ShoppingFeedback || global.UIFeedback)) || safeRequire('ui-feedback.js') || {};
+  const ShareModule = (typeof window !== 'undefined' && (window.ShoppingShare || window.ShareModule)) || (typeof global !== 'undefined' && (global.ShoppingShare || global.ShareModule)) || safeRequire('share.js') || {};
+
+  function getShareModule() {
+    if (typeof window !== 'undefined' && (window.ShoppingShare || window.ShareModule)) {
+      return window.ShoppingShare || window.ShareModule;
+    }
+    if (typeof global !== 'undefined' && (global.ShoppingShare || global.ShareModule)) {
+      return global.ShoppingShare || global.ShareModule;
+    }
+    if (ShareModule && (typeof ShareModule.shareList === 'function' || typeof ShareModule.formatShoppingList === 'function')) {
+      return ShareModule;
+    }
+    const req = safeRequire('share.js');
+    if (req) return req;
+    return null;
+  }
   const stateReq = safeRequire('state.js');
   const StoreClass = window.Store || (window.ShoppingStore && window.ShoppingStore.Store) || (window.ShoppingState && window.ShoppingState.Store) || (typeof global !== 'undefined' && (global.Store || (global.ShoppingStore && global.ShoppingStore.Store) || (global.ShoppingState && global.ShoppingState.Store))) || (stateReq && (stateReq.Store || stateReq)) || null;
   const MapRouteService = (typeof window !== 'undefined' && (window.MapRouteService || window.MapRoute)) || (typeof global !== 'undefined' && (global.MapRouteService || global.MapRoute)) || safeRequire('map-route.js') || {};
@@ -212,13 +232,14 @@ document.addEventListener('DOMContentLoaded', () => {
           renderStatsView(state, items, isDark);
         }
         try {
-          if (chartController) {
+          const ctrl = (typeof getOrInitChartController === 'function') ? getOrInitChartController() : chartController;
+          if (ctrl) {
             setTimeout(() => {
               try {
-                if (typeof chartController.resize === 'function') {
-                  chartController.resize();
-                } else if (chartController.instance && typeof chartController.instance.resize === 'function') {
-                  chartController.instance.resize();
+                if (typeof ctrl.resize === 'function') {
+                  ctrl.resize();
+                } else if (ctrl.instance && typeof ctrl.instance.resize === 'function') {
+                  ctrl.instance.resize();
                 }
               } catch (_) {}
             }, 60);
@@ -250,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Exposición global para callbacks inline y utilidades de prueba
   window.switchAppView = switchView;
+  window.switchView = switchView;
   window.renderAppUI = (...args) => renderUI(...args);
   window.__getRenderState = () => ({
     currentView,
@@ -327,19 +349,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- 4. Inicialización del Store Local Reactivo ---
+  const localStore = (typeof window !== 'undefined' && window.localStorage)
+    ? window.localStorage
+    : (typeof localStorage !== 'undefined' ? localStorage : { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+
   let initialItems = [];
   try {
-    initialItems = JSON.parse(localStorage.getItem('shopping_items') || '[]');
+    initialItems = JSON.parse(localStore.getItem('shopping_items') || '[]');
   } catch (_) {
     initialItems = [];
   }
-  const initialBudget = parseFloat(localStorage.getItem('budget')) || 0;
-  const initialTheme = localStorage.getItem('theme') || 'light';
+  const initialBudget = parseFloat(localStore.getItem('budget')) || 0;
+  const initialTheme = localStore.getItem('theme') || 'light';
   let initialLocationOrder = [];
   let initialCollapsed = [];
   try {
-    initialLocationOrder = JSON.parse(localStorage.getItem('locationOrder') || '[]');
-    initialCollapsed = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
+    initialLocationOrder = JSON.parse(localStore.getItem('locationOrder') || '[]');
+    initialCollapsed = JSON.parse(localStore.getItem('collapsedGroups') || '[]');
   } catch (_) {}
 
   const storageReq = safeRequire('storage.js');
@@ -401,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
           store.state.items = remoteItems;
         }
         try {
-          localStorage.setItem('shopping_items', JSON.stringify(remoteItems));
+          localStore.setItem('shopping_items', JSON.stringify(remoteItems));
         } catch (_) {}
       },
       err => {
@@ -410,12 +436,29 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-  // --- 6. Controlador de Apache ECharts ---
+  // --- 6. Controlador Adaptativo de Apache ECharts ---
   const chartDom = document.getElementById('categoryChart');
   let chartController = null;
-  if (chartDom && ChartModule.ChartController) {
-    chartController = new ChartModule.ChartController(chartDom, { echarts: window.echarts });
+
+  function getOrInitChartController() {
+    if (chartController && chartController.instance && !chartController.instance.disposed) {
+      return chartController;
+    }
+    const echartsLib = (typeof window !== 'undefined' && window.echarts) || (typeof global !== 'undefined' && global.echarts);
+    if (chartDom && ChartModule.ChartController) {
+      if (!chartController) {
+        chartController = new ChartModule.ChartController(chartDom, { echarts: echartsLib });
+      } else if (echartsLib && (!chartController.instance || chartController.instance.disposed)) {
+        if (typeof chartController.init === 'function') {
+          chartController.init(echartsLib);
+        }
+      }
+    }
+    return chartController;
   }
+
+  // Intento de inicialización temprana síncrona si echarts ya estuviera en memoria (ej. Node.js mocks)
+  getOrInitChartController();
 
   // --- 7. Gestión del Tema (Claro / Oscuro) ---
   function applyTheme(theme) {
@@ -441,14 +484,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const savedTheme = localStorage.getItem('theme') || initialTheme || 'light';
+  const savedTheme = localStore.getItem('theme') || initialTheme || 'light';
   applyTheme(savedTheme);
 
   if (elements.themeToggle) {
     elements.themeToggle.addEventListener('click', () => {
       const current = document.documentElement.getAttribute('data-theme') || 'light';
       const nextTheme = current === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('theme', nextTheme);
+      localStore.setItem('theme', nextTheme);
       applyTheme(nextTheme);
     });
   }
@@ -468,6 +511,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (elements.grandTotalValue) {
       elements.grandTotalValue.textContent = `$${metrics.totalPending.toFixed(2)}`;
+    }
+
+    if (elements.printGrandTotalValue) {
+      elements.printGrandTotalValue.textContent = `$${metrics.totalPending.toFixed(2)}`;
     }
 
     if (elements.budgetInput && document.activeElement !== elements.budgetInput) {
@@ -515,23 +562,285 @@ document.addEventListener('DOMContentLoaded', () => {
     listDirty = false;
   }
 
+  // --- Placeholders visuales y accesibles (WCAG AA) para carga diferida ---
+  function showChartLoadingPlaceholder() {
+    let ph = document.getElementById('chartLoadingPlaceholder');
+    if (!ph && chartDom && chartDom.parentNode) {
+      ph = document.createElement('div');
+      ph.id = 'chartLoadingPlaceholder';
+      ph.className = 'chart-placeholder chart-loading';
+      ph.setAttribute('role', 'status');
+      ph.setAttribute('aria-live', 'polite');
+      ph.innerHTML = `
+        <i data-lucide="loader-2" class="spin" aria-hidden="true"></i>
+        <span>Cargando estadísticas financieras...</span>
+      `;
+      chartDom.parentNode.insertBefore(ph, chartDom);
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons({ root: ph });
+      }
+    }
+    if (ph) ph.style.display = 'flex';
+    if (chartDom) chartDom.style.display = 'none';
+  }
+
+  function hideChartPlaceholder() {
+    const ph = document.getElementById('chartLoadingPlaceholder');
+    const errPh = document.getElementById('chartErrorPlaceholder');
+    if (ph) ph.style.display = 'none';
+    if (errPh) errPh.style.display = 'none';
+    if (chartDom) chartDom.style.display = 'block';
+  }
+
+  function showChartErrorPlaceholder(retryCallback) {
+    let ph = document.getElementById('chartErrorPlaceholder');
+    if (!ph && chartDom && chartDom.parentNode) {
+      ph = document.createElement('div');
+      ph.id = 'chartErrorPlaceholder';
+      ph.className = 'chart-placeholder chart-error';
+      ph.setAttribute('role', 'alert');
+      ph.innerHTML = `
+        <i data-lucide="bar-chart-2" style="font-size:24px;opacity:0.6;" aria-hidden="true"></i>
+        <p style="margin:0;font-size:0.875rem;">Módulo de gráficos no disponible sin conexión.</p>
+        <button type="button" class="btn btn-sm btn-secondary" id="btnRetryECharts">
+          <i data-lucide="refresh-cw" aria-hidden="true"></i>
+          <span>Reintentar</span>
+        </button>
+      `;
+      chartDom.parentNode.insertBefore(ph, chartDom);
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons({ root: ph });
+      }
+      const retryBtn = ph.querySelector('#btnRetryECharts');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          if (typeof retryCallback === 'function') retryCallback();
+        });
+      }
+    }
+    const loadingPh = document.getElementById('chartLoadingPlaceholder');
+    if (loadingPh) loadingPh.style.display = 'none';
+    if (ph) ph.style.display = 'flex';
+    if (chartDom) chartDom.style.display = 'none';
+  }
+
+  function showMapLoadingPlaceholder() {
+    const mapEl = elements.mapContainer || document.getElementById('map-container');
+    if (!mapEl) return;
+    let ph = document.getElementById('mapLoadingPlaceholder');
+    if (!ph) {
+      ph = document.createElement('div');
+      ph.id = 'mapLoadingPlaceholder';
+      ph.className = 'map-overlay-placeholder map-loading';
+      ph.setAttribute('role', 'status');
+      ph.setAttribute('aria-live', 'polite');
+      ph.innerHTML = `
+        <i data-lucide="loader-2" class="spin" aria-hidden="true"></i>
+        <span>Cargando mapa interactivo y capas satelitales...</span>
+      `;
+      mapEl.appendChild(ph);
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons({ root: ph });
+      }
+    }
+    ph.style.display = 'flex';
+  }
+
+  function hideMapPlaceholder() {
+    const ph = document.getElementById('mapLoadingPlaceholder');
+    const errPh = document.getElementById('mapErrorPlaceholder');
+    if (ph) ph.style.display = 'none';
+    if (errPh) errPh.style.display = 'none';
+  }
+
+  function showMapErrorPlaceholder(retryCallback) {
+    const mapEl = elements.mapContainer || document.getElementById('map-container');
+    if (!mapEl) return;
+    let ph = document.getElementById('mapErrorPlaceholder');
+    if (!ph) {
+      ph = document.createElement('div');
+      ph.id = 'mapErrorPlaceholder';
+      ph.className = 'map-overlay-placeholder map-error';
+      ph.setAttribute('role', 'alert');
+      ph.innerHTML = `
+        <i data-lucide="map-pin-off" style="font-size:28px;opacity:0.6;" aria-hidden="true"></i>
+        <p style="margin:0;font-size:0.9rem;font-weight:700;">El mapa satelital requiere conexión a internet.</p>
+        <p style="margin:0;font-size:0.8rem;color:var(--text-muted);">Tu itinerario ordenado y el botón para abrir en Google Maps siguen funcionando.</p>
+        <button type="button" class="btn btn-sm btn-secondary" id="btnRetryLeaflet">
+          <i data-lucide="refresh-cw" aria-hidden="true"></i>
+          <span>Reintentar carga de mapa</span>
+        </button>
+      `;
+      mapEl.appendChild(ph);
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons({ root: ph });
+      }
+      const retryBtn = ph.querySelector('#btnRetryLeaflet');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          if (typeof retryCallback === 'function') retryCallback();
+        });
+      }
+    }
+    const loadingPh = document.getElementById('mapLoadingPlaceholder');
+    if (loadingPh) loadingPh.style.display = 'none';
+    ph.style.display = 'flex';
+  }
+
+  let isEChartsLoading = false;
+
   // 8.3 Vista de Estadísticas Financieras
   function renderStatsView(state, items, isDark) {
-    if (chartController) {
+    const hasEChartsInMemory = (typeof window !== 'undefined' && window.echarts) || (typeof global !== 'undefined' && global.echarts);
+    const ctrl = getOrInitChartController();
+
+    // Fast-Path: Si ECharts ya está en memoria y el controlador está inicializado
+    if (hasEChartsInMemory && ctrl && ctrl.instance) {
+      hideChartPlaceholder();
       let breakdown = {};
       if (AnalyticsModule.getCategoryBreakdown) {
         breakdown = AnalyticsModule.getCategoryBreakdown(items);
       }
-      chartController.render(breakdown, items, isDark);
+      ctrl.render(breakdown, items, isDark);
+      statsDirty = false;
+      return;
     }
-    statsDirty = false;
+
+    // Slow-Path: Carga bajo demanda mediante ResourceLoader
+    const loader = (typeof window !== 'undefined' && window.ResourceLoader) || (typeof ResourceLoader !== 'undefined' ? ResourceLoader : null) || safeRequire('resource-loader.js');
+    if (loader && typeof loader.loadECharts === 'function') {
+      if (isEChartsLoading) return;
+      isEChartsLoading = true;
+      showChartLoadingPlaceholder();
+
+      loader.loadECharts().then((echartsLib) => {
+        isEChartsLoading = false;
+        hideChartPlaceholder();
+        const updatedCtrl = getOrInitChartController();
+        if (updatedCtrl && typeof updatedCtrl.init === 'function') {
+          updatedCtrl.init(echartsLib);
+        }
+        if (currentView === 'stats') {
+          const freshState = (store && typeof store.getState === 'function') ? store.getState() : state;
+          const freshItems = freshState.items || items;
+          let breakdown = {};
+          if (AnalyticsModule.getCategoryBreakdown) {
+            breakdown = AnalyticsModule.getCategoryBreakdown(freshItems);
+          }
+          if (updatedCtrl) {
+            updatedCtrl.render(breakdown, freshItems, isDark);
+            setTimeout(() => {
+              try {
+                if (typeof updatedCtrl.resize === 'function') updatedCtrl.resize();
+              } catch (_) {}
+            }, 60);
+          }
+          statsDirty = false;
+        } else {
+          statsDirty = true;
+        }
+      }).catch((err) => {
+        isEChartsLoading = false;
+        console.warn('[App] Error al descargar ECharts bajo demanda:', err);
+        showChartErrorPlaceholder(() => renderStatsView(state, items, isDark));
+      });
+    } else if (ctrl) {
+      hideChartPlaceholder();
+      let breakdown = {};
+      if (AnalyticsModule.getCategoryBreakdown) {
+        breakdown = AnalyticsModule.getCategoryBreakdown(items);
+      }
+      ctrl.render(breakdown, items, isDark);
+      statsDirty = false;
+    }
+  }
+
+  let leafletLoadPromise = null;
+
+  function ensureLeafletAndMapLoaded(onSuccess, onError) {
+    const hasL = (typeof window !== 'undefined' && window.L) || (typeof global !== 'undefined' && global.L);
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Fast-Path: Si Leaflet ya existe en memoria
+    if (hasL) {
+      if (typeof MapRouteService !== 'undefined' && MapRouteService.initMap && (!MapRouteService.mapController || !MapRouteService.mapController.map)) {
+        MapRouteService.initMap('map-container', { isDark });
+      }
+      hideMapPlaceholder();
+      if (typeof onSuccess === 'function') {
+        try {
+          onSuccess();
+        } catch (e) {
+          console.error('[App] Error en callback Leaflet onSuccess:', e);
+        }
+      }
+      return Promise.resolve(hasL);
+    }
+
+    // Slow-Path: Carga bajo demanda vía ResourceLoader
+    const loader = (typeof window !== 'undefined' && window.ResourceLoader) || (typeof ResourceLoader !== 'undefined' ? ResourceLoader : null) || safeRequire('resource-loader.js');
+    if (!loader || typeof loader.loadLeaflet !== 'function') {
+      const err = new Error('ResourceLoader no disponible para cargar Leaflet');
+      if (typeof onError === 'function') onError(err);
+      return Promise.reject(err);
+    }
+
+    if (!leafletLoadPromise) {
+      showMapLoadingPlaceholder();
+      leafletLoadPromise = loader.loadLeaflet().then((leafletLib) => {
+        hideMapPlaceholder();
+        if (typeof MapRouteService !== 'undefined' && MapRouteService.initMap) {
+          MapRouteService.initMap('map-container', { isDark });
+        }
+        return leafletLib;
+      }).catch((err) => {
+        leafletLoadPromise = null;
+        console.warn('[App] Error al descargar Leaflet bajo demanda:', err);
+        showMapErrorPlaceholder(() => ensureLeafletAndMapLoaded(onSuccess, onError));
+        throw err;
+      });
+    }
+
+    return leafletLoadPromise.then((leafletLib) => {
+      if (typeof onSuccess === 'function') onSuccess(leafletLib);
+      return leafletLib;
+    }).catch((err) => {
+      if (typeof onError === 'function') onError(err);
+      throw err;
+    });
   }
 
   // 8.4 Vista de Ruta y Mapa
   function renderMapView() {
-    if (typeof updateMapRouteUI === 'function') {
-      updateMapRouteUI();
+    const hasL = (typeof window !== 'undefined' && window.L) || (typeof global !== 'undefined' && global.L);
+
+    // Fast-Path: Si Leaflet ya existe en memoria, actualización 100% síncrona y única
+    if (hasL) {
+      ensureLeafletAndMapLoaded();
+      if (typeof updateMapRouteUI === 'function') {
+        updateMapRouteUI();
+      }
+      if (typeof window.MapRouteService !== 'undefined' && MapRouteService.invalidateSize) {
+        MapRouteService.invalidateSize();
+      }
+      mapDirty = false;
+      return;
     }
+
+    // Slow-Path: Carga bajo demanda asíncrona mediante ResourceLoader
+    ensureLeafletAndMapLoaded(() => {
+      if (currentView === 'map') {
+        if (typeof updateMapRouteUI === 'function') {
+          updateMapRouteUI();
+        }
+        if (typeof window.MapRouteService !== 'undefined' && MapRouteService.invalidateSize) {
+          MapRouteService.invalidateSize();
+        }
+        mapDirty = false;
+      } else {
+        mapDirty = true;
+      }
+    });
     mapDirty = false;
   }
 
@@ -1021,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (elements.budgetInput) {
     elements.budgetInput.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value) || 0;
-      localStorage.setItem('budget', String(val));
+      localStore.setItem('budget', String(val));
       store.setBudget(val);
     });
   }
@@ -1134,6 +1443,95 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- Compartir Lista (F13 - WhatsApp / Web Share / Clipboard) ---
+  if (elements.shareButton) {
+    elements.shareButton.addEventListener('click', async () => {
+      const state = (store && typeof store.getState === 'function') ? store.getState() : {};
+      const items = state.items || [];
+
+      if (!items || items.length === 0) {
+        if (FeedbackModule && typeof FeedbackModule.showToast === 'function') {
+          FeedbackModule.showToast('La lista está vacía, no hay nada para compartir', 'warning');
+        }
+        return;
+      }
+
+      const sm = getShareModule();
+      if (!sm || typeof sm.shareList !== 'function') {
+        console.warn('[App] ShareModule no disponible');
+        return;
+      }
+
+      try {
+        const res = await sm.shareList(items, { includeCompleted: false });
+        if (res && res.success) {
+          if (res.method === 'whatsapp') {
+            if (FeedbackModule && typeof FeedbackModule.showToast === 'function') {
+              FeedbackModule.showToast('Abriendo WhatsApp para compartir lista', 'info');
+            }
+          } else if (res.method === 'clipboard' || res.copied) {
+            if (FeedbackModule && typeof FeedbackModule.showToast === 'function') {
+              FeedbackModule.showToast('¡Lista copiada al portapapeles!', 'success');
+            }
+          }
+        }
+      } catch (err) {
+        if (FeedbackModule && typeof FeedbackModule.showToast === 'function') {
+          FeedbackModule.showToast('No se pudo compartir la lista', 'error');
+        }
+      }
+    });
+  }
+
+  // --- Modo de Impresión y PDF (F14 & F15) ---
+  if (elements.printButton) {
+    elements.printButton.addEventListener('click', () => {
+      const state = (store && typeof store.getState === 'function') ? store.getState() : {};
+      const items = state.items || [];
+
+      if (!items || items.length === 0) {
+        if (FeedbackModule && typeof FeedbackModule.showToast === 'function') {
+          FeedbackModule.showToast('La lista está vacía, no hay nada para imprimir', 'warning');
+        }
+        return;
+      }
+
+      if (typeof switchView === 'function' && currentView !== 'list') {
+        switchView('list');
+      } else if (listDirty && typeof renderListView === 'function') {
+        renderListView(state, items);
+        listDirty = false;
+      }
+
+      if (typeof window !== 'undefined' && typeof window.print === 'function') {
+        window.print();
+      }
+    });
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeprint', () => {
+      try {
+        const state = (store && typeof store.getState === 'function') ? store.getState() : {};
+        const items = state.items || [];
+        if (typeof renderShoppingList === 'function') {
+          renderShoppingList(state);
+        }
+        if (elements.printGrandTotalValue) {
+          let pending = 0;
+          if (AnalyticsModule && typeof AnalyticsModule.calculateMetrics === 'function') {
+            const m = AnalyticsModule.calculateMetrics(items, state.budget);
+            pending = m.totalPending;
+          } else {
+            items.forEach(it => { if (!it.completed) pending += (Number(it.unitPrice) || 0) * (Number(it.quantity) || 1); });
+            pending = Math.round(pending * 100) / 100;
+          }
+          elements.printGrandTotalValue.textContent = `$${pending.toFixed(2)}`;
+        }
+      } catch (_) {}
+    });
+  }
+
   if (elements.importButton && elements.importFileInput) {
     elements.importButton.addEventListener('click', () => {
       elements.importFileInput.value = '';
@@ -1224,7 +1622,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newOrder = Array.from(elements.shoppingListContainer.querySelectorAll('.location-group'))
           .map(g => g.dataset.location);
         if (typeof store.reorderLocations === 'function') store.reorderLocations(newOrder);
-        localStorage.setItem('locationOrder', JSON.stringify(newOrder));
+        localStore.setItem('locationOrder', JSON.stringify(newOrder));
       }
     });
   }
@@ -1864,22 +2262,24 @@ document.addEventListener('DOMContentLoaded', () => {
       switchView('map');
     }
 
-    MapRouteService.enablePickLocationMode(storeName, (picked) => {
-      if (elements.mapPickerBanner) {
-        elements.mapPickerBanner.setAttribute('hidden', '');
-      }
-      if (picked && typeof picked.lat === 'number' && typeof picked.lng === 'number') {
-        MapRouteService.saveStoreCoordinate(picked.storeName, {
-          lat: picked.lat,
-          lng: picked.lng,
-          address: 'Ubicación seleccionada en el mapa',
-          source: 'map_click'
-        });
-        updateMapRouteUI();
-        if (FeedbackModule.showToast) {
-          FeedbackModule.showToast(`Ubicación de "${picked.storeName}" fijada en el mapa`, 'success');
+    ensureLeafletAndMapLoaded(() => {
+      MapRouteService.enablePickLocationMode(storeName, (picked) => {
+        if (elements.mapPickerBanner) {
+          elements.mapPickerBanner.setAttribute('hidden', '');
         }
-      }
+        if (picked && typeof picked.lat === 'number' && typeof picked.lng === 'number') {
+          MapRouteService.saveStoreCoordinate(picked.storeName, {
+            lat: picked.lat,
+            lng: picked.lng,
+            address: 'Ubicación seleccionada en el mapa',
+            source: 'map_click'
+          });
+          updateMapRouteUI();
+          if (FeedbackModule.showToast) {
+            FeedbackModule.showToast(`Ubicación de "${picked.storeName}" fijada en el mapa`, 'success');
+          }
+        }
+      });
     });
 
     if (FeedbackModule.showToast) {
@@ -1901,8 +2301,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // C. Inicialización de MapRouteService y Leaflet
-  if (typeof window.MapRouteService !== 'undefined' && MapRouteService.initMap) {
+  // C. Inicialización de MapRouteService y Leaflet (síncrona solo si L ya existe en memoria)
+  const hasLeafletInMemory = (typeof window !== 'undefined' && window.L) || (typeof global !== 'undefined' && global.L);
+  if (hasLeafletInMemory && typeof window.MapRouteService !== 'undefined' && MapRouteService.initMap) {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     MapRouteService.initMap('map-container', { isDark });
   }
@@ -2053,7 +2454,84 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Inicialización de Conectividad de Red (Online / Offline)
+  initNetworkConnectivity();
+
   // Primer renderizado
   renderUI();
   if (window.lucide) window.lucide.createIcons();
 });
+
+/**
+ * Inicializa el monitoreo de conectividad en tiempo real (F06)
+ * Actualiza el componente accesible #networkStatusBadge
+ */
+function initNetworkConnectivity() {
+  if (typeof document === 'undefined') return;
+  const badge = document.getElementById('networkStatusBadge');
+  if (!badge) return;
+
+  function updateStatus(isOnline) {
+    if (isOnline) {
+      badge.classList.remove('offline');
+      badge.classList.add('online');
+      badge.title = 'Estado de red: Online (Conectado)';
+      const textEl = badge.querySelector('.badge-text') || badge.querySelector('.network-text');
+      if (textEl) textEl.textContent = 'Online';
+      badge.setAttribute('aria-label', 'Conexión a internet restablecida');
+    } else {
+      badge.classList.remove('online');
+      badge.classList.add('offline');
+      badge.title = 'Estado de red: Offline (Sin conexión)';
+      const textEl = badge.querySelector('.badge-text') || badge.querySelector('.network-text');
+      if (textEl) textEl.textContent = 'Offline';
+      badge.setAttribute('aria-label', 'Sin conexión a internet. Modo offline activado');
+    }
+  }
+
+  // Estado inicial
+  const nav = (typeof window !== 'undefined' && window.navigator)
+    ? window.navigator
+    : (typeof navigator !== 'undefined' ? navigator : null);
+  const initialOnline = (nav && 'onLine' in nav)
+    ? Boolean(nav.onLine)
+    : true;
+  updateStatus(initialOnline);
+
+  // Escuchar eventos en window
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('online', () => updateStatus(true));
+    window.addEventListener('offline', () => updateStatus(false));
+  }
+}
+
+/**
+ * Registra el Service Worker con guardas defensivas estrictas (F05)
+ * Seguro para entornos sin soporte de SW (Node.js / JSDOM)
+ */
+function registerServiceWorker() {
+  if (
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    navigator &&
+    'serviceWorker' in navigator &&
+    typeof navigator.serviceWorker.register === 'function'
+  ) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch((err) => {
+        console.warn('SW registration failed:', err);
+      });
+    });
+  }
+}
+
+// Registro Seguro de Service Worker (PWA)
+registerServiceWorker();
+
+// Exposición global para pruebas de ciclo de vida y conectividad
+if (typeof window !== 'undefined') {
+  window.initNetworkConnectivity = initNetworkConnectivity;
+  window.registerServiceWorker = registerServiceWorker;
+}
+
+
