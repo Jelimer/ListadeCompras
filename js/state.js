@@ -349,10 +349,13 @@
         grouped[loc].push(item);
       });
 
-      // Ordenar productos dentro de cada ubicación: pendientes primero, luego por nombre
+      // Ordenar productos dentro de cada ubicación: pendientes primero, luego por fecha más reciente de adición (timestamp descendente)
       Object.keys(grouped).forEach(loc => {
         grouped[loc].sort((a, b) => {
           if (a.completed !== b.completed) return a.completed ? 1 : -1;
+          const timeA = Number(a.timestamp || a.createdAt || 0);
+          const timeB = Number(b.timestamp || b.createdAt || 0);
+          if (timeA !== timeB) return timeB - timeA;
           return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
         });
       });

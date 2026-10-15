@@ -33,6 +33,15 @@ document.addEventListener('DOMContentLoaded', () => {
     resetListButton: document.getElementById('resetListButton'),
     shoppingListContainer: document.getElementById('shoppingListContainer'),
 
+    // Conmutadores de diseño de lista / cuadrícula
+    btnViewList: document.getElementById('btnViewList'),
+    btnViewGrid: document.getElementById('btnViewGrid'),
+
+    // Sección: Por averiguar / Sin lugar asignado (del día)
+    pendingLocationSection: document.getElementById('pendingLocationSection'),
+    pendingLocationList: document.getElementById('pendingLocationList'),
+    pendingLocationCountBadge: document.getElementById('pendingLocationCountBadge'),
+
     // Selector de Vistas y Paneles WAI-ARIA
     tabList: document.getElementById('tab-list'),
     tabStats: document.getElementById('tab-stats'),
@@ -151,6 +160,128 @@ document.addEventListener('DOMContentLoaded', () => {
   let listDirty = false;
   let statsDirty = true;
   let mapDirty = true;
+
+  // --- 2.1.b. Estado de Diseño de Lista / Cuadrícula (Grid View) ---
+  let currentLayout = (typeof localStorage !== 'undefined' && localStorage.getItem('shopping_view_layout')) || 'list';
+
+  function setLayoutMode(layout) {
+    currentLayout = layout === 'grid' ? 'grid' : 'list';
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('shopping_view_layout', currentLayout);
+      } catch (_) {}
+    }
+
+    const isGrid = currentLayout === 'grid';
+    if (elements.btnViewList) {
+      elements.btnViewList.classList.toggle('active', !isGrid);
+      elements.btnViewList.setAttribute('aria-pressed', (!isGrid).toString());
+    }
+    if (elements.btnViewGrid) {
+      elements.btnViewGrid.classList.toggle('active', isGrid);
+      elements.btnViewGrid.setAttribute('aria-pressed', isGrid.toString());
+    }
+    if (elements.shoppingListContainer) {
+      elements.shoppingListContainer.classList.toggle('view-grid', isGrid);
+    }
+  }
+
+  // --- 2.1.c. Detección y Renderizado de Productos "Por averiguar / Sin lugar asignado" ---
+  function isPendingLocationName(locName) {
+    if (!locName) return true;
+    const clean = String(locName).trim().toLowerCase();
+    const pendingNames = [
+      'por averiguar',
+      'por definir',
+      'sin asignar',
+      'sin lugar',
+      'a averiguar',
+      'averiguar',
+      'pendiente',
+      'sin tienda',
+      'indefinido'
+    ];
+    return pendingNames.includes(clean);
+  }
+
+  function isPendingLocationItem(item) {
+    if (!item || item.completed) return false;
+    return isPendingLocationName(item.location);
+  }
+
+  function renderPendingLocationSection(items) {
+    if (!elements.pendingLocationSection || !elements.pendingLocationList) return;
+
+    const allItems = items || [];
+    const pendingItems = allItems.filter(isPendingLocationItem);
+
+    if (pendingItems.length === 0) {
+      elements.pendingLocationSection.style.display = 'none';
+      elements.pendingLocationList.innerHTML = '';
+      return;
+    }
+
+    elements.pendingLocationSection.style.display = 'block';
+    if (elements.pendingLocationCountBadge) {
+      elements.pendingLocationCountBadge.textContent = `${pendingItems.length} ${pendingItems.length === 1 ? 'producto' : 'productos'}`;
+    }
+
+    // Obtener comercios existentes conocidos excluyendo nombres pendientes y 'General'
+    const distinctStores = (store && typeof store.getDistinctLocations === 'function')
+      ? store.getDistinctLocations().filter(l => !isPendingLocationName(l) && l !== 'General')
+      : [];
+
+    elements.pendingLocationList.innerHTML = '';
+
+    pendingItems.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'pending-item-card';
+      card.dataset.id = item.id;
+
+      const safeName = (ValidationModule && ValidationModule.escapeHtml) ? ValidationModule.escapeHtml(item.name) : item.name;
+      const safeCategory = (ValidationModule && ValidationModule.escapeHtml) ? ValidationModule.escapeHtml(item.category || 'General') : (item.category || 'General');
+      const unitPrice = Number(item.unitPrice) || 0;
+      const qty = Number(item.quantity) || 1;
+      const priceText = unitPrice > 0 ? `$${(unitPrice * qty).toFixed(2)}` : '';
+
+      const storeOptions = distinctStores.map(storeName => {
+        const safeStore = (ValidationModule && ValidationModule.escapeHtml) ? ValidationModule.escapeHtml(storeName) : storeName;
+        return `<option value="${safeStore}">${safeStore}</option>`;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="pending-item-main">
+          <div class="pending-item-info">
+            <span class="pending-item-name" title="${safeName}">${safeName}</span>
+            <div class="pending-item-details">
+              <span class="pending-qty-badge">Cant: ${qty}</span>
+              ${priceText ? `<span class="pending-price-badge">${priceText}</span>` : ''}
+              <span class="pending-cat-badge">${safeCategory}</span>
+            </div>
+          </div>
+          <button type="button" class="btn-remove-pending" data-id="${item.id}" title="Eliminar producto" aria-label="Eliminar ${safeName}">
+            <i data-lucide="trash-2" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="pending-assign-row">
+          <select class="pending-assign-select" data-id="${item.id}" aria-label="Elegir comercio para ${safeName}">
+            <option value="" disabled selected>Elegir comercio...</option>
+            ${storeOptions}
+            <option value="__new_store__">+ Nuevo comercio...</option>
+          </select>
+          <button type="button" class="btn-assign-arrow" data-id="${item.id}" title="Asignar y guardar en este comercio" aria-label="Asignar ${safeName} al comercio seleccionado">
+            <i data-lucide="arrow-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      `;
+
+      elements.pendingLocationList.appendChild(card);
+    });
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons({ root: elements.pendingLocationSection });
+    }
+  }
 
   // --- 2.2. Funciones de Navegación y Conmutación de Vistas WAI-ARIA ---
   function setPanelVisibility(panelEl, visible) {
@@ -884,6 +1015,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderShoppingList(state) {
     if (!elements.shoppingListContainer) return;
 
+    // 1. Renderizar sección destacada de productos por averiguar / sin lugar asignado
+    renderPendingLocationSection(state.items || []);
+
+    // 2. Aplicar modo de visualización (Lista o Cuadrícula)
+    elements.shoppingListContainer.classList.toggle('view-grid', currentLayout === 'grid');
+
     let grouped = {};
     if (typeof store.getGroupedItems === 'function') {
       grouped = store.getGroupedItems();
@@ -905,17 +1042,31 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    const locations = Object.keys(grouped);
+    // Filtrar ubicaciones para no duplicar los productos que ya están en la bandeja "Por averiguar"
+    const allLocations = Object.keys(grouped);
+    const regularLocations = allLocations.filter(loc => !isPendingLocationName(loc));
+
     elements.shoppingListContainer.innerHTML = '';
 
-    if (locations.length === 0) {
-      elements.shoppingListContainer.innerHTML = `
-        <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted);">
-          <i data-lucide="shopping-bag" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;"></i>
-          <p style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Tu lista de compras está vacía</p>
-          <p style="font-size: 0.85rem; margin-top: 4px;">Añade productos usando el formulario superior para comenzar.</p>
-        </div>
-      `;
+    if (regularLocations.length === 0) {
+      const hasPending = (state.items || []).some(isPendingLocationItem);
+      if (hasPending) {
+        elements.shoppingListContainer.innerHTML = `
+          <div class="empty-state" style="text-align:center; padding: 36px 20px; color: var(--text-muted);">
+            <i data-lucide="help-circle" style="width: 44px; height: 44px; margin-bottom: 12px; opacity: 0.6; color: var(--primary);"></i>
+            <p style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">Tus productos están en la bandeja superior</p>
+            <p style="font-size: 0.85rem; margin-top: 4px;">Selecciona el comercio y haz clic en la flecha para organizar tus listas por tienda.</p>
+          </div>
+        `;
+      } else {
+        elements.shoppingListContainer.innerHTML = `
+          <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted);">
+            <i data-lucide="shopping-bag" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;"></i>
+            <p style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Tu lista de compras está vacía</p>
+            <p style="font-size: 0.85rem; margin-top: 4px;">Añade productos usando el formulario superior para comenzar.</p>
+          </div>
+        `;
+      }
       if (window.lucide) window.lucide.createIcons(elements.shoppingListContainer ? { root: elements.shoppingListContainer } : undefined);
       return;
     }
@@ -923,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawCollapsed = state.collapsedGroups || (state.uiPreferences && state.uiPreferences.collapsedGroups) || [];
     const collapsedSet = new Set(rawCollapsed);
 
-    locations.forEach(loc => {
+    regularLocations.forEach(loc => {
       const itemsInGroup = grouped[loc];
       const isCollapsed = collapsedSet.has(loc);
 
@@ -1221,6 +1372,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof store.deleteItem === 'function') {
           store.deleteItem(itemId);
         }
+        if (currentEditingId === itemId) {
+          cancelEditing();
+        }
 
         if (isFirebaseActive && itemsCollection) {
           try {
@@ -1273,6 +1427,99 @@ document.addEventListener('DOMContentLoaded', () => {
           if (loc && typeof store.toggleGroupCollapse === 'function') {
             store.toggleGroupCollapse(loc);
           }
+        }
+      }
+    });
+  }
+
+  // --- 11.2 Control de Modo de Visualización (Lista / Cuadrícula) ---
+  if (elements.btnViewList) {
+    elements.btnViewList.addEventListener('click', () => {
+      setLayoutMode('list');
+      if (FeedbackModule && FeedbackModule.showToast) FeedbackModule.showToast('Vista en lista activada', 'info');
+    });
+  }
+  if (elements.btnViewGrid) {
+    elements.btnViewGrid.addEventListener('click', () => {
+      setLayoutMode('grid');
+      if (FeedbackModule && FeedbackModule.showToast) FeedbackModule.showToast('Vista en cuadrícula activada', 'info');
+    });
+  }
+  // Sincronizar estado inicial del layout guardado
+  setLayoutMode(currentLayout);
+
+  // --- 11.3 Delegación de Asignación Rápida para Productos "Por averiguar" ---
+  if (elements.pendingLocationSection) {
+    elements.pendingLocationSection.addEventListener('click', async (e) => {
+      const arrowBtn = e.target.closest('.btn-assign-arrow');
+      const removeBtn = e.target.closest('.btn-remove-pending');
+
+      if (arrowBtn) {
+        const itemId = arrowBtn.dataset.id;
+        const card = arrowBtn.closest('.pending-item-card');
+        const select = card ? card.querySelector('.pending-assign-select') : null;
+
+        if (!select || !select.value) {
+          if (FeedbackModule && FeedbackModule.showToast) {
+            FeedbackModule.showToast('Selecciona un comercio en la lista desplegable.', 'warning');
+          } else {
+            alert('Selecciona un comercio en la lista desplegable.');
+          }
+          if (select) select.focus();
+          return;
+        }
+
+        let targetLocation = select.value.trim();
+        if (targetLocation === '__new_store__') {
+          const customPrompt = prompt('Ingresa el nombre del nuevo comercio o supermercado:');
+          if (!customPrompt || !customPrompt.trim()) {
+            return;
+          }
+          targetLocation = customPrompt.trim().toUpperCase();
+        }
+
+        // Actualizar ítem en el store con su nuevo lugar
+        if (typeof store.updateItem === 'function') {
+          store.updateItem(itemId, {
+            location: targetLocation,
+            updatedAt: Date.now()
+          });
+        }
+
+        // Sincronizar en Firebase si está activo
+        if (isFirebaseActive && itemsCollection) {
+          try {
+            await itemsCollection.doc(itemId).set({
+              location: targetLocation,
+              updatedAt: (firebase.firestore && firebase.firestore.FieldValue)
+                ? firebase.firestore.FieldValue.serverTimestamp()
+                : Date.now()
+            }, { merge: true });
+          } catch (err) {
+            console.warn('[App] Error al actualizar comercio en Firebase:', err);
+          }
+        }
+
+        if (FeedbackModule && FeedbackModule.showToast) {
+          FeedbackModule.showToast(`Producto asignado a ${targetLocation}`, 'success');
+        }
+        return;
+      }
+
+      if (removeBtn) {
+        const itemId = removeBtn.dataset.id;
+        if (typeof store.deleteItem === 'function') {
+          store.deleteItem(itemId);
+        }
+        if (isFirebaseActive && itemsCollection) {
+          try {
+            await itemsCollection.doc(itemId).delete();
+          } catch (err) {
+            console.warn('[App] Error al eliminar en Firebase:', err);
+          }
+        }
+        if (FeedbackModule && FeedbackModule.showToast) {
+          FeedbackModule.showToast('Producto eliminado', 'info');
         }
       }
     });

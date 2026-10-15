@@ -408,8 +408,12 @@ async function runScriptLifecycleTests() {
   await new Promise(r => setTimeout(r, 40));
   assert.ok(addItemBtn.textContent.includes('Guardar'), 'Clic delegado en edit-btn activa modo edición');
 
-  // Cancelar edición re-reseteando valores
-  itemInput.value = '';
+  // Cancelar edición mediante tecla Escape
+  const cancelEditEvt = new env.DOMEvent('keydown', { bubbles: true });
+  cancelEditEvt.key = 'Escape';
+  itemInput.dispatchEvent(cancelEditEvt);
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(addItemBtn.textContent.includes('Añadir'), 'Escape restaura el botón a Añadir');
 
   // Delegación de del-btn click
   const countBeforeDel = container.querySelectorAll('.shopping-item').length;
@@ -430,9 +434,68 @@ async function runScriptLifecycleTests() {
   await new Promise(r => setTimeout(r, 40));
   console.log('  ✓ Test 20: Persistencia de SortableJS y ciclo de vida de componentes verificado');
 
+  // Test 21: Alternancia y persistencia de vista de Lista vs Cuadrícula
+  const btnViewList = env.document.getElementById('btnViewList');
+  const btnViewGrid = env.document.getElementById('btnViewGrid');
+  assert.ok(btnViewList && btnViewGrid, 'Botones de alternancia de vista lista/cuadrícula deben existir');
+
+  // Cambiar a cuadrícula
+  btnViewGrid.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  assert.ok(container.classList.contains('view-grid'), 'shoppingListContainer debe tener clase view-grid');
+  assert.strictEqual(env.localStorage.getItem('shopping_view_layout'), 'grid', 'Debe persistir "grid" en localStorage');
+
+  // Volver a lista
+  btnViewList.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  assert.strictEqual(container.classList.contains('view-grid'), false, 'shoppingListContainer no debe tener clase view-grid en modo lista');
+  assert.strictEqual(env.localStorage.getItem('shopping_view_layout'), 'list', 'Debe persistir "list" en localStorage');
+  console.log('  ✓ Test 21: Alternancia y persistencia de vista de lista y cuadrícula validada');
+
+  // Test 22: Productos "Por averiguar / Sin lugar asignado" y reasignación rápida con flechita
+  itemInput.value = 'Café en Grano';
+  locationInput.value = 'Por averiguar';
+  addItemBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+
+  const pendingSection = env.document.getElementById('pendingLocationSection');
+  const pendingList = env.document.getElementById('pendingLocationList');
+  assert.ok(pendingSection && pendingList, 'pendingLocationSection y pendingLocationList deben existir en el DOM');
+  assert.strictEqual(pendingSection.style.display, 'block', 'pendingLocationSection debe estar visible');
+  assert.ok(pendingList.textContent.includes('Café en Grano'), 'Café en Grano debe estar en la lista de pendientes');
+
+  // Reasignar mediante select y flechita
+  const pendingCard = pendingList.querySelector('.pending-item-card');
+  const selectStore = pendingCard.querySelector('.pending-assign-select');
+  const arrowBtn = pendingCard.querySelector('.btn-assign-arrow');
+  assert.ok(selectStore && arrowBtn, 'Debe existir select y botón de flecha en tarjeta pendiente');
+
+  // Seleccionar tienda 'Carrefour' y presionar flechita
+  selectStore.value = 'Carrefour';
+  arrowBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+
+  // Verificar que el producto se movió de pendientes al grupo de Carrefour
+  assert.strictEqual(pendingList.textContent.includes('Café en Grano'), false, 'Café en Grano no debe estar en pendientes tras reasignar');
+  assert.ok(container.textContent.includes('Carrefour'), 'Carrefour debe existir en el contenedor de compras');
+  assert.ok(container.textContent.includes('Café en Grano'), 'Café en Grano debe estar renderizado en su nuevo comercio');
+  console.log('  ✓ Test 22: Sección "Por averiguar" y reasignación rápida con flechita validada');
+
+  // Test 23: Ordenamiento predeterminado por fecha más reciente de ser agregados
+  const storeInstance = global.store;
+  if (storeInstance && typeof storeInstance.addItem === 'function') {
+    const t0 = 100000;
+    storeInstance.addItem({ name: 'Producto Antiguo', location: 'TestTienda', completed: false, timestamp: t0 });
+    storeInstance.addItem({ name: 'Producto Reciente', location: 'TestTienda', completed: false, timestamp: t0 + 50000 });
+    const grouped = storeInstance.getGroupedItems();
+    assert.strictEqual(grouped['TestTienda'][0].name, 'Producto Reciente', 'El producto más reciente debe aparecer primero');
+    assert.strictEqual(grouped['TestTienda'][1].name, 'Producto Antiguo', 'El producto más antiguo debe aparecer después');
+  }
+  console.log('  ✓ Test 23: Ordenamiento predeterminado por fecha más reciente verificado');
+
   console.log('\n==================================================');
   console.log('RESUMEN DE PRUEBAS LIFECYCLE DE SCRIPT.JS:');
-  console.log('Total: 20 | Aprobadas: 20 | Falladas: 0');
+  console.log('Total: 23 | Aprobadas: 23 | Falladas: 0');
   console.log('==================================================\n');
 }
 

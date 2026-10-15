@@ -129,8 +129,10 @@
                     <div class="input-wrapper input-wrapper-loc">
                         <i data-lucide="map-pin" class="input-icon" aria-hidden="true"></i>
                         <label for="locationInput" class="sr-only">Lugar o Supermercado</label>
-                        <input type="text" id="locationInput" placeholder="Lugar / Super" list="location-suggestions" aria-label="Lugar o Supermercado" autocomplete="off">
-                        <datalist id="location-suggestions"></datalist>
+                        <input type="text" id="locationInput" placeholder="Lugar / Super (o Por averiguar)" list="location-suggestions" aria-label="Lugar o Supermercado" autocomplete="off">
+                        <datalist id="location-suggestions">
+                            <option value="Por averiguar">
+                        </datalist>
                     </div>
                     <div class="input-wrapper input-wrapper-cat">
                         <i data-lucide="tag" class="input-icon" aria-hidden="true"></i>
@@ -151,11 +153,36 @@
                             <label for="searchInput" class="sr-only">Buscar en toda la lista</label>
                             <input type="search" id="searchInput" placeholder="Buscar en toda la lista..." aria-label="Buscar productos">
                         </div>
-                        <div class="form-check">
-                            <input type="checkbox" id="hideCompletedSwitch" role="switch" aria-checked="false">
-                            <label for="hideCompletedSwitch">Ocultar Comprados</label>
+                        <div class="toolbar-controls-group">
+                            <div class="form-check">
+                                <input type="checkbox" id="hideCompletedSwitch" role="switch" aria-checked="false">
+                                <label for="hideCompletedSwitch">Ocultar Comprados</label>
+                            </div>
+                            <div class="view-layout-toggle" role="group" aria-label="Diseño de visualización">
+                                <button type="button" id="btnViewList" class="btn-layout-toggle active" title="Ver en lista" aria-label="Ver en lista" aria-pressed="true">
+                                    <i data-lucide="list" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" id="btnViewGrid" class="btn-layout-toggle" title="Ver en cuadrícula" aria-label="Ver en cuadrícula" aria-pressed="false">
+                                    <i data-lucide="layout-grid" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Sección: Por averiguar / Sin lugar asignado (del día) -->
+                    <section id="pendingLocationSection" class="pending-location-section" aria-label="Productos por averiguar o sin lugar asignado" style="display: none;">
+                        <div class="pending-location-header">
+                            <div class="pending-title-group">
+                                <i data-lucide="help-circle" class="pending-icon" aria-hidden="true"></i>
+                                <h3>Por averiguar / Sin lugar asignado</h3>
+                                <span id="pendingLocationCountBadge" class="pending-badge">0 por asignar</span>
+                            </div>
+                            <p class="pending-hint">Productos agregados sin comercio definido. Elige el comercio en el menú y pulsa la flecha para guardarlo en su lugar.</p>
+                        </div>
+                        <div id="pendingLocationList" class="pending-items-grid">
+                            <!-- Inyección dinámica de productos por averiguar -->
+                        </div>
+                    </section>
 
                     <div id="shoppingListContainer" class="shopping-list-container" role="region" aria-live="polite" aria-label="Lista de compras agrupada por ubicación">
                         <!-- Los grupos de productos se inyectan dinámicamente aquí -->
