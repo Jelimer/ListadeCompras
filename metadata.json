@@ -1,0 +1,8 @@
+{
+  "name": "Lista de Compra | PRO",
+  "description": "Gestión avanzada de suministros, rutas de compra optimizadas y análisis financiero.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

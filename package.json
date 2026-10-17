@@ -2,16 +2,30 @@
   "name": "lista-de-compras",
   "version": "1.0.0",
   "description": "Una simple aplicación de lista de compras",
-  "main": "script.js",
+  "main": "src/main.tsx",
   "scripts": {
-    "start": "npx serve .",
-    "test": "node tests/e2e_runner.js && node tests/m1_unit.test.js && node tests/map_routing.test.js && node tests/script_lifecycle.test.js && node tests/adversarial_reactivity_stress.test.js && node tests/adversarial_challenger2_m1.test.js && node tests/pwa_share_lazy.test.js",
-    "build": "node generate-config.js && node scripts/generate_pwa_icons.js",
-    "build:icons": "node scripts/generate_pwa_icons.js"
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "lint": "tsc --noEmit",
+    "preview": "vite preview --host 0.0.0.0 --port 3000"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "echarts": "^6.0.0"
+    "canvas-confetti": "^1.9.4",
+    "echarts": "^6.0.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.58.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/leaflet": "^1.9.22",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
   }
 }
