@@ -1,0 +1,6 @@
+{
+  "summary": "Plan de actualización para eliminar el bloqueo API KEY REQUIRED de CartoDB usando OpenStreetMap libre, fijar Corrientes (Argentina) como punto de partida por defecto y mostrar en el mapa e itinerario tanto los comercios con pendientes como los comercios con 0 pendientes (con estilo visual más claro/atenuado).",
+  "updatedAt": "2026-10-18T05:25:52.855701099Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

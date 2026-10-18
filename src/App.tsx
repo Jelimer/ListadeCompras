@@ -32,6 +32,10 @@ import { ShareModal } from './components/ShareModal';
 import { ExportModal } from './components/ExportModal';
 import { UndoToast } from './components/UndoToast';
 
+function normalizeLocKey(loc: string): string {
+  return String(loc || 'General').trim().toLowerCase();
+}
+
 export const App: React.FC = () => {
   // State Initialization from Persistent LocalStorage
   const [items, setItems] = useState<ShoppingItem[]>(() => loadStoredItems());
@@ -191,10 +195,6 @@ export const App: React.FC = () => {
     const completedItems = items.filter((i) => i.completed);
     if (completedItems.length === 0) return;
 
-    if (!confirm(`¿Eliminar ${completedItems.length} productos marcados como comprados?`)) {
-      return;
-    }
-
     setItems((prev) => prev.filter((i) => !i.completed));
 
     pushUndo({
@@ -250,22 +250,29 @@ export const App: React.FC = () => {
     saveStoredLayout(mode);
   };
 
-  // Group Collapse
+  // Group Collapse (normalized so 100% of groups can be collapsed/expanded cleanly)
   const handleToggleGroupCollapse = (loc: string) => {
-    setCollapsedGroups((prev) =>
-      prev.includes(loc) ? prev.filter((l) => l !== loc) : [...prev, loc]
-    );
+    const targetNorm = normalizeLocKey(loc);
+    setCollapsedGroups((prev) => {
+      const exists = prev.some((l) => normalizeLocKey(l) === targetNorm);
+      if (exists) {
+        return prev.filter((l) => normalizeLocKey(l) !== targetNorm);
+      }
+      return [...prev, loc.trim()];
+    });
   };
 
   // Reorder Locations
   const handleReorderLocation = (direction: 'up' | 'down', targetLoc: string) => {
-    const distinctLocs = Array.from(new Set(items.map((i) => i.location || 'General')));
+    const distinctLocs = Array.from(new Set(items.map((i) => (i.location && i.location.trim()) || 'General')));
     const fullOrder = [...locationOrder];
     distinctLocs.forEach((l) => {
-      if (!fullOrder.includes(l)) fullOrder.push(l);
+      if (!fullOrder.some((existing) => normalizeLocKey(existing) === normalizeLocKey(l))) {
+        fullOrder.push(l);
+      }
     });
 
-    const index = fullOrder.indexOf(targetLoc);
+    const index = fullOrder.findIndex((l) => normalizeLocKey(l) === normalizeLocKey(targetLoc));
     if (index === -1) return;
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= fullOrder.length) return;
@@ -301,23 +308,28 @@ export const App: React.FC = () => {
         const res = importCSV(content);
         if (res.success && res.items.length > 0) {
           setItems(res.items);
-          alert(`¡${res.items.length} productos importados correctamente desde CSV!`);
-        } else {
-          alert(`Error al importar CSV: ${res.error || 'Archivo inválido'}`);
+          pushUndo({
+            type: 'ADD_ITEM',
+            timestamp: Date.now(),
+            payload: { id: '' },
+            description: `¡${res.items.length} productos importados desde CSV!`,
+          });
         }
       } else {
         const res = importJSON(content);
         if (res.success) {
           setItems(res.items);
           if (res.budget > 0) setBudget(res.budget);
-          alert(`¡${res.items.length} productos importados correctamente desde JSON!`);
-        } else {
-          alert(`Error al importar JSON: ${res.error || 'Archivo inválido'}`);
+          pushUndo({
+            type: 'ADD_ITEM',
+            timestamp: Date.now(),
+            payload: { id: '' },
+            description: `¡${res.items.length} productos importados desde JSON!`,
+          });
         }
       }
     };
     reader.readAsText(file);
-    // Reset file input value so same file can be reloaded if needed
     e.target.value = '';
   };
 
@@ -336,7 +348,7 @@ export const App: React.FC = () => {
       source: 'picker',
     });
     setPickerStore(null);
-    alert(`Ubicación fijada para ${storeName} en [${lat.toFixed(5)}, ${lng.toFixed(5)}]`);
+    setItems((prev) => [...prev]);
   };
 
   return (
@@ -373,8 +385,10 @@ export const App: React.FC = () => {
             onDeleteItem={handleDeleteItem}
             onToggleCompleted={handleToggleCompleted}
             locationOrder={locationOrder}
+            onSetLocationOrder={setLocationOrder}
             collapsedGroups={collapsedGroups}
             onToggleGroupCollapse={handleToggleGroupCollapse}
+            onSetCollapsedGroups={setCollapsedGroups}
             onReorderLocation={handleReorderLocation}
             grandTotalPending={metrics.totalPending}
           />
@@ -403,6 +417,7 @@ export const App: React.FC = () => {
             pickerStore={pickerStore}
             onCancelPicker={() => setPickerStore(null)}
             onCoordPicked={handleCoordPicked}
+            onToggleCompleted={handleToggleCompleted}
           />
         )}
       </main>
@@ -427,7 +442,6 @@ export const App: React.FC = () => {
           onClose={() => setEditStoreModalName(null)}
           onStartMapPicker={(store) => setPickerStore(store)}
           onLocationSaved={() => {
-            // Trigger state change so map updates
             setItems((prev) => [...prev]);
           }}
         />

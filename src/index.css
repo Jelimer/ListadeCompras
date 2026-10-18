@@ -1,6 +1,13 @@
 @import "../style.css";
 
-/* Additional React & Component Polish */
+/* ==========================================================================
+   OPTIMIZACIÓN DE LAYOUT, COLAPSO 100%, DRAG & DROP Y MAPA PANORÁMICO OSRM
+   ========================================================================== */
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -11,147 +18,225 @@
   pointer-events: none;
 }
 
-.editing-row {
-  background-color: var(--primary-soft);
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* Evitar transición de ancho que causaba que la mitad derecha del mapa quedara en blanco */
+.container,
+.container.map-panoramic-mode,
+.container:has(#panel-map.active) {
+  transition: background-color 0.2s ease, border-color 0.2s ease !important;
 }
 
-.edit-inputs-grid {
+/* Filtro nocturno calibrado para mosaicos libres de OpenStreetMap (sin API key) */
+[data-theme="dark"] .map-view-container .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(2.6) hue-rotate(190deg) saturate(0.35) !important;
+}
+
+.panel-map-layout,
+.view-panel.panel-map-layout.active {
+  width: 100%;
+  min-width: 0;
+}
+
+.map-main-wrapper {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+
+.map-view-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 540px;
+}
+
+@media (min-width: 900px) {
+  .map-view-container {
+    min-height: calc(100vh - 190px);
+  }
+}
+
+/* ==========================================================================
+   BARRA DE HERRAMIENTAS: FILTROS Y BOTÓN CONTRAER / EXPANDIR TODO
+   ========================================================================== */
+
+.toolbar-controls-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  flex: 1;
-}
-
-.edit-inputs-grid input {
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-main);
-  font-size: 13px;
-}
-
-.edit-input-name {
-  flex: 2;
-  min-width: 120px;
-}
-
-.edit-input-qty {
-  width: 65px;
-}
-
-.edit-input-price {
-  width: 80px;
-}
-
-.edit-input-loc,
-.edit-input-cat {
-  flex: 1;
-  min-width: 90px;
-}
-
-.edit-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.btn-save-edit,
-.btn-cancel-edit {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px;
-  cursor: pointer;
-  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+}
+
+.btn-collapse-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
   color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
 }
 
-.btn-save-edit:hover {
-  background: var(--success);
-  color: white;
+.btn-collapse-all:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
-.btn-cancel-edit:hover {
-  background: var(--danger);
-  color: white;
+.btn-collapse-all:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 48px 16px;
-  color: var(--text-muted);
+/* ==========================================================================
+   TARJETAS DE COMERCIOS: COLAPSO TOTAL SIN EXCEPCIÓN Y DRAG & DROP
+   ========================================================================== */
+
+.shopping-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.empty-icon {
-  margin: 0 auto 16px;
-  opacity: 0.4;
+.shopping-list-container.view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start !important;
 }
 
 .location-group-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  margin-bottom: 16px;
+  border-radius: var(--radius-md, 14px);
+  margin-bottom: 0;
   overflow: hidden;
+  align-self: start;
+  height: auto !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.location-group-card:hover {
+  border-color: var(--border-strong, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+
+.location-group-card.is-collapsed .location-header {
+  border-bottom: none;
+}
+
+.location-group-card.has-zero-pending {
+  opacity: 0.82;
+}
+
+.location-group-card.drag-over-card,
+.route-stop-card.drag-over-card {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary-soft) !important;
 }
 
 .location-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 16px;
   background: var(--bg-surface-elevated);
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.location-header:hover {
+  background: var(--border-subtle);
+}
+
+.location-header:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .location-title-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: none;
-  border: none;
-  cursor: pointer;
   color: var(--text-main);
   font-size: 15px;
   font-weight: 600;
-  padding: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.store-drag-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: grab;
+  padding: 2px;
+  border-radius: 4px;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.store-drag-grip:hover {
+  opacity: 1;
+  color: var(--primary);
+}
+
+.store-drag-grip:active {
+  cursor: grabbing;
 }
 
 .loc-pin-icon {
   color: var(--primary);
+  flex-shrink: 0;
 }
 
 .location-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .location-count-badge {
   font-size: 12px;
-  font-weight: 500;
-  padding: 2px 8px;
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-radius: var(--radius-full);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.location-count-badge::before {
+  content: "· ";
+  margin-right: 2px;
+}
+
+.location-count-badge.badge-zero {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .location-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .location-subtotal-badge {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .location-reorder-buttons {
@@ -160,21 +245,27 @@
 }
 
 .btn-order-arrow {
-  background: none;
+  background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   cursor: pointer;
   padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
+  transition: all 0.15s ease;
 }
 
 .btn-order-arrow:hover:not(:disabled) {
-  color: var(--text-main);
-  background: var(--bg-body);
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
+
+/* ==========================================================================
+   FILAS DE PRODUCTO Y STEPPER DE CANTIDAD (+/-)
+   ========================================================================== */
 
 .items-list {
   display: flex;
@@ -185,6 +276,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-subtle);
   transition: background-color 0.15s ease;
@@ -194,8 +286,12 @@
   border-bottom: none;
 }
 
+.item-row:hover {
+  background-color: rgba(79, 70, 229, 0.03);
+}
+
 .item-row.completed {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .item-row.completed .item-name {
@@ -206,8 +302,9 @@
 .item-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
+  min-width: 0;
 }
 
 .checkbox-container {
@@ -225,9 +322,9 @@
 }
 
 .category-avatar-pill {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   background: var(--primary-soft);
   color: var(--primary);
   display: flex;
@@ -238,9 +335,12 @@
 
 .item-name {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-main);
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-name:hover {
@@ -250,7 +350,8 @@
 .item-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .item-pricing {
@@ -259,22 +360,55 @@
   gap: 8px;
 }
 
+.qty-stepper-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px 4px;
+}
+
+.btn-qty-step {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-qty-step:hover:not(:disabled) {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.btn-qty-step:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .item-qty-tag {
   font-size: 12px;
-  background: var(--bg-surface-elevated);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  font-weight: 600;
+  padding: 1px 4px;
   color: var(--text-secondary);
 }
 
 .item-price-tag {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-main);
 }
 
 .unit-price-sub {
-  font-weight: normal;
+  font-weight: 500;
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -289,11 +423,12 @@
   border: none;
   cursor: pointer;
   padding: 6px;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .btn-item-action:hover {
@@ -303,28 +438,196 @@
 
 .btn-item-action.btn-delete-item:hover {
   color: var(--danger);
+  background: var(--danger-soft);
 }
 
-/* Route Stops List */
+/* Edición inline de producto */
+.editing-row {
+  background-color: var(--primary-soft);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-inputs-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.edit-inputs-grid input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.edit-input-name {
+  flex: 2;
+  min-width: 130px;
+}
+
+.edit-input-qty {
+  width: 68px;
+}
+
+.edit-input-price {
+  width: 85px;
+}
+
+.edit-input-loc,
+.edit-input-cat {
+  flex: 1;
+  min-width: 95px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-save-edit,
+.btn-cancel-edit {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-main);
+}
+
+.btn-save-edit:hover {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
+}
+
+.btn-cancel-edit:hover {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.pending-custom-store-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--primary);
+  background: var(--card-bg);
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+}
+
+.empty-icon {
+  margin: 0 auto 14px;
+  opacity: 0.4;
+}
+
+/* ==========================================================================
+   VISTA DE MAPA: ETIQUETAS PERMANENTES, DESGLOSE DE PRODUCTOS Y OSRM
+   ========================================================================== */
+
+.origin-status-hint {
+  font-size: 12px;
+  color: var(--primary);
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.route-mode-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-muted));
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+}
+
+.route-mode-status svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.trip-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trip-inline-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--primary);
+  background: var(--bg-body);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Tarjetas de Parada con Productos Incluidos */
 .route-stops-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.route-stop-card {
+  background: var(--bg-body);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.route-stop-card:hover {
+  border-color: var(--primary);
+}
+
+.route-stop-card.zero-pending {
+  opacity: 0.72;
+  background: var(--bg-surface-elevated);
+  border-style: dashed;
+}
+
+.route-stop-card.zero-pending .stop-badge-idx {
+  background: #64748b;
+}
+
+.route-stop-card.excluded {
+  opacity: 0.5;
+  background: var(--bg-surface-elevated);
 }
 
 .route-stop-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: var(--bg-body);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.route-stop-item.excluded {
-  opacity: 0.5;
-  background: var(--bg-surface-elevated);
+  gap: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
 }
 
 .stop-checkbox-wrap input {
@@ -335,17 +638,21 @@
 }
 
 .stop-badge-idx {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--primary);
-  color: white;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: bold;
+  font-size: 12px;
+  font-weight: 800;
   flex-shrink: 0;
+}
+
+.route-stop-card.excluded .stop-badge-idx {
+  background: var(--text-muted);
 }
 
 .stop-info-body {
@@ -356,17 +663,20 @@
 .stop-name-row {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 6px;
   flex-wrap: wrap;
 }
 
 .stop-store-name {
   font-size: 14px;
+  font-weight: 700;
   color: var(--text-main);
 }
 
 .stop-items-count {
   font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
 }
 
@@ -381,8 +691,8 @@
 
 .stop-leg-meta {
   font-size: 11px;
-  color: var(--secondary);
-  font-weight: 500;
+  color: var(--primary);
+  font-weight: 600;
   margin-top: 2px;
 }
 
@@ -390,22 +700,26 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .btn-stop-edit {
-  background: none;
+  background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 4px;
+  border-radius: 6px;
+  padding: 5px;
   cursor: pointer;
   color: var(--text-muted);
   display: flex;
   align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
 
 .btn-stop-edit:hover {
   color: var(--primary);
-  background: var(--card-bg);
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .stop-arrows-col {
@@ -414,9 +728,214 @@
   gap: 2px;
 }
 
+/* Desglose de productos dentro de cada parada del itinerario */
+.stop-inline-items {
+  border-top: 1px solid var(--border-subtle, var(--border));
+  background: var(--card-bg);
+  padding: 6px 12px 8px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stop-inline-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.stop-inline-item-row:hover {
+  background: var(--bg-surface-elevated);
+}
+
+.stop-inline-item-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.stop-inline-item-row.completed-inline-item {
+  opacity: 0.58;
+}
+
+.stop-inline-item-row.completed-inline-item .stop-inline-item-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.stop-inline-item-name {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stop-inline-item-meta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .empty-stops-text {
   font-size: 13px;
   color: var(--text-muted);
   text-align: center;
   padding: 16px 0;
+}
+
+/* ==========================================================================
+   MARCADORES Y ETIQUETAS PERMANENTES EN EL MAPA LEAFLET
+   ========================================================================== */
+
+.map-pin-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #ffffff;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.35);
+}
+
+.map-pin-origin {
+  background: #047857;
+}
+
+.map-pin-stop {
+  background: #4f46e5;
+}
+
+.map-pin-zero-pending {
+  background: #64748b;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.2);
+}
+
+.leaflet-tooltip.map-store-permanent-label {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.14);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.leaflet-tooltip.map-store-permanent-label.map-label-zero-pending {
+  background: rgba(248, 250, 252, 0.85);
+  color: #64748b;
+  border-style: dashed;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.leaflet-tooltip.map-store-permanent-label::before {
+  display: none;
+}
+
+.leaflet-tooltip.map-origin-permanent-label {
+  background: rgba(4, 120, 87, 0.95);
+  color: #ffffff;
+  border-color: #065f46;
+}
+
+[data-theme="dark"] .leaflet-tooltip.map-store-permanent-label {
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border-color: #334155;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .leaflet-tooltip.map-store-permanent-label.map-label-zero-pending {
+  background: rgba(30, 41, 59, 0.82);
+  color: #94a3b8;
+  border-color: #475569;
+}
+
+.popup-item-completed {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+[data-theme="dark"] .leaflet-tooltip.map-origin-permanent-label {
+  background: rgba(6, 95, 70, 0.96);
+  color: #ecfdf5;
+  border-color: #10b981;
+}
+
+.label-step-num {
+  color: #4f46e5;
+  font-weight: 800;
+}
+
+[data-theme="dark"] .label-step-num {
+  color: #818cf8;
+}
+
+.label-item-count {
+  font-weight: 600;
+  opacity: 0.75;
+  font-size: 11px;
+}
+
+.map-popup-box {
+  min-width: 180px;
+}
+
+.map-popup-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 2px;
+}
+
+.map-popup-address {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.map-popup-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.map-popup-item-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-popup-footer {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
 }

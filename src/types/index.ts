@@ -50,6 +50,8 @@ export interface RouteStop {
   lng: number;
   address: string;
   pendingItems: ShoppingItem[];
+  completedItems?: ShoppingItem[];
+  hasPending?: boolean;
   itemCount: number;
   estimatedTotal: number;
   stepIndex?: number;

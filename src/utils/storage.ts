@@ -10,12 +10,13 @@ const STORAGE_KEYS = {
   TRIPS_DATA: 'shopping_trips_data',
   LOCATION_ORDER: 'locationOrder',
   COLLAPSED_GROUPS: 'collapsedGroups',
+  HIDE_EMPTY_STORES: 'shopping_hide_empty_stores',
 };
 
 export const DEFAULT_ORIGIN: RouteOrigin = {
-  lat: 40.416775,
-  lng: -3.703790,
-  address: 'Puerta del Sol, Madrid (Referencia)',
+  lat: -27.469213,
+  lng: -58.830635,
+  address: 'Plaza 25 de Mayo, Corrientes, Argentina',
   type: 'default',
   accuracy: null,
 };
@@ -96,19 +97,28 @@ export function saveStoredLayout(layout: 'list' | 'grid'): void {
   safeSet(STORAGE_KEYS.VIEW_LAYOUT, layout);
 }
 
+export function loadStoredHideEmptyStores(): boolean {
+  const raw = safeGet(STORAGE_KEYS.HIDE_EMPTY_STORES);
+  return raw === 'true';
+}
+
+export function saveStoredHideEmptyStores(hide: boolean): void {
+  safeSet(STORAGE_KEYS.HIDE_EMPTY_STORES, String(hide));
+}
+
 export function loadStoredLocationOrder(): string[] {
   const raw = safeGet(STORAGE_KEYS.LOCATION_ORDER);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map((s) => String(s).trim()) : [];
   } catch {
     return [];
   }
 }
 
 export function saveStoredLocationOrder(order: string[]): void {
-  safeSet(STORAGE_KEYS.LOCATION_ORDER, JSON.stringify(order));
+  safeSet(STORAGE_KEYS.LOCATION_ORDER, JSON.stringify(order.map((s) => String(s).trim())));
 }
 
 export function loadStoredCollapsedGroups(): string[] {
@@ -116,14 +126,14 @@ export function loadStoredCollapsedGroups(): string[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map((s) => String(s).trim()) : [];
   } catch {
     return [];
   }
 }
 
 export function saveStoredCollapsedGroups(groups: string[]): void {
-  safeSet(STORAGE_KEYS.COLLAPSED_GROUPS, JSON.stringify(groups));
+  safeSet(STORAGE_KEYS.COLLAPSED_GROUPS, JSON.stringify(groups.map((s) => String(s).trim())));
 }
 
 export function normalizeStoreKey(storeName: string): string {
@@ -197,6 +207,17 @@ export function loadStoredOrigin(): RouteOrigin {
       isFinite(parsed.lat) &&
       isFinite(parsed.lng)
     ) {
+      // Auto-migrate legacy Madrid default origin to Corrientes, Argentina
+      const isLegacyMadrid =
+        parsed.type === 'default' ||
+        (Math.abs(parsed.lat - 40.416775) < 0.01 && Math.abs(parsed.lng - -3.70379) < 0.01) ||
+        (typeof parsed.address === 'string' && parsed.address.includes('Puerta del Sol, Madrid'));
+
+      if (isLegacyMadrid) {
+        saveStoredOrigin(DEFAULT_ORIGIN);
+        return { ...DEFAULT_ORIGIN };
+      }
+
       return {
         lat: parsed.lat,
         lng: parsed.lng,
