@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { ShoppingItem, RouteOrigin, TripsData, UndoAction } from './types';
+import {
+  ShoppingItem,
+  RouteOrigin,
+  TripsData,
+  UndoAction,
+  PurchaseReceipt,
+  ReceiptLineItem,
+  PurchaseHistoryEntry,
+} from './types';
 import {
   loadStoredItems,
   saveStoredItems,
@@ -20,17 +28,22 @@ import {
   saveStoreCoordinate,
   getNextSequentialSku,
   ensureSequentialSkus,
+  loadStoredReceipts,
+  saveStoredReceipts,
+  formatSkuCode,
 } from './utils/storage';
 import { calculateMetrics } from './utils/analytics';
 import { importJSON, importCSV } from './utils/exportImport';
+import { formatMoney } from './utils/formatters';
 import { Header } from './components/Header';
 import { NavigationTabs, ViewType } from './components/NavigationTabs';
-import { ListView } from './components/ListView';
+import { ListView, isPendingLocationName } from './components/ListView';
 import { StatsView } from './components/StatsView';
 import { MapView } from './components/MapView';
 import { ModalEditStoreLocation } from './components/ModalEditStoreLocation';
 import { ShareModal } from './components/ShareModal';
 import { ExportModal } from './components/ExportModal';
+import { ReceiptScannerModal } from './components/ReceiptScannerModal';
 import { UndoToast } from './components/UndoToast';
 
 function normalizeLocKey(loc: string): string {
@@ -52,6 +65,7 @@ export const App: React.FC = () => {
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>(() => loadStoredCollapsedGroups());
   const [origin, setOrigin] = useState<RouteOrigin>(() => loadStoredOrigin());
   const [tripsData, setTripsData] = useState<TripsData>(() => loadStoredTripsData());
+  const [receipts, setReceipts] = useState<PurchaseReceipt[]>(() => loadStoredReceipts());
 
   // Network Online Status
   const [isOnline, setIsOnline] = useState<boolean>(() =>
@@ -65,6 +79,7 @@ export const App: React.FC = () => {
   // Modals & Map Picker State
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isReceiptScannerOpen, setIsReceiptScannerOpen] = useState(false);
   const [editStoreModalName, setEditStoreModalName] = useState<string | null>(null);
   const [pickerStore, setPickerStore] = useState<string | null>(null);
 
@@ -106,8 +121,32 @@ export const App: React.FC = () => {
     saveStoredCollapsedGroups(collapsedGroups);
   }, [collapsedGroups]);
 
+  // Save receipts when changed
+  useEffect(() => {
+    saveStoredReceipts(receipts);
+  }, [receipts]);
+
   // Financial Metrics
   const metrics = useMemo(() => calculateMetrics(items, budget), [items, budget]);
+
+  // Distinct locations and categories for autocomplete in ReceiptScannerModal
+  const distinctLocations = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (i.location && i.location.trim() && !isPendingLocationName(i.location)) {
+        set.add(i.location.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [items]);
+
+  const distinctCategories = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (i.category && i.category.trim()) set.add(i.category.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [items]);
 
   // Push Undo Helper
   const pushUndo = useCallback((action: UndoAction) => {
@@ -176,15 +215,40 @@ export const App: React.FC = () => {
     if (!item) return;
 
     const previousCompleted = item.completed;
+    const previousDate = item.lastPurchasedDate;
     const nextCompleted = !previousCompleted;
+    const todayStr = new Date().toLocaleDateString('es-AR');
 
-    const nextItems = items.map((i) =>
-      i.id === id ? { ...i, completed: nextCompleted, updatedAt: Date.now() } : i
-    );
+    const nextItems = items.map((i) => {
+      if (i.id !== id) return i;
+      if (nextCompleted) {
+        const entry: PurchaseHistoryEntry = {
+          date: todayStr,
+          storeName: i.location || 'General',
+          unitPrice: i.unitPrice || 0,
+          quantity: i.quantity || 1,
+        };
+        const prevHist = Array.isArray(i.purchaseHistory) ? i.purchaseHistory : [];
+        return {
+          ...i,
+          completed: true,
+          lastPurchasedDate: todayStr,
+          purchaseHistory: [entry, ...prevHist.slice(0, 19)],
+          updatedAt: Date.now(),
+        };
+      } else {
+        return {
+          ...i,
+          completed: false,
+          lastPurchasedDate: undefined,
+          receiptId: undefined,
+          updatedAt: Date.now(),
+        };
+      }
+    });
 
     setItems(nextItems);
 
-    // If all items are completed, trigger celebration confetti!
     const pendingRemaining = nextItems.filter((i) => !i.completed).length;
     if (nextCompleted && pendingRemaining === 0 && nextItems.length > 0) {
       confetti({
@@ -197,25 +261,266 @@ export const App: React.FC = () => {
     pushUndo({
       type: 'TOGGLE_COMPLETED',
       timestamp: Date.now(),
-      payload: { id, previousCompleted },
+      payload: { id, previousCompleted, previousDate },
       description: previousCompleted
-        ? `Marcado como pendiente: ${item.skuCode || ''} "${item.name}"`
-        : `Comprado: ${item.skuCode || ''} "${item.name}"`,
+        ? `Pendiente nuevamente: ${item.skuCode || ''} "${item.name}"`
+        : `Comprado (${todayStr}): ${item.skuCode || ''} "${item.name}"`,
     });
   };
 
-  const handleClearCompleted = () => {
+  // Reset a single product to pending (keeping the product, its #ID, name, store, and reference price)
+  const handleResetProduct = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+
+    const snapshot = { ...item };
+
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              completed: false,
+              lastPurchasedDate: undefined,
+              receiptId: undefined,
+              updatedAt: Date.now(),
+            }
+          : i
+      )
+    );
+
+    pushUndo({
+      type: 'RESET_ITEMS',
+      timestamp: Date.now(),
+      payload: { previousItems: [snapshot] },
+      description: `Producto reseteado a pendiente: ${item.skuCode || ''} "${item.name}"`,
+    });
+  };
+
+  // Reset all completed products of a specific store (keeping all products intact)
+  const handleResetStoreCompleted = (location: string) => {
+    const targetNorm = normalizeLocKey(location);
+    const affected = items.filter(
+      (i) => i.completed && normalizeLocKey(i.location) === targetNorm
+    );
+    if (affected.length === 0) return;
+
+    const snapshots = affected.map((i) => ({ ...i }));
+
+    setItems((prev) =>
+      prev.map((i) =>
+        i.completed && normalizeLocKey(i.location) === targetNorm
+          ? {
+              ...i,
+              completed: false,
+              lastPurchasedDate: undefined,
+              receiptId: undefined,
+              updatedAt: Date.now(),
+            }
+          : i
+      )
+    );
+
+    pushUndo({
+      type: 'RESET_ITEMS',
+      timestamp: Date.now(),
+      payload: { previousItems: snapshots },
+      description: `Se resetearon ${affected.length} productos en "${location}" (conservados en tu lista)`,
+    });
+  };
+
+  // Reset all completed products across the list (keeping 100% of products intact to start tracking with dates)
+  const handleResetAllCompleted = () => {
     const completedItems = items.filter((i) => i.completed);
     if (completedItems.length === 0) return;
 
-    setItems((prev) => prev.filter((i) => !i.completed));
+    const snapshots = completedItems.map((i) => ({ ...i }));
+
+    setItems((prev) =>
+      prev.map((i) =>
+        i.completed
+          ? {
+              ...i,
+              completed: false,
+              lastPurchasedDate: undefined,
+              receiptId: undefined,
+              updatedAt: Date.now(),
+            }
+          : i
+      )
+    );
 
     pushUndo({
-      type: 'CLEAR_COMPLETED',
+      type: 'RESET_ITEMS',
       timestamp: Date.now(),
-      payload: { items: completedItems },
-      description: `Se limpiaron ${completedItems.length} productos comprados`,
+      payload: { previousItems: snapshots },
+      description: `Se resetearon ${completedItems.length} productos a pendientes (sin borrar ninguno)`,
     });
+  };
+
+  // Process & Confirm Uploaded Receipt
+  const handleConfirmReceipt = (payload: {
+    storeName: string;
+    storeAddress: string;
+    date: string;
+    receiptNumber: string;
+    items: ReceiptLineItem[];
+    total: number;
+    thumbnailDataUrl?: string;
+    syncEditedNamesToList: boolean;
+  }) => {
+    const receiptId = `rcpt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const cleanStoreName = payload.storeName.trim() || 'General';
+    const purchaseDate = payload.date.trim() || new Date().toLocaleDateString('es-AR');
+
+    let workingItems = [...items];
+    const receiptSavedItems: PurchaseReceipt['items'] = [];
+
+    payload.items.forEach((lineItem, idx) => {
+      const qty = Math.max(0.01, Number(lineItem.quantity) || 1);
+      const price = Math.max(0, Number(lineItem.unitPrice) || 0);
+      const lineTotal = Math.round(qty * price * 100) / 100;
+      const cleanEditedName = lineItem.name.trim();
+
+      // Check if linked to an existing item in the list
+      const existingIndex = lineItem.matchedItemId
+        ? workingItems.findIndex((w) => w.id === lineItem.matchedItemId)
+        : -1;
+
+      const historyEntry: PurchaseHistoryEntry = {
+        date: purchaseDate,
+        storeName: cleanStoreName,
+        unitPrice: price,
+        quantity: qty,
+        receiptId,
+        rawTicketName: lineItem.rawTicketName,
+      };
+
+      if (existingIndex !== -1) {
+        const existing = workingItems[existingIndex];
+        const sku = existing.skuCode || formatSkuCode(existing.seqNumber || existingIndex + 1);
+        const finalProductName =
+          payload.syncEditedNamesToList && cleanEditedName ? cleanEditedName : existing.name;
+        const prevHist = Array.isArray(existing.purchaseHistory) ? existing.purchaseHistory : [];
+
+        workingItems[existingIndex] = {
+          ...existing,
+          name: finalProductName,
+          quantity: qty,
+          unitPrice: price,
+          location: cleanStoreName,
+          category: lineItem.category || existing.category || 'General',
+          completed: true,
+          lastPurchasedDate: purchaseDate,
+          receiptId,
+          purchaseHistory: [historyEntry, ...prevHist.slice(0, 19)],
+          updatedAt: Date.now(),
+        };
+        receiptSavedItems.push({
+          name: cleanEditedName || existing.name,
+          rawTicketName: lineItem.rawTicketName,
+          quantity: qty,
+          unitPrice: price,
+          lineTotal,
+          category: lineItem.category || existing.category || 'General',
+          skuCode: sku,
+          matchedItemId: existing.id,
+        });
+      } else {
+        // Add as a new purchased item with next sequential #ID
+        const { seqNumber, skuCode } = getNextSequentialSku(workingItems);
+        const newItemId = `item_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+        const newItem: ShoppingItem = {
+          id: newItemId,
+          seqNumber,
+          skuCode,
+          name: cleanEditedName,
+          quantity: qty,
+          unitPrice: price,
+          location: cleanStoreName,
+          category: lineItem.category.trim() || 'General',
+          completed: true,
+          lastPurchasedDate: purchaseDate,
+          receiptId,
+          purchaseHistory: [historyEntry],
+          timestamp: Date.now(),
+          updatedAt: Date.now(),
+        };
+        workingItems = [newItem, ...workingItems];
+        receiptSavedItems.push({
+          name: newItem.name,
+          rawTicketName: lineItem.rawTicketName,
+          quantity: qty,
+          unitPrice: price,
+          lineTotal,
+          category: newItem.category,
+          skuCode,
+          matchedItemId: newItemId,
+        });
+      }
+    });
+
+    const newReceipt: PurchaseReceipt = {
+      id: receiptId,
+      storeName: cleanStoreName,
+      storeAddress: payload.storeAddress || undefined,
+      date: purchaseDate,
+      receiptNumber: payload.receiptNumber || undefined,
+      items: receiptSavedItems,
+      total: payload.total,
+      imagePreview: payload.thumbnailDataUrl,
+      createdAt: Date.now(),
+    };
+
+    setItems(ensureSequentialSkus(workingItems));
+    setReceipts((prev) => [newReceipt, ...prev]);
+
+    confetti({
+      particleCount: 70,
+      spread: 60,
+      origin: { y: 0.65 },
+    });
+
+    pushUndo({
+      type: 'ADD_ITEM',
+      timestamp: Date.now(),
+      payload: { id: '' },
+      description: `Ticket de "${cleanStoreName}" (${purchaseDate}) registrado por ${formatMoney(payload.total)}`,
+    });
+  };
+
+  // Update a saved receipt in History (and sync corrected names/prices to linked items in the main list)
+  const handleUpdateReceipt = (updatedReceipt: PurchaseReceipt) => {
+    setReceipts((prev) =>
+      prev.map((r) => (r.id === updatedReceipt.id ? updatedReceipt : r))
+    );
+
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        // Match by matchedItemId or skuCode from the edited receipt
+        const editedLine = updatedReceipt.items.find(
+          (ri) =>
+            (ri.matchedItemId && ri.matchedItemId === item.id) ||
+            (ri.skuCode && ri.skuCode === item.skuCode && item.receiptId === updatedReceipt.id)
+        );
+        if (!editedLine) return item;
+
+        return {
+          ...item,
+          name: editedLine.name.trim() || item.name,
+          category: editedLine.category.trim() || item.category,
+          quantity: editedLine.quantity > 0 ? editedLine.quantity : item.quantity,
+          unitPrice: editedLine.unitPrice >= 0 ? editedLine.unitPrice : item.unitPrice,
+          location: updatedReceipt.storeName.trim() || item.location,
+          lastPurchasedDate: updatedReceipt.date.trim() || item.lastPurchasedDate,
+          updatedAt: Date.now(),
+        };
+      })
+    );
+  };
+
+  const handleDeleteReceipt = (receiptId: string) => {
+    setReceipts((prev) => prev.filter((r) => r.id !== receiptId));
   };
 
   // Undo execution
@@ -227,7 +532,9 @@ export const App: React.FC = () => {
 
     switch (action.type) {
       case 'ADD_ITEM':
-        setItems((prev) => prev.filter((i) => i.id !== action.payload.id));
+        if (action.payload.id) {
+          setItems((prev) => prev.filter((i) => i.id !== action.payload.id));
+        }
         break;
       case 'DELETE_ITEM': {
         const restored = { ...action.payload.item };
@@ -249,10 +556,23 @@ export const App: React.FC = () => {
       case 'TOGGLE_COMPLETED':
         setItems((prev) =>
           prev.map((i) =>
-            i.id === action.payload.id ? { ...i, completed: action.payload.previousCompleted } : i
+            i.id === action.payload.id
+              ? {
+                  ...i,
+                  completed: action.payload.previousCompleted,
+                  lastPurchasedDate: action.payload.previousDate,
+                }
+              : i
           )
         );
         break;
+      case 'RESET_ITEMS': {
+        const mapById = new Map(action.payload.previousItems.map((p) => [p.id, p]));
+        setItems((prev) =>
+          prev.map((i) => (mapById.has(i.id) ? { ...mapById.get(i.id)! } : i))
+        );
+        break;
+      }
       case 'CLEAR_COMPLETED':
         setItems((prev) => ensureSequentialSkus([...prev, ...action.payload.items]));
         break;
@@ -381,6 +701,8 @@ export const App: React.FC = () => {
         isOnline={isOnline}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
+        receiptsCount={receipts.length}
         onOpenShare={() => setIsShareOpen(true)}
         onPrint={handlePrint}
         onExport={() => setIsExportOpen(true)}
@@ -402,6 +724,9 @@ export const App: React.FC = () => {
             onUpdateItem={handleUpdateItem}
             onDeleteItem={handleDeleteItem}
             onToggleCompleted={handleToggleCompleted}
+            onResetItem={handleResetProduct}
+            onResetStoreCompleted={handleResetStoreCompleted}
+            onResetAllCompleted={handleResetAllCompleted}
             locationOrder={locationOrder}
             onSetLocationOrder={setLocationOrder}
             collapsedGroups={collapsedGroups}
@@ -409,6 +734,7 @@ export const App: React.FC = () => {
             onSetCollapsedGroups={setCollapsedGroups}
             onReorderLocation={handleReorderLocation}
             grandTotalPending={metrics.totalPending}
+            onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
           />
         )}
 
@@ -418,8 +744,12 @@ export const App: React.FC = () => {
             budget={budget}
             onBudgetChange={setBudget}
             metrics={metrics}
-            onClearCompleted={handleClearCompleted}
+            onResetAllCompleted={handleResetAllCompleted}
+            onResetItem={handleResetProduct}
             onToggleCompleted={handleToggleCompleted}
+            receipts={receipts}
+            onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
+            onDeleteReceipt={handleDeleteReceipt}
             theme={theme}
           />
         )}
@@ -442,6 +772,20 @@ export const App: React.FC = () => {
       </main>
 
       {/* Modals & Popups */}
+      {isReceiptScannerOpen && (
+        <ReceiptScannerModal
+          isOpen={isReceiptScannerOpen}
+          onClose={() => setIsReceiptScannerOpen(false)}
+          items={items}
+          receipts={receipts}
+          distinctLocations={distinctLocations}
+          distinctCategories={distinctCategories}
+          onConfirmReceipt={handleConfirmReceipt}
+          onUpdateReceipt={handleUpdateReceipt}
+          onDeleteReceipt={handleDeleteReceipt}
+        />
+      )}
+
       {isShareOpen && (
         <ShareModal items={items} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
       )}

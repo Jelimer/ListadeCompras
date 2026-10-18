@@ -39,6 +39,7 @@ import {
   saveStoredTripsData,
   formatSkuCode,
 } from '../utils/storage';
+import { formatMoney, formatNumber } from '../utils/formatters';
 
 interface MapViewProps {
   items: ShoppingItem[];
@@ -316,8 +317,8 @@ export const MapView: React.FC<MapViewProps> = ({
           (it) =>
             `<div class="map-popup-item-row ${it.completed ? 'popup-item-completed' : ''}">
               <span>${it.completed ? '✓' : '•'} ${it.name}</span>
-              <span class="tabular-nums">${it.quantity} un.${
-              it.unitPrice > 0 ? ` · $${(it.quantity * it.unitPrice).toFixed(2)}` : ''
+              <span class="tabular-nums">${formatNumber(it.quantity)} un.${
+              it.unitPrice > 0 ? ` · ${formatMoney(it.quantity * it.unitPrice)}` : ''
             }</span>
             </div>`
         )
@@ -332,7 +333,7 @@ export const MapView: React.FC<MapViewProps> = ({
       const stepPrefix = isIncluded ? `<span class="label-step-num">${orderedIndex + 1}.</span> ` : '';
       const countText = isZeroPending
         ? '0 pend.'
-        : `${stop.pendingItems.length} ${stop.pendingItems.length === 1 ? 'art.' : 'arts.'}`;
+        : `${formatNumber(stop.pendingItems.length, 0)} ${stop.pendingItems.length === 1 ? 'art.' : 'arts.'}`;
 
       marker.bindTooltip(
         `${stepPrefix}<span class="label-store-name">${stop.storeName}</span> <span class="label-item-count">· ${countText}</span>`,
@@ -359,7 +360,7 @@ export const MapView: React.FC<MapViewProps> = ({
             ${
               isZeroPending
                 ? '0 pendientes (Compra completada)'
-                : `Subtotal pendiente: $${stop.estimatedTotal.toFixed(2)} (${stop.pendingItems.length} prod.)`
+                : `Subtotal pendiente: ${formatMoney(stop.estimatedTotal)} (${formatNumber(stop.pendingItems.length, 0)} prod.)`
             }
           </div>
         </div>
@@ -740,7 +741,7 @@ export const MapView: React.FC<MapViewProps> = ({
                   {osrmRoute ? 'Distancia en ruta' : 'Distancia estimada'}
                 </span>
                 <strong id="route-distance" className="metric-value tabular-nums">
-                  {displayedTotalDistanceKm.toFixed(1)} km
+                  {formatNumber(displayedTotalDistanceKm, 1, 1)} km
                 </strong>
               </div>
             </div>
@@ -750,7 +751,7 @@ export const MapView: React.FC<MapViewProps> = ({
               <div>
                 <span className="metric-label">Tiempo en vehículo</span>
                 <strong id="route-duration" className="metric-value tabular-nums">
-                  {displayedTotalMinutes} min
+                  {formatNumber(displayedTotalMinutes, 0)} min
                 </strong>
               </div>
             </div>
@@ -760,7 +761,7 @@ export const MapView: React.FC<MapViewProps> = ({
               <div>
                 <span className="metric-label">Paradas activas</span>
                 <strong id="route-stops" className="metric-value tabular-nums">
-                  {routeResult.orderedStops.length}{' '}
+                  {formatNumber(routeResult.orderedStops.length, 0)}{' '}
                   {routeResult.orderedStops.length === 1 ? 'parada' : 'paradas'}
                 </strong>
               </div>
@@ -1074,10 +1075,10 @@ export const MapView: React.FC<MapViewProps> = ({
                           <strong className="stop-store-name">{stop.storeName}</strong>
                           <span className="stop-items-count tabular-nums">
                             {isZeroPending
-                              ? `0 pendientes · ${stop.completedItems?.length || 0} comprados`
-                              : `${stop.pendingItems.length} ${
+                              ? `0 pendientes · ${formatNumber(stop.completedItems?.length || 0, 0)} comprados`
+                              : `${formatNumber(stop.pendingItems.length, 0)} ${
                                   stop.pendingItems.length === 1 ? 'pend.' : 'pends.'
-                                } · $${stop.estimatedTotal.toFixed(2)}`}
+                                } · ${formatMoney(stop.estimatedTotal)}`}
                           </span>
                         </div>
                         <span className="stop-address-text" title={stop.address}>
@@ -1086,8 +1087,8 @@ export const MapView: React.FC<MapViewProps> = ({
                         {isIncluded && legDistanceKm !== undefined && (
                           <div className="stop-leg-meta tabular-nums">
                             <span>
-                              Tramo #{orderedIndex + 1}: +{legDistanceKm.toFixed(2)} km · ~
-                              {legMinutes} min
+                              Tramo #{orderedIndex + 1}: +{formatNumber(legDistanceKm, 2, 2)} km · ~
+                              {formatNumber(legMinutes || 0, 0)} min
                             </span>
                           </div>
                         )}
@@ -1162,8 +1163,8 @@ export const MapView: React.FC<MapViewProps> = ({
                               <span className="item-sku-code tabular-nums">{sku}</span>
                               <span className="stop-inline-item-name">{item.name}</span>
                               <span className="stop-inline-item-meta tabular-nums">
-                                {item.quantity} un.
-                                {lineTotal > 0 ? ` · $${lineTotal.toFixed(2)}` : ''}
+                                {formatNumber(item.quantity)} un.
+                                {lineTotal > 0 ? ` · ${formatMoney(lineTotal)}` : ''}
                               </span>
                             </label>
                           );

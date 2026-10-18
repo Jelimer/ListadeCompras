@@ -12,17 +12,26 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowUpDown,
+  Receipt,
+  Camera,
+  RotateCcw,
+  Calendar,
 } from 'lucide-react';
-import { ShoppingItem, FinancialMetrics } from '../types';
+import { ShoppingItem, FinancialMetrics, PurchaseReceipt } from '../types';
 import { calculateDetailedAnalytics } from '../utils/analytics';
+import { formatMoney, formatCurrency, formatNumber, parseLocaleNumber } from '../utils/formatters';
 
 interface StatsViewProps {
   items: ShoppingItem[];
   budget: number;
   onBudgetChange: (budget: number) => void;
   metrics: FinancialMetrics;
-  onClearCompleted: () => void;
+  onResetAllCompleted: () => void;
+  onResetItem?: (id: string) => void;
   onToggleCompleted?: (id: string) => void;
+  receipts?: PurchaseReceipt[];
+  onOpenReceiptScanner?: () => void;
+  onDeleteReceipt?: (receiptId: string) => void;
   theme: 'light' | 'dark';
 }
 
@@ -30,19 +39,37 @@ export const StatsView: React.FC<StatsViewProps> = ({
   items,
   budget,
   onBudgetChange,
-  onClearCompleted,
+  onResetAllCompleted,
+  onResetItem,
   onToggleCompleted,
+  receipts = [],
+  onOpenReceiptScanner,
+  onDeleteReceipt,
   theme,
 }) => {
   // Interactive chart controls
   const [groupBy, setGroupBy] = useState<'store' | 'category'>('store');
   const [metricType, setMetricType] = useState<'currency' | 'units' | 'products'>('currency');
 
-  // Product ranking table controls & collapsible state
+  // Product ranking & audit table controls & collapsible state
   const [isRankingCollapsed, setIsRankingCollapsed] = useState(false);
-  const [ isStoreTableCollapsed, setIsStoreTableCollapsed] = useState(false);
+  const [isStoreTableCollapsed, setIsStoreTableCollapsed] = useState(false);
+  const [isReceiptsSectionCollapsed, setIsReceiptsSectionCollapsed] = useState(false);
+  const [expandedReceiptIds, setExpandedReceiptIds] = useState<Record<string, boolean>>({});
   const [rankingFilter, setRankingFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [rankingSort, setRankingSort] = useState<'cost_desc' | 'sku_asc'>('cost_desc');
+
+  // Budget text input state so user can type with . or , smoothly
+  const [budgetText, setBudgetText] = useState<string>(() =>
+    budget > 0 ? formatNumber(budget, 2) : ''
+  );
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+
+  useEffect(() => {
+    if (!isEditingBudget) {
+      setBudgetText(budget > 0 ? formatNumber(budget, 2) : '');
+    }
+  }, [budget, isEditingBudget]);
 
   const mainChartRef = useRef<HTMLDivElement | null>(null);
   const mainChartInstance = useRef<echarts.EChartsType | null>(null);
@@ -112,7 +139,6 @@ export const StatsView: React.FC<StatsViewProps> = ({
         : d.completedProductCount
     );
 
-    const unitPrefix = metricType === 'currency' ? '$' : '';
     const unitSuffix =
       metricType === 'currency' ? '' : metricType === 'units' ? ' un.' : ' prod.';
 
@@ -130,8 +156,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
             totalVal += val;
             const formatted =
               metricType === 'currency'
-                ? `$${val.toFixed(2)}`
-                : `${val}${unitSuffix}`;
+                ? formatMoney(val)
+                : `${formatNumber(val)}${unitSuffix}`;
             return `<div style="display:flex;justify-content:space-between;gap:14px;margin-top:4px;">
               <span>${p.marker} ${p.seriesName}</span>
               <strong style="font-variant-numeric:tabular-nums;">${formatted}</strong>
@@ -139,8 +165,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
           });
           const totalFormatted =
             metricType === 'currency'
-              ? `$${totalVal.toFixed(2)}`
-              : `${Math.round(totalVal * 1000) / 1000}${unitSuffix}`;
+              ? formatMoney(totalVal)
+              : `${formatNumber(totalVal)}${unitSuffix}`;
           return `<div style="min-width:170px;">
             <div style="font-weight:800;margin-bottom:4px;border-bottom:1px solid rgba(148,163,184,0.3);padding-bottom:3px;">${groupName}</div>
             ${lines.join('')}
@@ -180,7 +206,10 @@ export const StatsView: React.FC<StatsViewProps> = ({
         splitLine: { lineStyle: { color: gridColor, type: 'dashed' } },
         axisLabel: {
           color: textColor,
-          formatter: (val: number) => `${unitPrefix}${val}${unitSuffix}`,
+          formatter: (val: number) =>
+            metricType === 'currency'
+              ? `$${formatNumber(val, 0)}`
+              : `${formatNumber(val)}${unitSuffix}`,
         },
       },
       series: [
@@ -285,8 +314,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
         trigger: 'item',
         formatter: (p: any) => {
           const isMoney = String(p.name).includes('$');
-          const valStr = isMoney ? `$${Number(p.value).toFixed(2)}` : `${p.value} art.`;
-          return `<strong>${p.name}</strong><br/>${valStr} (${p.percent}%)`;
+          const valStr = isMoney ? formatMoney(p.value) : `${formatNumber(p.value, 0)} art.`;
+          return `<strong>${p.name}</strong><br/>${valStr} (${formatNumber(p.percent, 1)}%)`;
         },
       },
       legend: {
@@ -310,8 +339,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
             position: 'center',
             formatter: () =>
               analytics.totalOverall > 0
-                ? `$${analytics.totalOverall.toFixed(0)}\nTotal Carrito`
-                : `${analytics.completionRateProducts}%\nCompletado`,
+                ? `$${formatNumber(analytics.totalOverall, 0)}\nTotal Carrito`
+                : `${formatNumber(analytics.completionRateProducts, 1)}%\nCompletado`,
             color: textColor,
             fontSize: 13,
             fontWeight: 'bold',
@@ -358,6 +387,13 @@ export const StatsView: React.FC<StatsViewProps> = ({
     return list;
   }, [analytics.topProducts, rankingFilter, rankingSort]);
 
+  const toggleReceiptExpand = (id: string) => {
+    setExpandedReceiptIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   return (
     <section
       id="panel-stats"
@@ -380,28 +416,37 @@ export const StatsView: React.FC<StatsViewProps> = ({
             <div className="budget-input-inline-wrap">
               <span className="currency-prefix">$</span>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 id="budgetInput"
                 className="budget-minimal-input tabular-nums"
-                placeholder="0.00"
-                min="0"
-                step="0.01"
+                placeholder="0,00"
                 aria-label="Presupuesto disponible"
-                value={budget > 0 ? budget : ''}
-                onChange={(e) => onBudgetChange(parseFloat(e.target.value) || 0)}
+                value={budgetText}
+                onFocus={() => setIsEditingBudget(true)}
+                onBlur={() => {
+                  setIsEditingBudget(false);
+                  const parsed = parseLocaleNumber(budgetText);
+                  setBudgetText(parsed > 0 ? formatNumber(parsed, 2) : '');
+                }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBudgetText(val);
+                  onBudgetChange(parseLocaleNumber(val));
+                }}
               />
             </div>
             <div className="kpi-sub-metrics tabular-nums">
               {analytics.budget > 0 ? (
                 analytics.budgetRemaining < 0 ? (
                   <span className="kpi-status-danger">
-                    Excedido por ${Math.abs(analytics.budgetRemaining).toFixed(2)} (
-                    {analytics.budgetPercentage}%)
+                    Excedido por {formatMoney(Math.abs(analytics.budgetRemaining))} (
+                    {formatNumber(analytics.budgetPercentage, 1)}%)
                   </span>
                 ) : (
                   <span className="kpi-status-ok">
-                    Disponible: ${analytics.budgetRemaining.toFixed(2)} (
-                    {100 - analytics.budgetPercentage}% libre)
+                    Disponible: {formatMoney(analytics.budgetRemaining)} (
+                    {formatNumber(100 - analytics.budgetPercentage, 1)}% libre)
                   </span>
                 )
               ) : (
@@ -420,13 +465,13 @@ export const StatsView: React.FC<StatsViewProps> = ({
               <div>
                 <span className="kpi-mini-caption">Por pagar (Pend.)</span>
                 <span id="grandTotalValue" className="stat-value" aria-live="polite">
-                  ${analytics.totalPending.toFixed(2)}
+                  {formatMoney(analytics.totalPending)}
                 </span>
               </div>
               <div className="kpi-right-align">
                 <span className="kpi-mini-caption">Gastado Real</span>
                 <span className="stat-value stat-value-emerald">
-                  ${analytics.totalSpent.toFixed(2)}
+                  {formatMoney(analytics.totalSpent)}
                 </span>
               </div>
             </div>
@@ -440,7 +485,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
                 aria-valuenow={analytics.budgetPercentage}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuetext={`${analytics.budgetPercentage}% consumido`}
+                aria-valuetext={`${formatNumber(analytics.budgetPercentage, 1)}% consumido`}
                 aria-label="Progreso del presupuesto"
                 style={{
                   width: `${
@@ -461,8 +506,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
             </div>
 
             <span id="budgetStats" className="budget-stats tabular-nums" aria-live="polite">
-              Total Carrito: <strong>${analytics.totalOverall.toFixed(2)}</strong> · Ejecutado:{' '}
-              <strong>{analytics.spentShareOfTotal}%</strong>
+              Total Carrito: <strong>{formatMoney(analytics.totalOverall)}</strong> · Ejecutado:{' '}
+              <strong>{formatNumber(analytics.spentShareOfTotal, 1)}%</strong>
             </span>
           </div>
 
@@ -473,9 +518,9 @@ export const StatsView: React.FC<StatsViewProps> = ({
               <CheckCircle2 size={18} className="kpi-icon kpi-icon-success" aria-hidden="true" />
             </div>
             <div className="kpi-main-row tabular-nums">
-              <span className="stat-value">{analytics.completionRateProducts}%</span>
+              <span className="stat-value">{formatNumber(analytics.completionRateProducts, 1)}%</span>
               <span className="kpi-inline-detail">
-                {analytics.completedProducts} de {analytics.totalProducts} productos (#ID)
+                {formatNumber(analytics.completedProducts, 0)} de {formatNumber(analytics.totalProducts, 0)} productos (#ID)
               </span>
             </div>
             <div className="progress-container">
@@ -489,8 +534,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
             </div>
             <div className="kpi-sub-metrics tabular-nums">
               <span>
-                Unidades físicas: <strong>{analytics.completedUnits}</strong> compradas /{' '}
-                <strong>{analytics.pendingUnits}</strong> pend. ({analytics.totalUnits} total)
+                Unidades físicas: <strong>{formatNumber(analytics.completedUnits)}</strong> compradas /{' '}
+                <strong>{formatNumber(analytics.pendingUnits)}</strong> pend. ({formatNumber(analytics.totalUnits)} total)
               </span>
             </div>
           </div>
@@ -504,19 +549,19 @@ export const StatsView: React.FC<StatsViewProps> = ({
             <div className="kpi-Dual-values tabular-nums">
               <div>
                 <span className="kpi-mini-caption">Prom. por Producto</span>
-                <span className="stat-value">${analytics.averageCostPerProduct.toFixed(2)}</span>
+                <span className="stat-value">{formatMoney(analytics.averageCostPerProduct)}</span>
               </div>
               <div className="kpi-right-align">
                 <span className="kpi-mini-caption">Prom. por Unidad</span>
                 <span className="stat-value stat-value-secondary">
-                  ${analytics.averageCostPerUnit.toFixed(2)}
+                  {formatMoney(analytics.averageCostPerUnit)}
                 </span>
               </div>
             </div>
             <div className="kpi-sub-metrics tabular-nums">
               <span>
-                {analytics.pricedProductsCount} productos con precio ·{' '}
-                {analytics.unpricedProductsCount} sin precio ($0)
+                {formatNumber(analytics.pricedProductsCount, 0)} productos con precio ·{' '}
+                {formatNumber(analytics.unpricedProductsCount, 0)} sin precio ($0,00)
               </span>
             </div>
           </div>
@@ -533,12 +578,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
                   <strong className="kpi-highlight-name" title={topStore.name}>
                     {topStore.name}
                   </strong>
-                  <span className="stat-value">${topStore.totalAmount.toFixed(2)}</span>
+                  <span className="stat-value">{formatMoney(topStore.totalAmount)}</span>
                 </div>
                 <div className="kpi-sub-metrics tabular-nums">
                   <span>
-                    Representa el <strong>{topStore.shareOfTotalSpend}%</strong> del gasto ·{' '}
-                    {topStore.productCount} productos ({topStore.pendingProductCount} pend.)
+                    Representa el <strong>{formatNumber(topStore.shareOfTotalSpend, 1)}%</strong> del gasto ·{' '}
+                    {formatNumber(topStore.productCount, 0)} productos ({formatNumber(topStore.pendingProductCount, 0)} pend.)
                   </span>
                 </div>
               </>
@@ -560,13 +605,13 @@ export const StatsView: React.FC<StatsViewProps> = ({
                     <span className="item-sku-code">{mostExpensiveProduct.skuCode}</span>{' '}
                     {mostExpensiveProduct.name}
                   </span>
-                  <span className="stat-value">${mostExpensiveProduct.lineTotal.toFixed(2)}</span>
+                  <span className="stat-value">{formatMoney(mostExpensiveProduct.lineTotal)}</span>
                 </div>
                 <div className="kpi-sub-metrics tabular-nums">
                   <span>
-                    Cat. líder: <strong>{topCategory ? topCategory.name : 'General'}</strong> ($
-                    {topCategory ? topCategory.totalAmount.toFixed(2) : '0.00'} ·{' '}
-                    {topCategory ? topCategory.shareOfTotalSpend : 0}%)
+                    Cat. líder: <strong>{topCategory ? topCategory.name : 'General'}</strong> (
+                    {topCategory ? formatMoney(topCategory.totalAmount) : '$0,00'} ·{' '}
+                    {formatNumber(topCategory ? topCategory.shareOfTotalSpend : 0, 1)}%)
                   </span>
                 </div>
               </>
@@ -662,7 +707,164 @@ export const StatsView: React.FC<StatsViewProps> = ({
           </div>
         </div>
 
-        {/* FILA 3: RESUMEN DETALLADO POR COMERCIO (PLEGABLE) */}
+        {/* FILA 3: TICKETS PROCESADOS Y SEGUIMIENTO DE COMPRAS REALIZADAS (PLEGABLE) */}
+        <div className="stat-card kpi-collapsible-table-card">
+          <div
+            className="kpi-section-collapse-header"
+            role="button"
+            tabIndex={0}
+            aria-expanded={!isReceiptsSectionCollapsed}
+            onClick={() => setIsReceiptsSectionCollapsed((prev) => !prev)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setIsReceiptsSectionCollapsed((prev) => !prev);
+              }
+            }}
+          >
+            <div className="kpi-collapse-title-wrap">
+              {isReceiptsSectionCollapsed ? (
+                <ChevronRight size={18} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={18} aria-hidden="true" />
+              )}
+              <Receipt size={18} className="kpi-icon-primary" aria-hidden="true" />
+              <h3>
+                Seguimiento de Tickets de Compra Procesados ({formatNumber(receipts.length, 0)})
+              </h3>
+            </div>
+
+            <div className="kpi-table-Controls" onClick={(e) => e.stopPropagation()}>
+              {onOpenReceiptScanner && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={onOpenReceiptScanner}
+                >
+                  <Camera size={14} aria-hidden="true" />
+                  <span>Subir Foto de Ticket</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-collapse-section-inline"
+                onClick={() => setIsReceiptsSectionCollapsed((prev) => !prev)}
+              >
+                {isReceiptsSectionCollapsed ? 'Expandir' : 'Contraer'}
+              </button>
+            </div>
+          </div>
+
+          {!isReceiptsSectionCollapsed && (
+            <div className="kpi-table-scroll">
+              {receipts.length === 0 ? (
+                <div className="receipt-empty-inline">
+                  <p className="empty-stops-text">
+                    Aún no has subido tickets de compra. Sube una foto de tu ticket para registrar automáticamente qué compraste, en qué comercio y a qué precio.
+                  </p>
+                </div>
+              ) : (
+                <div className="receipt-history-list">
+                  {receipts.map((rcpt) => {
+                    const isExpanded = Boolean(expandedReceiptIds[rcpt.id]);
+                    return (
+                      <div key={rcpt.id} className="receipt-history-card">
+                        <div
+                          className="receipt-history-header"
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleReceiptExpand(rcpt.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggleReceiptExpand(rcpt.id);
+                            }
+                          }}
+                        >
+                          <div className="receipt-history-left">
+                            {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                            {rcpt.imagePreview && (
+                              <img
+                                src={rcpt.imagePreview}
+                                alt={`Ticket ${rcpt.storeName}`}
+                                className="receipt-history-mini-thumb"
+                              />
+                            )}
+                            <div>
+                              <strong className="receipt-history-store">{rcpt.storeName}</strong>
+                              <span className="receipt-history-meta tabular-nums">
+                                {rcpt.date}
+                                {rcpt.receiptNumber ? ` · Comp. #${rcpt.receiptNumber}` : ''} ·{' '}
+                                {formatNumber(rcpt.items.length, 0)} productos
+                              </span>
+                            </div>
+                          </div>
+
+                          <div
+                            className="receipt-history-right tabular-nums"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <strong className="receipt-history-total">
+                              {formatMoney(rcpt.total)}
+                            </strong>
+                            {onDeleteReceipt && (
+                              <button
+                                type="button"
+                                className="btn-item-action btn-delete-item"
+                                title="Eliminar registro de ticket"
+                                onClick={() => onDeleteReceipt(rcpt.id)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="receipt-history-items">
+                            <table className="kpi-audit-table tabular-nums">
+                              <thead>
+                                <tr>
+                                  <th>#ID</th>
+                                  <th>Producto</th>
+                                  <th>Categoría</th>
+                                  <th className="num-col">Cant.</th>
+                                  <th className="num-col">Precio Unit.</th>
+                                  <th className="num-col">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rcpt.items.map((it, idx) => (
+                                  <tr key={idx}>
+                                    <td>
+                                      <span className="item-sku-code">
+                                        {it.skuCode || `#${String(idx + 1).padStart(3, '0')}`}
+                                      </span>
+                                    </td>
+                                    <td className="font-bold">{it.name}</td>
+                                    <td>{it.category}</td>
+                                    <td className="num-col">{formatNumber(it.quantity)} un.</td>
+                                    <td className="num-col">{formatMoney(it.unitPrice)}</td>
+                                    <td className="num-col font-bold">
+                                      {formatMoney(it.lineTotal)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* FILA 4: RESUMEN DETALLADO POR COMERCIO (PLEGABLE) */}
         {analytics.storeBreakdown.length > 0 && (
           <div className="stat-card kpi-collapsible-table-card">
             <div
@@ -685,7 +887,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
                   <ChevronDown size={18} aria-hidden="true" />
                 )}
                 <Store size={18} className="kpi-icon-primary" aria-hidden="true" />
-                <h3>Desglose Financiero por Comercio ({analytics.storeBreakdown.length})</h3>
+                <h3>Desglose Financiero por Comercio ({formatNumber(analytics.storeBreakdown.length, 0)})</h3>
               </div>
               <span className="btn-collapse-section-inline">
                 {isStoreTableCollapsed ? 'Expandir' : 'Contraer'}
@@ -711,13 +913,13 @@ export const StatsView: React.FC<StatsViewProps> = ({
                       <tr key={st.name}>
                         <td className="font-bold">{st.name}</td>
                         <td className="num-col">
-                          {st.completedProductCount} / {st.productCount}
+                          {formatNumber(st.completedProductCount, 0)} / {formatNumber(st.productCount, 0)}
                         </td>
-                        <td className="num-col">{st.totalUnits} un.</td>
-                        <td className="num-col text-emerald">${st.spentAmount.toFixed(2)}</td>
-                        <td className="num-col text-indigo">${st.pendingAmount.toFixed(2)}</td>
-                        <td className="num-col font-bold">${st.totalAmount.toFixed(2)}</td>
-                        <td className="num-col">{st.shareOfTotalSpend}%</td>
+                        <td className="num-col">{formatNumber(st.totalUnits)} un.</td>
+                        <td className="num-col text-emerald">{formatMoney(st.spentAmount)}</td>
+                        <td className="num-col text-indigo">{formatMoney(st.pendingAmount)}</td>
+                        <td className="num-col font-bold">{formatMoney(st.totalAmount)}</td>
+                        <td className="num-col">{formatNumber(st.shareOfTotalSpend, 1)}%</td>
                       </tr>
                     ))}
                   </tbody>
@@ -727,7 +929,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
           </div>
         )}
 
-        {/* FILA 4: RANKING Y AUDITORÍA DE PRODUCTOS CONTABILIZADOS POR #ID (PLEGABLE) */}
+        {/* FILA 5: RANKING Y AUDITORÍA DE PRODUCTOS CONTABILIZADOS POR #ID (PLEGABLE) */}
         <div className="stat-card kpi-collapsible-table-card">
           <div
             className="kpi-section-collapse-header"
@@ -750,7 +952,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               )}
               <Hash size={18} className="kpi-icon-primary" aria-hidden="true" />
               <h3>
-                Top Productos Más Caros y Contabilidad por #ID ({filteredRankedProducts.length})
+                Top Productos Más Caros y Contabilidad por #ID ({formatNumber(filteredRankedProducts.length, 0)})
               </h3>
             </div>
 
@@ -761,21 +963,21 @@ export const StatsView: React.FC<StatsViewProps> = ({
                   className={`seg-btn ${rankingFilter === 'all' ? 'active' : ''}`}
                   onClick={() => setRankingFilter('all')}
                 >
-                  Todos ({analytics.totalProducts})
+                  Todos ({formatNumber(analytics.totalProducts, 0)})
                 </button>
                 <button
                   type="button"
                   className={`seg-btn ${rankingFilter === 'pending' ? 'active' : ''}`}
                   onClick={() => setRankingFilter('pending')}
                 >
-                  Pendientes ({analytics.pendingProducts})
+                  Pendientes ({formatNumber(analytics.pendingProducts, 0)})
                 </button>
                 <button
                   type="button"
                   className={`seg-btn ${rankingFilter === 'completed' ? 'active' : ''}`}
                   onClick={() => setRankingFilter('completed')}
                 >
-                  Comprados ({analytics.completedProducts})
+                  Comprados ({formatNumber(analytics.completedProducts, 0)})
                 </button>
               </div>
 
@@ -814,10 +1016,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
                       <th>Producto</th>
                       <th>Comercio</th>
                       <th>Categoría</th>
+                      <th>Fecha Compra</th>
                       <th className="num-col">Cant.</th>
                       <th className="num-col">Precio Unit.</th>
                       <th className="num-col">Subtotal</th>
                       <th className="num-col">% del Total</th>
+                      <th>Reset</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -840,10 +1044,40 @@ export const StatsView: React.FC<StatsViewProps> = ({
                         <td className="font-bold">{prod.name}</td>
                         <td>{prod.location}</td>
                         <td>{prod.category}</td>
-                        <td className="num-col">{prod.quantity} un.</td>
-                        <td className="num-col">${prod.unitPrice.toFixed(2)}</td>
-                        <td className="num-col font-bold">${prod.lineTotal.toFixed(2)}</td>
-                        <td className="num-col">{prod.shareOfTotal}%</td>
+                        <td>
+                          {prod.completed ? (
+                            <span
+                              className={`item-purchase-date-badge tabular-nums ${
+                                prod.lastPurchasedDate ? 'has-date' : 'no-date'
+                              }`}
+                            >
+                              <Calendar size={11} aria-hidden="true" />
+                              <span>{prod.lastPurchasedDate || 'Sin fecha'}</span>
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>
+                              Pendiente
+                            </span>
+                          )}
+                        </td>
+                        <td className="num-col">{formatNumber(prod.quantity)} un.</td>
+                        <td className="num-col">{formatMoney(prod.unitPrice)}</td>
+                        <td className="num-col font-bold">{formatMoney(prod.lineTotal)}</td>
+                        <td className="num-col">{formatNumber(prod.shareOfTotal, 1)}%</td>
+                        <td>
+                          {onResetItem && (
+                            <button
+                              type="button"
+                              className={`btn-item-action btn-reset-item ${
+                                prod.completed ? 'is-completed-reset' : ''
+                              }`}
+                              title={`Resetear ${prod.skuCode} ${prod.name} a pendiente (conservando el producto)`}
+                              onClick={() => onResetItem(prod.id)}
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -853,18 +1087,20 @@ export const StatsView: React.FC<StatsViewProps> = ({
           )}
         </div>
 
-        {/* BOTÓN DE LIMPIEZA DE COMPRADOS */}
+        {/* BOTÓN DE RESETEO DE COMPRADOS CONSERVANDO TODOS LOS PRODUCTOS */}
         <div className="stats-actions">
           <button
             id="resetListButton"
             className="btn btn-secondary btn-block"
             type="button"
-            aria-label="Limpiar todos los productos marcados como comprados"
+            aria-label="Resetear todos los productos marcados como comprados a pendientes sin borrarlos"
             disabled={analytics.completedProducts === 0}
-            onClick={onClearCompleted}
+            onClick={onResetAllCompleted}
           >
-            <Trash2 size={18} aria-hidden="true" />
-            <span>Limpiar Comprados ({analytics.completedProducts})</span>
+            <RotateCcw size={18} aria-hidden="true" />
+            <span>
+              Resetear Comprados para Nueva Compra con Fecha ({formatNumber(analytics.completedProducts, 0)} productos · Conserva todos tus #ID)
+            </span>
           </button>
         </div>
       </div>

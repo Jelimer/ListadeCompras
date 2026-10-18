@@ -231,6 +231,7 @@ export function calculateDetailedAnalytics(
       unitPrice: price,
       lineTotal,
       completed: Boolean(item.completed),
+      lastPurchasedDate: item.lastPurchasedDate,
       shareOfTotal:
         base.totalOverall > 0 ? Math.round((lineTotal / base.totalOverall) * 1000) / 10 : 0,
     });

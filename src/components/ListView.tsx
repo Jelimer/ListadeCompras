@@ -23,6 +23,9 @@ import {
   GripVertical,
   Plus,
   Minus,
+  Receipt,
+  RotateCcw,
+  Calendar,
 } from 'lucide-react';
 import { ShoppingItem } from '../types';
 import { getCategoryIcon } from '../utils/categoryIcons';
@@ -31,6 +34,7 @@ import {
   saveStoredHideEmptyStores,
   formatSkuCode,
 } from '../utils/storage';
+import { formatMoney, formatNumber, parseLocaleNumber } from '../utils/formatters';
 
 interface ListViewProps {
   items: ShoppingItem[];
@@ -40,6 +44,9 @@ interface ListViewProps {
   onUpdateItem: (id: string, updates: Partial<ShoppingItem>) => void;
   onDeleteItem: (id: string) => void;
   onToggleCompleted: (id: string) => void;
+  onResetItem: (id: string) => void;
+  onResetStoreCompleted: (location: string) => void;
+  onResetAllCompleted: () => void;
   locationOrder: string[];
   onSetLocationOrder: (newOrder: string[]) => void;
   collapsedGroups: string[];
@@ -47,6 +54,7 @@ interface ListViewProps {
   onSetCollapsedGroups: (groups: string[]) => void;
   onReorderLocation: (direction: 'up' | 'down', location: string) => void;
   grandTotalPending: number;
+  onOpenReceiptScanner?: () => void;
 }
 
 const PENDING_LOCATION_NAMES = [
@@ -85,6 +93,9 @@ export const ListView: React.FC<ListViewProps> = ({
   onUpdateItem,
   onDeleteItem,
   onToggleCompleted,
+  onResetItem,
+  onResetStoreCompleted,
+  onResetAllCompleted,
   locationOrder,
   onSetLocationOrder,
   collapsedGroups,
@@ -92,6 +103,7 @@ export const ListView: React.FC<ListViewProps> = ({
   onSetCollapsedGroups,
   onReorderLocation,
   grandTotalPending,
+  onOpenReceiptScanner,
 }) => {
   // Input form state
   const [name, setName] = useState('');
@@ -118,10 +130,16 @@ export const ListView: React.FC<ListViewProps> = ({
   const [editPrice, setEditPrice] = useState('');
   const [editLoc, setEditLoc] = useState('');
   const [editCat, setEditCat] = useState('');
+  const [editDate, setEditDate] = useState('');
 
   // Pending item assign state
   const [pendingAssignMap, setPendingAssignMap] = useState<Record<string, string>>({});
   const [pendingCustomStoreMap, setPendingCustomStoreMap] = useState<Record<string, string>>({});
+
+  const totalCompletedCount = useMemo(
+    () => items.filter((i) => i.completed).length,
+    [items]
+  );
 
   const handleToggleHideEmptyStores = (checked: boolean) => {
     setHideEmptyStores(checked);
@@ -151,13 +169,13 @@ export const ListView: React.FC<ListViewProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const parsedQty = parseFloat(quantity.replace(',', '.'));
-    const parsedPrice = parseFloat(unitPrice.replace(',', '.'));
+    const parsedQty = parseLocaleNumber(quantity);
+    const parsedPrice = parseLocaleNumber(unitPrice);
 
     onAddItem({
       name: name.trim(),
-      quantity: !isNaN(parsedQty) && parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1,
-      unitPrice: !isNaN(parsedPrice) && parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0,
+      quantity: parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1,
+      unitPrice: parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0,
       location: location.trim() || 'General',
       category: category.trim() || 'General',
       completed: false,
@@ -175,6 +193,7 @@ export const ListView: React.FC<ListViewProps> = ({
     setEditPrice(item.unitPrice > 0 ? String(item.unitPrice) : '');
     setEditLoc(item.location || 'General');
     setEditCat(item.category || 'General');
+    setEditDate(item.lastPurchasedDate || '');
   };
 
   const cancelEditing = () => {
@@ -183,15 +202,16 @@ export const ListView: React.FC<ListViewProps> = ({
 
   const saveEditing = (id: string) => {
     if (!editName.trim()) return;
-    const parsedQty = parseFloat(editQty.replace(',', '.'));
-    const parsedPrice = parseFloat(editPrice.replace(',', '.'));
+    const parsedQty = parseLocaleNumber(editQty);
+    const parsedPrice = parseLocaleNumber(editPrice);
 
     onUpdateItem(id, {
       name: editName.trim(),
-      quantity: !isNaN(parsedQty) && parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1,
-      unitPrice: !isNaN(parsedPrice) && parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0,
+      quantity: parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1,
+      unitPrice: parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0,
       location: editLoc.trim() || 'General',
       category: editCat.trim() || 'General',
+      ...(editDate.trim() ? { lastPurchasedDate: editDate.trim() } : { lastPurchasedDate: undefined }),
     });
 
     setEditingId(null);
@@ -451,11 +471,10 @@ export const ListView: React.FC<ListViewProps> = ({
             Cantidad
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             id="quantityInput"
             placeholder="Cant."
-            min="0.01"
-            step="any"
             aria-label="Cantidad"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -468,11 +487,10 @@ export const ListView: React.FC<ListViewProps> = ({
             Precio Unitario
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             id="unitPriceInput"
             placeholder="Precio Unit."
-            min="0"
-            step="0.01"
             aria-label="Precio Unitario"
             value={unitPrice}
             onChange={(e) => setUnitPrice(e.target.value)}
@@ -582,6 +600,30 @@ export const ListView: React.FC<ListViewProps> = ({
               <label htmlFor="hideEmptyStoresSwitch">Ocultar 0 pendientes</label>
             </div>
 
+            {onOpenReceiptScanner && (
+              <button
+                type="button"
+                className="btn-collapse-all"
+                onClick={onOpenReceiptScanner}
+                title="Subir foto de ticket y registrar compra con fecha"
+              >
+                <Receipt size={16} aria-hidden="true" />
+                <span>Escanear Ticket</span>
+              </button>
+            )}
+
+            {totalCompletedCount > 0 && (
+              <button
+                type="button"
+                className="btn-collapse-all btn-reset-completed-toolbar"
+                onClick={onResetAllCompleted}
+                title="Resetear todos los productos comprados a pendientes sin borrarlos, para iniciar registro con fechas"
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                <span>Resetear Comprados ({formatNumber(totalCompletedCount, 0)})</span>
+              </button>
+            )}
+
             {(groupedItems.length > 0 || pendingItems.length > 0) && (
               <button
                 type="button"
@@ -672,7 +714,7 @@ export const ListView: React.FC<ListViewProps> = ({
                   <HelpCircle className="pending-icon" size={20} aria-hidden="true" />
                   <h3>Por averiguar / Sin lugar asignado</h3>
                   <span id="pendingLocationCountBadge" className="pending-badge tabular-nums">
-                    {pendingItems.length} por asignar
+                    {formatNumber(pendingItems.length, 0)} por asignar
                   </span>
                 </div>
 
@@ -717,10 +759,12 @@ export const ListView: React.FC<ListViewProps> = ({
                             </span>
                           </div>
                           <div className="pending-item-details tabular-nums">
-                            <span className="pending-qty-badge">Cant: {item.quantity}</span>
+                            <span className="pending-qty-badge">
+                              Cant: {formatNumber(item.quantity)}
+                            </span>
                             {itemTotalPrice > 0 && (
                               <span className="pending-price-badge">
-                                ${itemTotalPrice.toFixed(2)}
+                                {formatMoney(itemTotalPrice)}
                               </span>
                             )}
                             <span className="pending-cat-badge">{item.category || 'General'}</span>
@@ -821,7 +865,7 @@ export const ListView: React.FC<ListViewProps> = ({
               <p>
                 {items.length > 0
                   ? 'Prueba desactivando "Ocultar 0 pendientes" o "Ocultar Comprados" para ver todos los comercios.'
-                  : 'Agrega productos usando el formulario superior para comenzar a organizarte.'}
+                  : 'Agrega productos usando el formulario superior o escanea un ticket para comenzar a organizarte.'}
               </p>
             </div>
           ) : (
@@ -879,18 +923,30 @@ export const ListView: React.FC<ListViewProps> = ({
                           group.pendingCount === 0 ? 'badge-zero' : ''
                         }`}
                       >
-                        {group.pendingCount}{' '}
+                        {formatNumber(group.pendingCount, 0)}{' '}
                         {group.pendingCount === 1 ? 'pendiente' : 'pendientes'}
                       </span>
                     </div>
 
                     <div className="location-actions" onClick={(e) => e.stopPropagation()}>
+                      {group.completedCount > 0 && (
+                        <button
+                          type="button"
+                          className="btn-collapse-section-inline"
+                          title={`Resetear los ${group.completedCount} productos comprados de ${group.location} a pendientes (sin borrarlos)`}
+                          onClick={() => onResetStoreCompleted(group.location)}
+                        >
+                          <RotateCcw size={13} aria-hidden="true" />
+                          <span>Resetear ({formatNumber(group.completedCount, 0)})</span>
+                        </button>
+                      )}
+
                       {group.subtotal > 0 && (
                         <span
                           className="location-subtotal-badge tabular-nums"
                           title="Subtotal estimado para este comercio"
                         >
-                          ${group.subtotal.toFixed(2)}
+                          {formatMoney(group.subtotal)}
                         </span>
                       )}
 
@@ -926,6 +982,7 @@ export const ListView: React.FC<ListViewProps> = ({
                         const CategoryIcon = getCategoryIcon(item.category);
                         const itemTotal = (item.unitPrice || 0) * (item.quantity || 1);
                         const sku = item.skuCode || formatSkuCode(item.seqNumber || 1);
+                        const lastHistoryEntry = item.purchaseHistory?.[0];
 
                         if (isEditing) {
                           return (
@@ -941,21 +998,19 @@ export const ListView: React.FC<ListViewProps> = ({
                                   autoFocus
                                 />
                                 <input
-                                  type="number"
+                                  type="text"
+                                  inputMode="decimal"
                                   className="edit-input-qty"
                                   value={editQty}
                                   placeholder="Cant."
-                                  min="0.01"
-                                  step="any"
                                   onChange={(e) => setEditQty(e.target.value)}
                                 />
                                 <input
-                                  type="number"
+                                  type="text"
+                                  inputMode="decimal"
                                   className="edit-input-price"
                                   value={editPrice}
                                   placeholder="Precio unit."
-                                  min="0"
-                                  step="0.01"
                                   onChange={(e) => setEditPrice(e.target.value)}
                                 />
                                 <input
@@ -973,6 +1028,14 @@ export const ListView: React.FC<ListViewProps> = ({
                                   placeholder="Categoría"
                                   list="category-suggestions"
                                   onChange={(e) => setEditCat(e.target.value)}
+                                />
+                                <input
+                                  type="text"
+                                  className="edit-input-cat"
+                                  value={editDate}
+                                  placeholder="Fecha compra (DD/MM/AAAA)"
+                                  title="Fecha de compra (opcional)"
+                                  onChange={(e) => setEditDate(e.target.value)}
                                 />
                               </div>
                               <div className="edit-actions">
@@ -1034,11 +1097,39 @@ export const ListView: React.FC<ListViewProps> = ({
 
                               <span
                                 className="item-name"
-                                title="Haga clic para editar"
+                                title="Haga clic para editar nombre o datos"
                                 onClick={() => startEditing(item)}
                               >
                                 {item.name}
                               </span>
+
+                              {item.completed ? (
+                                <span
+                                  className={`item-purchase-date-badge tabular-nums ${
+                                    item.lastPurchasedDate ? 'has-date' : 'no-date'
+                                  }`}
+                                  title={
+                                    item.lastPurchasedDate
+                                      ? `Comprado el ${item.lastPurchasedDate}`
+                                      : 'Comprado sin fecha registrada — puedes pulsar Resetear (↺) para iniciar el registro con fecha'
+                                  }
+                                >
+                                  <Calendar size={11} aria-hidden="true" />
+                                  <span>
+                                    {item.lastPurchasedDate || 'Sin fecha'}
+                                  </span>
+                                </span>
+                              ) : (
+                                lastHistoryEntry?.date && (
+                                  <span
+                                    className="item-purchase-date-badge prev-date tabular-nums"
+                                    title={`Última compra registrada el ${lastHistoryEntry.date} en ${lastHistoryEntry.storeName} (${formatMoney(lastHistoryEntry.unitPrice)})`}
+                                  >
+                                    <Calendar size={11} aria-hidden="true" />
+                                    <span>Últ.: {lastHistoryEntry.date}</span>
+                                  </span>
+                                )
+                              )}
                             </div>
 
                             <div className="item-right">
@@ -1055,7 +1146,9 @@ export const ListView: React.FC<ListViewProps> = ({
                                     >
                                       <Minus size={12} />
                                     </button>
-                                    <span className="item-qty-tag">{item.quantity} un.</span>
+                                    <span className="item-qty-tag">
+                                      {formatNumber(item.quantity)} un.
+                                    </span>
                                     <button
                                       type="button"
                                       className="btn-qty-step"
@@ -1067,16 +1160,18 @@ export const ListView: React.FC<ListViewProps> = ({
                                     </button>
                                   </div>
                                 ) : (
-                                  <span className="item-qty-tag">{item.quantity} un.</span>
+                                  <span className="item-qty-tag">
+                                    {formatNumber(item.quantity)} un.
+                                  </span>
                                 )}
 
                                 {item.unitPrice > 0 && (
                                   <span className="item-price-tag">
-                                    ${itemTotal.toFixed(2)}
+                                    {formatMoney(itemTotal)}
                                     {item.quantity > 1 && (
                                       <small className="unit-price-sub">
                                         {' '}
-                                        (${item.unitPrice.toFixed(2)} c/u)
+                                        ({formatMoney(item.unitPrice)} c/u)
                                       </small>
                                     )}
                                   </span>
@@ -1086,8 +1181,23 @@ export const ListView: React.FC<ListViewProps> = ({
                               <div className="item-actions">
                                 <button
                                   type="button"
+                                  className={`btn-item-action btn-reset-item ${
+                                    item.completed ? 'is-completed-reset' : ''
+                                  }`}
+                                  title={
+                                    item.completed
+                                      ? 'Resetear producto: volver a pendiente (sin borrarlo) para registrar nueva compra con fecha'
+                                      : 'Resetear fecha/estado del producto'
+                                  }
+                                  aria-label={`Resetear ${item.name}`}
+                                  onClick={() => onResetItem(item.id)}
+                                >
+                                  <RotateCcw size={15} />
+                                </button>
+                                <button
+                                  type="button"
                                   className="btn-item-action"
-                                  title="Editar producto"
+                                  title="Editar nombre, precio o fecha del producto"
                                   aria-label={`Editar ${item.name}`}
                                   onClick={() => startEditing(item)}
                                 >
@@ -1096,7 +1206,7 @@ export const ListView: React.FC<ListViewProps> = ({
                                 <button
                                   type="button"
                                   className="btn-item-action btn-delete-item"
-                                  title="Eliminar producto"
+                                  title="Eliminar producto del catálogo"
                                   aria-label={`Eliminar ${item.name}`}
                                   onClick={() => onDeleteItem(item.id)}
                                 >
@@ -1120,7 +1230,7 @@ export const ListView: React.FC<ListViewProps> = ({
           <div className="print-summary-content">
             <span className="print-summary-title">Total Estimado de Compra:</span>
             <span id="printGrandTotalValue" className="print-summary-value tabular-nums">
-              ${grandTotalPending.toFixed(2)}
+              {formatMoney(grandTotalPending)}
             </span>
           </div>
         </div>

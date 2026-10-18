@@ -1,4 +1,5 @@
 import { ShoppingItem } from '../types';
+import { formatMoney, formatNumber } from './formatters';
 
 export function formatShoppingList(
   items: ShoppingItem[] = [],
@@ -59,34 +60,37 @@ export function formatShoppingList(
       }
       storeSubtotalCents += itemTotalCents;
 
-      const qtyDisplay = Number.isInteger(qty) ? `${qty}x` : `${qty} un. x`;
+      const qtyDisplay = Number.isInteger(qty) ? `${formatNumber(qty, 0)}x` : `${formatNumber(qty)} un. x`;
       const checkPrefix = item.completed ? '[✓] ' : '• ';
+      const skuPrefix = item.skuCode ? `${item.skuCode} ` : '';
 
       if (includePrices && price > 0) {
-        const totalFormatted = (itemTotalCents / 100).toFixed(2);
+        const totalFormatted = formatMoney(itemTotalCents / 100);
         if (qty > 1) {
-          lines.push(`${checkPrefix}${qtyDisplay} ${item.name} ($${totalFormatted} - $${price.toFixed(2)} c/u)`);
+          lines.push(
+            `${checkPrefix}${skuPrefix}${qtyDisplay} ${item.name} (${totalFormatted} - ${formatMoney(price)} c/u)`
+          );
         } else {
-          lines.push(`${checkPrefix}${qtyDisplay} ${item.name} ($${totalFormatted})`);
+          lines.push(`${checkPrefix}${skuPrefix}${qtyDisplay} ${item.name} (${totalFormatted})`);
         }
       } else {
-        lines.push(`${checkPrefix}${qtyDisplay} ${item.name}`);
+        lines.push(`${checkPrefix}${skuPrefix}${qtyDisplay} ${item.name}`);
       }
     });
 
     if (includePrices && storeSubtotalCents > 0) {
-      const subtotalFormatted = (storeSubtotalCents / 100).toFixed(2);
-      lines.push(`  _Subtotal estimado: $${subtotalFormatted}_`);
+      const subtotalFormatted = formatMoney(storeSubtotalCents / 100);
+      lines.push(`  _Subtotal estimado: ${subtotalFormatted}_`);
     }
 
     lines.push('');
   });
 
   if (includePrices && grandTotalCents > 0) {
-    const grandTotalFormatted = (grandTotalCents / 100).toFixed(2);
-    lines.push(`💰 *Total estimado:* $${grandTotalFormatted}`);
+    const grandTotalFormatted = formatMoney(grandTotalCents / 100);
+    lines.push(`💰 *Total estimado:* ${grandTotalFormatted}`);
   }
-  lines.push(`📦 *Artículos pendientes:* ${totalPendingArticles}`);
+  lines.push(`📦 *Artículos pendientes:* ${formatNumber(totalPendingArticles)}`);
   lines.push('📱 _Generado con Lista de Compra | PRO_');
 
   return lines.join('\n').trim();
@@ -99,7 +103,11 @@ export async function shareShoppingList(
     includePrices?: boolean;
     title?: string;
   } = {}
-): Promise<{ success: boolean; method: 'native' | 'whatsapp' | 'clipboard' | 'cancelled'; text: string }> {
+): Promise<{
+  success: boolean;
+  method: 'native' | 'whatsapp' | 'clipboard' | 'cancelled';
+  text: string;
+}> {
   const text = formatShoppingList(items, options);
   const title = options.title || 'Lista de Compras';
 
@@ -117,7 +125,11 @@ export async function shareShoppingList(
 
   // 2. Try copying to clipboard
   let copied = false;
-  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.writeText === 'function'
+  ) {
     try {
       await navigator.clipboard.writeText(text);
       copied = true;

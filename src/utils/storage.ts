@@ -1,4 +1,11 @@
-import { ShoppingItem, StoredStoreCoordinate, RouteOrigin, TripsData, Trip } from '../types';
+import {
+  ShoppingItem,
+  StoredStoreCoordinate,
+  RouteOrigin,
+  TripsData,
+  Trip,
+  PurchaseReceipt,
+} from '../types';
 
 const STORAGE_KEYS = {
   ITEMS: 'shopping_items',
@@ -11,6 +18,7 @@ const STORAGE_KEYS = {
   LOCATION_ORDER: 'locationOrder',
   COLLAPSED_GROUPS: 'collapsedGroups',
   HIDE_EMPTY_STORES: 'shopping_hide_empty_stores',
+  RECEIPTS_HISTORY: 'shopping_receipts_history',
 };
 
 export const DEFAULT_ORIGIN: RouteOrigin = {
@@ -165,6 +173,13 @@ export function sanitizeShoppingItem(raw: unknown, index = 0): ShoppingItem | nu
 
   const timestamp = Number(obj.timestamp) || Date.now();
   const updatedAt = Number(obj.updatedAt) || timestamp;
+  const lastPurchasedDate =
+    typeof obj.lastPurchasedDate === 'string' && obj.lastPurchasedDate.trim()
+      ? obj.lastPurchasedDate.trim()
+      : undefined;
+  const receiptId =
+    typeof obj.receiptId === 'string' && obj.receiptId.trim() ? obj.receiptId.trim() : undefined;
+  const purchaseHistory = Array.isArray(obj.purchaseHistory) ? obj.purchaseHistory : undefined;
 
   let storeCoords: { lat: number; lng: number } | undefined = undefined;
   if (obj.storeCoords && typeof obj.storeCoords === 'object') {
@@ -187,6 +202,9 @@ export function sanitizeShoppingItem(raw: unknown, index = 0): ShoppingItem | nu
     completed,
     timestamp,
     updatedAt,
+    ...(lastPurchasedDate ? { lastPurchasedDate } : {}),
+    ...(receiptId ? { receiptId } : {}),
+    ...(purchaseHistory ? { purchaseHistory } : {}),
     ...(storeCoords ? { storeCoords } : {}),
   };
 }
@@ -454,3 +472,20 @@ export function loadStoredTripsData(): TripsData {
 export function saveStoredTripsData(data: TripsData): void {
   safeSet(STORAGE_KEYS.TRIPS_DATA, JSON.stringify(data));
 }
+
+export function loadStoredReceipts(): PurchaseReceipt[] {
+  const raw = safeGet(STORAGE_KEYS.RECEIPTS_HISTORY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((r) => r && typeof r === 'object' && r.id && Array.isArray(r.items));
+  } catch {
+    return [];
+  }
+}
+
+export function saveStoredReceipts(receipts: PurchaseReceipt[]): void {
+  safeSet(STORAGE_KEYS.RECEIPTS_HISTORY, JSON.stringify(receipts));
+}
+

@@ -1,3 +1,12 @@
+export interface PurchaseHistoryEntry {
+  date: string;
+  storeName: string;
+  unitPrice: number;
+  quantity: number;
+  receiptId?: string;
+  rawTicketName?: string;
+}
+
 export interface ShoppingItem {
   id: string;
   seqNumber?: number;
@@ -10,10 +19,47 @@ export interface ShoppingItem {
   completed: boolean;
   timestamp: number;
   updatedAt: number;
+  lastPurchasedDate?: string;
+  receiptId?: string;
+  purchaseHistory?: PurchaseHistoryEntry[];
   storeCoords?: {
     lat: number;
     lng: number;
   };
+}
+
+export interface ReceiptLineItem {
+  id: string;
+  name: string;
+  rawTicketName?: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  category: string;
+  matchedItemId?: string;
+  matchedSkuCode?: string;
+  included: boolean;
+}
+
+export interface PurchaseReceipt {
+  id: string;
+  storeName: string;
+  storeAddress?: string;
+  date: string;
+  receiptNumber?: string;
+  items: Array<{
+    name: string;
+    rawTicketName?: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    category: string;
+    skuCode?: string;
+    matchedItemId?: string;
+  }>;
+  total: number;
+  imagePreview?: string;
+  createdAt: number;
 }
 
 export interface StoredStoreCoordinate {
@@ -108,6 +154,7 @@ export interface RankedProductItem {
   unitPrice: number;
   lineTotal: number;
   completed: boolean;
+  lastPurchasedDate?: string;
   shareOfTotal: number;
 }
 
@@ -137,5 +184,11 @@ export type UndoAction =
   | { type: 'ADD_ITEM'; timestamp: number; payload: { id: string }; description: string }
   | { type: 'DELETE_ITEM'; timestamp: number; payload: { item: ShoppingItem; index: number }; description: string }
   | { type: 'UPDATE_ITEM'; timestamp: number; payload: { previousItem: ShoppingItem }; description: string }
-  | { type: 'TOGGLE_COMPLETED'; timestamp: number; payload: { id: string; previousCompleted: boolean }; description: string }
+  | {
+      type: 'TOGGLE_COMPLETED';
+      timestamp: number;
+      payload: { id: string; previousCompleted: boolean; previousDate?: string };
+      description: string;
+    }
+  | { type: 'RESET_ITEMS'; timestamp: number; payload: { previousItems: ShoppingItem[] }; description: string }
   | { type: 'CLEAR_COMPLETED'; timestamp: number; payload: { items: ShoppingItem[] }; description: string };

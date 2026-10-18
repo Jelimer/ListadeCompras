@@ -1,10 +1,12 @@
 import React from 'react';
-import { Share2, Printer, Download, Upload, Moon, Sun } from 'lucide-react';
+import { Share2, Printer, Download, Upload, Moon, Sun, Receipt } from 'lucide-react';
 
 interface HeaderProps {
   isOnline: boolean;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  onOpenReceiptScanner: () => void;
+  receiptsCount?: number;
   onOpenShare: () => void;
   onPrint: () => void;
   onExport: () => void;
@@ -16,6 +18,8 @@ export const Header: React.FC<HeaderProps> = ({
   isOnline,
   theme,
   onToggleTheme,
+  onOpenReceiptScanner,
+  receiptsCount = 0,
   onOpenShare,
   onPrint,
   onExport,
@@ -41,6 +45,21 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="header-actions">
+        <button
+          id="scanReceiptButton"
+          className="btn-scan-ticket-header"
+          type="button"
+          aria-label="Subir foto de ticket o ver compras procesadas"
+          title="Subir foto del ticket para procesar la compra hecha y sus precios"
+          onClick={onOpenReceiptScanner}
+        >
+          <Receipt size={18} aria-hidden="true" />
+          <span className="scan-ticket-label">Subir Ticket</span>
+          {receiptsCount > 0 && (
+            <span className="scan-ticket-count tabular-nums">{receiptsCount}</span>
+          )}
+        </button>
+
         <button
           id="shareButton"
           className="icon-button"
@@ -102,7 +121,11 @@ export const Header: React.FC<HeaderProps> = ({
           title="Cambiar Tema"
           onClick={onToggleTheme}
         >
-          {theme === 'dark' ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
+          {theme === 'dark' ? (
+            <Sun size={20} aria-hidden="true" />
+          ) : (
+            <Moon size={20} aria-hidden="true" />
+          )}
         </button>
       </div>
     </header>
