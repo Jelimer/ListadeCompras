@@ -1,5 +1,7 @@
 export interface ShoppingItem {
   id: string;
+  seqNumber?: number;
+  skuCode?: string;
   name: string;
   quantity: number;
   unitPrice: number;
@@ -79,6 +81,56 @@ export interface FinancialMetrics {
   budget: number;
   budgetRemaining: number;
   budgetPercentage: number;
+}
+
+export interface GroupBreakdownItem {
+  name: string;
+  spentAmount: number;
+  pendingAmount: number;
+  totalAmount: number;
+  spentUnits: number;
+  pendingUnits: number;
+  totalUnits: number;
+  productCount: number;
+  completedProductCount: number;
+  pendingProductCount: number;
+  shareOfTotalSpend: number;
+}
+
+export interface RankedProductItem {
+  id: string;
+  skuCode: string;
+  seqNumber: number;
+  name: string;
+  location: string;
+  category: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  completed: boolean;
+  shareOfTotal: number;
+}
+
+export interface DetailedAnalytics extends FinancialMetrics {
+  spentPercentageOfBudget: number;
+  pendingPercentageOfBudget: number;
+  spentShareOfTotal: number;
+  totalProducts: number;
+  completedProducts: number;
+  pendingProducts: number;
+  unassignedProducts: number;
+  completionRateProducts: number;
+  totalUnits: number;
+  completedUnits: number;
+  pendingUnits: number;
+  completionRateUnits: number;
+  pricedProductsCount: number;
+  unpricedProductsCount: number;
+  averageCostPerProduct: number;
+  averageCostPerUnit: number;
+  storeBreakdown: GroupBreakdownItem[];
+  categoryBreakdown: GroupBreakdownItem[];
+  topProducts: RankedProductItem[];
 }
 
 export type UndoAction =

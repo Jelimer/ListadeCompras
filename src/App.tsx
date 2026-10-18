@@ -15,10 +15,11 @@ import {
   loadStoredCollapsedGroups,
   saveStoredCollapsedGroups,
   loadStoredOrigin,
-  saveStoredOrigin,
+  loadStoredOrigin as refreshOrigin,
   loadStoredTripsData,
-  saveStoredTripsData,
   saveStoreCoordinate,
+  getNextSequentialSku,
+  ensureSequentialSkus,
 } from './utils/storage';
 import { calculateMetrics } from './utils/analytics';
 import { importJSON, importCSV } from './utils/exportImport';
@@ -33,7 +34,11 @@ import { ExportModal } from './components/ExportModal';
 import { UndoToast } from './components/UndoToast';
 
 function normalizeLocKey(loc: string): string {
-  return String(loc || 'General').trim().toLowerCase();
+  return String(loc || 'General')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 export const App: React.FC = () => {
@@ -49,7 +54,9 @@ export const App: React.FC = () => {
   const [tripsData, setTripsData] = useState<TripsData>(() => loadStoredTripsData());
 
   // Network Online Status
-  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   // Undo Stack
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
@@ -110,8 +117,14 @@ export const App: React.FC = () => {
 
   // Item Actions
   const handleAddItem = (itemData: Omit<ShoppingItem, 'id' | 'timestamp' | 'updatedAt'>) => {
+    const { seqNumber, skuCode } = getNextSequentialSku(items);
     const newItem: ShoppingItem = {
-      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id:
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      seqNumber,
+      skuCode,
       ...itemData,
       timestamp: Date.now(),
       updatedAt: Date.now(),
@@ -123,7 +136,7 @@ export const App: React.FC = () => {
       type: 'ADD_ITEM',
       timestamp: Date.now(),
       payload: { id: newItem.id },
-      description: `Se añadió "${newItem.name}"`,
+      description: `Se añadió ${skuCode} "${newItem.name}"`,
     });
   };
 
@@ -139,7 +152,7 @@ export const App: React.FC = () => {
       type: 'UPDATE_ITEM',
       timestamp: Date.now(),
       payload: { previousItem: { ...previous } },
-      description: `Se actualizó "${updates.name || previous.name}"`,
+      description: `Se actualizó ${previous.skuCode || ''} "${updates.name || previous.name}"`,
     });
   };
 
@@ -154,7 +167,7 @@ export const App: React.FC = () => {
       type: 'DELETE_ITEM',
       timestamp: Date.now(),
       payload: { item: { ...itemToDelete }, index },
-      description: `Se eliminó "${itemToDelete.name}"`,
+      description: `Se eliminó ${itemToDelete.skuCode || ''} "${itemToDelete.name}"`,
     });
   };
 
@@ -186,8 +199,8 @@ export const App: React.FC = () => {
       timestamp: Date.now(),
       payload: { id, previousCompleted },
       description: previousCompleted
-        ? `Marcado como pendiente: "${item.name}"`
-        : `Comprado: "${item.name}"`,
+        ? `Marcado como pendiente: ${item.skuCode || ''} "${item.name}"`
+        : `Comprado: ${item.skuCode || ''} "${item.name}"`,
     });
   };
 
@@ -222,13 +235,15 @@ export const App: React.FC = () => {
         setItems((prev) => {
           const next = [...prev];
           next.splice(idx, 0, restored);
-          return next;
+          return ensureSequentialSkus(next);
         });
         break;
       }
       case 'UPDATE_ITEM':
         setItems((prev) =>
-          prev.map((i) => (i.id === action.payload.previousItem.id ? { ...action.payload.previousItem } : i))
+          prev.map((i) =>
+            i.id === action.payload.previousItem.id ? { ...action.payload.previousItem } : i
+          )
         );
         break;
       case 'TOGGLE_COMPLETED':
@@ -239,7 +254,7 @@ export const App: React.FC = () => {
         );
         break;
       case 'CLEAR_COMPLETED':
-        setItems((prev) => [...prev, ...action.payload.items]);
+        setItems((prev) => ensureSequentialSkus([...prev, ...action.payload.items]));
         break;
     }
   };
@@ -250,7 +265,7 @@ export const App: React.FC = () => {
     saveStoredLayout(mode);
   };
 
-  // Group Collapse (normalized so 100% of groups can be collapsed/expanded cleanly)
+  // Group Collapse (normalized so 100% of groups and sections can be collapsed/expanded cleanly)
   const handleToggleGroupCollapse = (loc: string) => {
     const targetNorm = normalizeLocKey(loc);
     setCollapsedGroups((prev) => {
@@ -264,7 +279,9 @@ export const App: React.FC = () => {
 
   // Reorder Locations
   const handleReorderLocation = (direction: 'up' | 'down', targetLoc: string) => {
-    const distinctLocs = Array.from(new Set(items.map((i) => (i.location && i.location.trim()) || 'General')));
+    const distinctLocs = Array.from(
+      new Set(items.map((i) => (i.location && i.location.trim()) || 'General'))
+    );
     const fullOrder = [...locationOrder];
     distinctLocs.forEach((l) => {
       if (!fullOrder.some((existing) => normalizeLocKey(existing) === normalizeLocKey(l))) {
@@ -307,7 +324,7 @@ export const App: React.FC = () => {
       if (file.name.endsWith('.csv')) {
         const res = importCSV(content);
         if (res.success && res.items.length > 0) {
-          setItems(res.items);
+          setItems(ensureSequentialSkus(res.items));
           pushUndo({
             type: 'ADD_ITEM',
             timestamp: Date.now(),
@@ -318,7 +335,7 @@ export const App: React.FC = () => {
       } else {
         const res = importJSON(content);
         if (res.success) {
-          setItems(res.items);
+          setItems(ensureSequentialSkus(res.items));
           if (res.budget > 0) setBudget(res.budget);
           pushUndo({
             type: 'ADD_ITEM',
@@ -348,6 +365,7 @@ export const App: React.FC = () => {
       source: 'picker',
     });
     setPickerStore(null);
+    setOrigin(refreshOrigin());
     setItems((prev) => [...prev]);
   };
 
@@ -401,6 +419,7 @@ export const App: React.FC = () => {
             onBudgetChange={setBudget}
             metrics={metrics}
             onClearCompleted={handleClearCompleted}
+            onToggleCompleted={handleToggleCompleted}
             theme={theme}
           />
         )}
@@ -455,7 +474,13 @@ export const App: React.FC = () => {
       />
 
       {/* Live Region for Screen Readers */}
-      <div id="ariaAnnouncer" className="sr-only" role="status" aria-live="polite" aria-atomic="true" />
+      <div
+        id="ariaAnnouncer"
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      />
     </div>
   );
 };

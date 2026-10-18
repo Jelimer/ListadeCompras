@@ -1,48 +1,58 @@
-# Lista de Compra | PRO — Mapa OpenStreetMap Libre, Origen en Corrientes y Visibilidad de Comercios con 0 Pendientes
+# Lista de Compra | PRO — Sistema de IDs por Producto (#001), Dashboard de KPIs Reales y Plegado Universal de Listas
 
-Esta actualización reemplaza los mosaicos de CartoDB que exigían llave de API (`API KEY REQUIRED`) por el servidor oficial libre de **OpenStreetMap**, establece **Corrientes, Argentina** como punto de partida predeterminado y muestra en el mapa y el itinerario todos los comercios —diferenciando visualmente con un tono más claro y suave aquellos que tienen `0 pendientes`—.
+Esta actualización incorpora un identificador secuencial único (`#001`, `#002`, `#003`...) para cada producto, transforma la pestaña de **Estadísticas** en un tablero analítico de KPIs financieros y operativos reales, y garantiza que **todas las listas de la aplicación** (Comercios, sección *Por averiguar* y Paradas del Mapa) puedan encogerse al 100% de forma individual o masiva.
+
+---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Se han incorporado tus respuestas para que el mapa funcione sin restricciones de API en cualquier dominio (AI Studio y Vercel) y refleje todos tus comercios en Corrientes.
+> Se han integrado todas tus respuestas para estructurar esta mejora:
 
-- **Mapa OpenStreetMap 100% Libre (Sin API Key)**: Se reemplazan las URLs de `basemaps.cartocdn.com` por `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, eliminando definitivamente el mensaje `API KEY REQUIRED` tanto en modo claro como en modo oscuro (mediante filtro cromático CSS calibrado sobre los mosaicos de OpenStreetMap).
-- **Punto de Partida en Corrientes, Argentina**: El origen por defecto pasa de Madrid a **Corrientes Capital** (`-27.4692, -58.8306` · *Plaza 25 de Mayo, Corrientes*), migrando automáticamente cualquier sesión guardada que aún tuviera la referencia de Madrid y priorizando Corrientes/Argentina en las búsquedas de direcciones.
-- **Visualización Dual de Comercios (Con Pendientes y con 0 Pendientes)**: Tanto en el mapa como en el itinerario lateral aparecerán todos los comercios registrados; aquellos con `0 pendientes` (todos sus productos comprados) se mostrarán en un tono más claro y atenuado para distinguirlos de un vistazo sin perder su ubicación ni su historial de productos.
+- **ID Secuencial Corto (`#001`, `#002`, `#003`)**: Cada producto existente y nuevo recibe automáticamente un código secuencial único (ej. `#001`, `#002`) visible junto al nombre del artículo, buscable desde la barra de búsqueda y utilizado para auditar unidades y costos en las tablas y gráficos de estadísticas.
+- **Suite Completa de KPIs y Gráficos en Estadísticas**:
+  - **Comparativa de Presupuesto vs. Comprometido y Gastado**: Desglose exacto entre *Presupuesto*, *Total Comprometido (Comprado + Pendiente)*, *Gastado Real ($)* y *Saldo Disponible / Excedente ($)*.
+  - **Gasto Real ($) por Comercio y por Categoría**: Gráfico interactivo ECharts con selector para alternar entre **Monto ($)** y **Unidades**, y agrupar por **Comercio** o **Categoría** (diferenciando *Comprado* vs. *Pendiente*).
+  - **Avance de Compra (% Comprados vs. Pendientes)**: Indicador y gráfico de progreso porcentual tanto en cantidad de productos únicos (`#ID`) como en unidades totales y presupuesto ejecutado.
+  - **Top Productos Más Caros y Promedio por Unidad**: Ranking detallado con `#ID`, nombre, comercio, costo unitario, subtotal y porcentaje de incidencia sobre el gasto total, además del KPI de costo promedio por producto y por unidad.
+- **Plegado Universal (Comercios, "Por averiguar" y Paradas del Mapa)**:
+  - La sección **"Por averiguar / Sin lugar asignado"** ahora cuenta con encabezado interactivo y botón para encogerse/expandirse, e ingresa dentro de la acción global **"Contraer todo / Expandir todo"**.
+  - Las tarjetas de **Comercios** en *Mi Lista* permiten contraer el 100% de los grupos (incluso cuando hay un único comercio) con ocultamiento estricto del cuerpo de ítems.
+  - Las **Paradas del Itinerario** en *Ruta en Mapa* incluyen botón para plegar/desplegar sus productos individuales y un botón rápido en la cabecera del itinerario para contraer o expandir todas las paradas a la vez.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **Qué hace**: Brinda un mapa interactivo de rutas de compra en **Corrientes, Argentina** sobre cartografía libre de OpenStreetMap con trazado vial OSRM, donde conviven las paradas activas con compras pendientes (resaltadas en primer plano) y los comercios ya completados con `0 pendientes` (en estilo suave y translúcido).
-- **Audiencia y Contexto**: Usuarios en Corrientes que organizan sus compras habituales en supermercados y comercios locales y necesitan visualizar su recorrido completo desde cualquier navegador o despliegue en Vercel sin bloqueos de proveedores de mapas.
-- **Valor Principal**: Elimina por completo el bloqueo `API KEY REQUIRED`, centra la experiencia en Corrientes desde el primer segundo y conserva visibles en el mapa los comercios aunque ya tengan sus productos comprados.
+- **What It Does**: Convierte la lista de compras en un sistema trazable por ítem (`#001`, `#002`...) donde cada unidad y peso gastado se refleja en KPIs financieros accionables, manteniendo una interfaz limpia donde cualquier lista o bloque puede plegarse por completo.
+- **Target Audience / Persona**: Usuarios que planifican compras multi-comercio y necesitan auditar cuánto gastaron realmente, cuánto les falta por pagar, qué productos encarecen el carrito y mantener las listas compactas en pantalla.
+- **Key Value**: Control financiero exacto (diferenciando gasto ejecutado vs. pendiente), trazabilidad por código `#ID` de cada artículo y ergonomía visual sin listas bloqueadas abiertas.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-- **Flujos de Usuario Clave**:
-  1. **Carga Inmediata en Corrientes sin Restricciones de API**: Al abrir **"Ruta en Mapa"**, el lienzo carga las calles de Corrientes mediante OpenStreetMap libre (`tile.openstreetmap.org`). Si el navegador tenía guardado el origen antiguo por defecto en Madrid, se actualiza automáticamente a Corrientes.
-  2. **Jerarquía Visual entre Comercios Activos y Comercios con 0 Pendientes**:
-     - **Comercios con compras pendientes**: Marcador índigo intenso (`#4f46e5`), etiqueta flotante nítida (`1. Facor · 4 art.`) y tarjeta de itinerario con contraste completo.
-     - **Comercios con 0 pendientes**: Marcador y etiqueta en tono más claro y suave (`opacity: 0.65`, borde punteado sutil y distintivo `0 pend.`), permitiendo igualmente ver sus productos comprados, desmarcarlos si hace falta volver a comprarlos o incluirlos/excluirlos del recorrido con su casilla.
-- **Identidad Visual y Tema**:
-  - *Dirección Estética*: SaaS Dashboard & Mobile Touch App de alta legibilidad, superficies limpias con bordes de `1px` y jerarquía visual inmediata por contraste y opacidad.
-  - *Paleta de Colores*: Lienzo claro (`#f8fafc`) y oscuro (`#020617`); acento índigo (`#4f46e5`) para paradas con pendientes; gris pizarra suave (`#64748b` / `#94a3b8` con opacidad `0.62`) para comercios con `0 pendientes`; esmeralda (`#047857`) para el punto de salida y acción de navegación.
-  - *Tipografía y Jerarquía*: `Plus Jakarta Sans` con numerales tabulares (`tabular-nums`) en distancias, tiempos de viaje, cantidades y subtotales.
+- **Key User Flows**:
+  1. **Trazabilidad por `#ID` en Mi Lista y Búsqueda**: Al agregar o visualizar un producto, se muestra su código secuencial (`#001`, `#002`...) con tipografía tabular. El usuario puede escribir `#003` o `003` en el buscador para localizar el artículo al instante.
+  2. **Plegado Total en Todas las Vistas**:
+     - En *Mi Lista*, el usuario puede contraer cualquier comercio, la caja *Por averiguar / Sin lugar asignado*, o pulsar **"Contraer todo"** para dejar absolutamente todas las secciones compactadas en una sola línea de resumen.
+     - En *Ruta en Mapa*, cada parada del itinerario puede encoger su lista de productos con un clic, o plegarse todas juntas desde la cabecera del itinerario.
+  3. **Análisis en Estadísticas**: Al abrir la pestaña *Estadísticas*, el usuario visualiza la fila superior de KPIs ejecutivos, los gráficos interactivos (con filtros para ver Gasto `$` por Comercio o Categoría y dona de Avance/Presupuesto) y la tabla de **Top Productos Más Caros** identificada por `#ID`.
+- **Visual Identity & Theme**:
+  - *Aesthetic Direction*: Dashboard analítico de alta densidad inspirado en herramientas financieras modernas, respetando el modo claro y oscuro (`data-theme="light" | "dark"`).
+  - *Color Palette & Mood*: Indigo (`#4f46e5` / `#a5b4fc`) para montos pendientes y serie principal; Esmeralda (`#047857` / `#34d399`) para gasto real comprado y presupuesto saludable; Ámbar (`#b45309` / `#fbbf24`) para advertencia (>80% del presupuesto); Rojo (`#b91c1c` / `#f87171`) para exceso presupuestario.
+  - *Typography & Hierarchy*: `Plus Jakarta Sans` con `font-variant-numeric: tabular-nums` obligatorio en todos los códigos `#001`, precios, porcentajes y tablas comparativas.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decisión 1: OpenStreetMap Oficial + Filtro Nocturno CSS en lugar de CartoDB**
-  - *Enfoque Elegido*: Usar `https://tile.openstreetmap.org/{z}/{x}/{y}.png` como fuente única de mosaicos y aplicar un filtro CSS exclusivamente sobre `.leaflet-tile-pane` cuando `data-theme="dark"` está activo, sin afectar marcadores, polilíneas ni etiquetas.
-  - *Por qué*: CartoDB bloquea dominios en la nube con la marca de agua `API KEY REQUIRED`; OpenStreetMap oficial es abierto, gratuito y funciona en AI Studio y Vercel sin configuración extra.
-- **Decisión 2: Inclusión de Comercios con 0 Pendientes con Atenuación Visual**
-  - *Enfoque Elegido*: Construir la lista de paradas a partir de todos los comercios de la lista (tanto los que tienen productos pendientes como los que tienen únicamente productos comprados), asignando la propiedad `hasPendingItems` para diferenciar su estilo en el mapa y en el itinerario.
-  - *Por qué*: Antes, al marcar todos los artículos como comprados, el comercio desaparecía por completo del mapa dando la impresión de que el mapa estaba vacío.
+- **Decision 1: Asignación y Persistencia del Código `#ID` (`#001`, `#002`...)**:
+  - *Chosen Approach*: Asignar y persistir un número secuencial (`seqNumber` y `skuCode` formateado a 3 dígitos `#001`) ordenado cronológicamente para los productos existentes y auto-incremental para cada nuevo producto añadido.
+  - *Why*: Garantiza que el código `#001` de un producto no cambie al reordenar comercios ni al marcarlo como comprado, permitiendo referenciarlo de forma estable en los gráficos y rankings.
+- **Decision 2: Gráficos Duales con Selector de Métrica (`$` vs `Unidades`) y Dimensión (`Comercio` vs `Categoría`)**:
+  - *Chosen Approach*: Incorporar controles segmentados en el panel de gráficos para alternar instantáneamente entre **Gasto ($)** y **Unidades**, y entre **Por Comercio** y **Por Categoría**, apilando *Comprado* + *Pendiente*.
+  - *Why*: Evita que el gráfico quede vacío cuando todos los productos se marcan como comprados (error actual) y permite analizar tanto el dinero gastado como el volumen físico de compra.
 
 ---
 
@@ -51,37 +61,51 @@ Esta actualización reemplaza los mosaicos de CartoDB que exigían llave de API 
 ### Architecture & Component Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Storage & Route Engine                          │
-│  DEFAULT_ORIGIN: Corrientes (-27.4692, -58.8306)                        │
-│  Auto-migración de origen antiguo (Madrid ──► Corrientes)               │
-└───────────────────┬─────────────────────────────────┬───────────────────┘
-                    │                                 │
-                    ▼                                 ▼
-┌───────────────────────────────────────┐ ┌───────────────────────────────┐
-│        calculateOptimalRoute()        │ │        Leaflet MapView        │
-│ ┌───────────────────────────────────┐ │ │ ┌───────────────────────────┐ │
-│ │ Agrupa TODOS los comercios:       │ │ │ │ OpenStreetMap Tiles       │ │
-│ │ • Con pendientes (Resaltados)     │ │ │ │ (Sin API Key + Dark CSS)  │ │
-│ │ • Con 0 pendientes (Más claros)   │ │ │ ├───────────────────────────┤ │
-│ └───────────────────────────────────┘ │ │ │ Marcadores + Etiquetas    │ │
-│                                       │ │ │ • Activos: Índigo sólido  │ │
-│                                       │ │ │ • 0 pend.: Suave / Claro  │ │
-│                                       │ │ └───────────────────────────┘ │
-└───────────────────────────────────────┘ └───────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                                 App State                                  │
+│  items (con seqNumber / skuCode #001) · budget · collapsedGroups · trips   │
+└───────────────┬─────────────────────────────┬──────────────────────────────┘
+                │                             │
+      ┌─────────▼──────────┐        ┌─────────▼──────────┐
+      │     ListView       │        │     StatsView      │
+      ├────────────────────┤        ├────────────────────┤
+      │ • Plegado 100% de: │        │ • 6 Tarjetas KPI   │
+      │   - Por averiguar  │        │ • Barra Dual de    │
+      │   - Comercios      │        │   Presupuesto      │
+      │ • Botón Contraer / │        │ • ECharts Gasto $  │
+      │   Expandir Todo    │        │   (Comercio / Cat) │
+      │ • Etiqueta #001 en │        │ • ECharts Avance % │
+      │   cada producto    │        │ • Ranking Top #ID  │
+      └────────────────────┘        └────────────────────┘
+                │
+      ┌─────────▼──────────┐
+      │      MapView       │
+      ├────────────────────┤
+      │ • Paradas con      │
+      │   lista plegable   │
+      │ • Botón Contraer / │
+      │   Expandir Paradas │
+      │ • Código #001 en   │
+      │   ítems de parada  │
+      └────────────────────┘
 ```
 
 ### Data Model & State
-
-- **Origen Predeterminado (`DEFAULT_ORIGIN`)**: `lat: -27.469213`, `lng: -58.830635`, `address: 'Plaza 25 de Mayo, Corrientes, Argentina'`. Al leer `localStorage`, si el origen guardado coincide con la referencia antigua de Madrid (`40.416775, -3.703790`), se reemplaza automáticamente por Corrientes.
-- **Modelo de Parada (`RouteStop`)**:
-  - `pendingItems: ShoppingItem[]`: Artículos pendientes de compra en ese comercio.
-  - `completedItems: ShoppingItem[]`: Artículos ya comprados en ese comercio.
-  - `hasPending: boolean`: Indica si el comercio tiene al menos 1 artículo pendiente (`true` = resaltado normal; `false` = estilo claro/atenuado con `0 pendientes`).
+- **Entidad `ShoppingItem`**: Se enriquece con `seqNumber?: number` y `skuCode?: string` (ej. `"#001"`). La función de sanitización en almacenamiento asigna automáticamente códigos correlativos `#001`, `#002`... a cualquier lista previa guardada en `localStorage` o importada por CSV/JSON.
+- **Métricas Analíticas Extendidas (`ExtendedAnalytics`)**:
+  - `totalPending`, `totalSpent`, `totalOverall` (Comprometido Total = Gastado + Pendiente).
+  - `budget`, `budgetRemaining`, `budgetPercentage`, `spentPercentage`, `pendingPercentage`.
+  - `totalItemsCount`, `completedItemsCount`, `pendingItemsCount`, `completionRateItems` (%).
+  - `totalUnitsCount`, `completedUnitsCount`, `pendingUnitsCount`, `completionRateUnits` (%).
+  - `averageCostPerItem`, `averageCostPerUnit`.
+  - `storeBreakdown` (Gasto comprado, gasto pendiente, unidades y cantidad de `#ID` por comercio).
+  - `categoryBreakdown` (Gasto comprado, gasto pendiente, unidades y cantidad de `#ID` por categoría).
+  - `topExpensiveItems` (Lista ordenada por subtotal `$` descendente con `#ID`, precio unitario, cantidad, comercio, estado y `%` del total).
 
 ### Interactive Component & State Mapping
-
-- **Mapa y Marcadores**:
-  - Los comercios con `hasPending === true` participan por defecto en el cálculo de la ruta vial OSRM y se dibujan con marcador índigo sólido (`#4f46e5`) y etiqueta fija completa.
-  - Los comercios con `hasPending === false` (`0 pendientes`) también se ubican en el mapa con un marcador y etiqueta más claros (`map-pin-zero-pending`, `map-label-zero-pending`), y el usuario puede incluirlos o excluirlos del trazado vial con un clic en su casilla del itinerario.
-  - Dentro de cada tarjeta del itinerario se muestran tanto los productos pendientes como los comprados (estos últimos tachados y más claros), permitiendo marcarlos o desmarcarlos en tiempo real.
+- **Plegado Universal en `ListView`**:
+  - La sección `#pendingLocationSection` utiliza la clave reservada `__pending_unassigned__` dentro de `collapsedGroups` (o estado sincronizado) para que tanto el clic en su propia cabecera como el botón global **"Contraer todo / Expandir todo"** la contraigan o desplieguen junto con todos los comercios.
+- **Plegado de Paradas en `MapView`**:
+  - Estado `collapsedStops` que permite contraer o expandir la lista de productos de cada parada del itinerario individualmente o todas a la vez mediante un botón en la cabecera del itinerario.
+- **Controles Interactivos en `StatsView`**:
+  - Selector segmentado `metricMode: 'currency' | 'units'` y `groupBy: 'store' | 'category'` que actualiza en tiempo real el gráfico principal de ECharts sin recargar la vista.

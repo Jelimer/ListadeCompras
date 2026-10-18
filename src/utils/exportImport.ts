@@ -1,12 +1,16 @@
 import { ShoppingItem } from '../types';
+import { ensureSequentialSkus, formatSkuCode } from './storage';
 
 export function exportJSON(items: ShoppingItem[] = [], budget: number = 0): string {
+  const normalized = ensureSequentialSkus(items || []);
   const payload = {
     version: '1.0',
     exportedAt: new Date().toISOString(),
     budget: Number(budget) || 0,
-    items: (items || []).map((it) => ({
+    items: normalized.map((it, idx) => ({
       id: String(it.id || ''),
+      seqNumber: Number(it.seqNumber) || idx + 1,
+      skuCode: String(it.skuCode || formatSkuCode(idx + 1)),
       name: String(it.name || ''),
       quantity: Number(it.quantity) || 1,
       unitPrice: Number(it.unitPrice) || 0,
@@ -30,12 +34,15 @@ function escapeCSVCell(val: unknown): string {
 
 export function exportCSV(items: ShoppingItem[] = []): string {
   const BOM = '\uFEFF';
-  const headers = ['id', 'name', 'quantity', 'unitPrice', 'category', 'location', 'completed', 'timestamp'];
+  const normalized = ensureSequentialSkus(items || []);
+  const headers = ['id', 'skuCode', 'name', 'quantity', 'unitPrice', 'category', 'location', 'completed', 'timestamp'];
   const rows = [headers.join(',')];
 
-  for (const it of items) {
+  for (let i = 0; i < normalized.length; i++) {
+    const it = normalized[i];
     const row = [
       escapeCSVCell(it.id),
+      escapeCSVCell(it.skuCode || formatSkuCode(i + 1)),
       escapeCSVCell(it.name),
       it.quantity,
       it.unitPrice,
@@ -79,6 +86,8 @@ export function importJSON(jsonString: string): {
 
       validItems.push({
         id: String(raw.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
+        seqNumber: typeof raw.seqNumber === 'number' ? raw.seqNumber : undefined,
+        skuCode: typeof raw.skuCode === 'string' ? raw.skuCode : undefined,
         name,
         quantity: !isNaN(qty) && qty > 0 ? qty : 1,
         unitPrice: !isNaN(price) && price >= 0 ? Math.round(price * 100) / 100 : 0,
@@ -93,7 +102,7 @@ export function importJSON(jsonString: string): {
     return {
       success: true,
       budget: Math.max(0, Number(data.budget) || 0),
-      items: validItems,
+      items: ensureSequentialSkus(validItems),
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -180,6 +189,7 @@ export function importCSV(csvString: string): {
     expectedHeaders.forEach((eh) => {
       idxMap[eh] = rawHeaders.indexOf(eh);
     });
+    const skuIdx = rawHeaders.indexOf('skucode');
 
     const validItems: ShoppingItem[] = [];
 
@@ -199,6 +209,7 @@ export function importCSV(csvString: string): {
 
       validItems.push({
         id: row[idxMap.id] || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        skuCode: skuIdx !== -1 && row[skuIdx] ? row[skuIdx].trim() : undefined,
         name: rawName.trim(),
         quantity: !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 1,
         unitPrice: !isNaN(parsedPrice) && parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0,
@@ -212,7 +223,7 @@ export function importCSV(csvString: string): {
 
     return {
       success: true,
-      items: validItems,
+      items: ensureSequentialSkus(validItems),
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

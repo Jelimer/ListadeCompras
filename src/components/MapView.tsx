@@ -19,6 +19,9 @@ import {
   Maximize2,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   GripVertical,
   Route,
   X,
@@ -34,6 +37,7 @@ import {
 import {
   saveStoredOrigin,
   saveStoredTripsData,
+  formatSkuCode,
 } from '../utils/storage';
 
 interface MapViewProps {
@@ -82,6 +86,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
   // Collapsed stop items state (expanded by default so details are visible)
   const [collapsedStopItems, setCollapsedStopItems] = useState<Record<string, boolean>>({});
+  const [isItineraryCollapsed, setIsItineraryCollapsed] = useState<boolean>(false);
 
   // Inline Trip create / rename state
   const [tripEditMode, setTripEditMode] = useState<'create' | 'rename' | null>(null);
@@ -623,6 +628,23 @@ export const MapView: React.FC<MapViewProps> = ({
     }));
   };
 
+  const areAllStopsCollapsed = useMemo(() => {
+    if (displayedStops.length === 0) return false;
+    return displayedStops.every((s) => Boolean(collapsedStopItems[s.storeName]));
+  }, [displayedStops, collapsedStopItems]);
+
+  const handleToggleAllStopProducts = () => {
+    if (areAllStopsCollapsed) {
+      setCollapsedStopItems({});
+    } else {
+      const next: Record<string, boolean> = {};
+      displayedStops.forEach((s) => {
+        next[s.storeName] = true;
+      });
+      setCollapsedStopItems(next);
+    }
+  };
+
   // Floating map controls
   const handleZoomIn = () => mapRef.current?.zoomIn();
   const handleZoomOut = () => mapRef.current?.zoomOut();
@@ -894,31 +916,78 @@ export const MapView: React.FC<MapViewProps> = ({
         {/* Itinerario de Paradas Reordenables con Desglose de Productos */}
         <div className="route-stops-card">
           <div className="route-stops-header">
-            <div className="route-stops-title">
-              <ListOrdered size={18} aria-hidden="true" />
-              <h3>Itinerario y Productos por Parada</h3>
-            </div>
-            <button
-              type="button"
-              id="btn-reset-route-order"
-              className="btn-reset-order"
-              title="Re-optimizar orden automático por cercanía (TSP)"
-              onClick={handleOptimizeRoute}
+            <div
+              className="route-stops-title"
+              role="button"
+              tabIndex={0}
+              aria-expanded={!isItineraryCollapsed}
+              onClick={() => setIsItineraryCollapsed((prev) => !prev)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setIsItineraryCollapsed((prev) => !prev);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
             >
-              <Sparkles size={15} aria-hidden="true" />
-              <span>Optimizar orden</span>
-            </button>
+              {isItineraryCollapsed ? (
+                <ChevronRight size={18} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={18} aria-hidden="true" />
+              )}
+              <ListOrdered size={18} aria-hidden="true" />
+              <h3>Itinerario y Productos ({displayedStops.length})</h3>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {displayedStops.length > 0 && !isItineraryCollapsed && (
+                <button
+                  type="button"
+                  className="btn-reset-order"
+                  title={
+                    areAllStopsCollapsed
+                      ? 'Expandir productos de todas las paradas'
+                      : 'Contraer productos de todas las paradas'
+                  }
+                  onClick={handleToggleAllStopProducts}
+                >
+                  {areAllStopsCollapsed ? (
+                    <>
+                      <ChevronsUpDown size={14} aria-hidden="true" />
+                      <span>Expandir paradas</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronsDownUp size={14} aria-hidden="true" />
+                      <span>Contraer paradas</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                type="button"
+                id="btn-reset-route-order"
+                className="btn-reset-order"
+                title="Re-optimizar orden automático por cercanía (TSP)"
+                onClick={handleOptimizeRoute}
+              >
+                <Sparkles size={15} aria-hidden="true" />
+                <span>Optimizar</span>
+              </button>
+            </div>
           </div>
-          <p className="route-stops-help">
-            Arrastra las paradas para reordenar el recorrido. Los comercios con 0 pendientes se muestran más claros:
-          </p>
 
-          <div
-            id="route-stops-list"
-            className="route-stops-list"
-            role="list"
-            aria-label="Lista de paradas del recorrido de compra"
-          >
+          {!isItineraryCollapsed && (
+            <>
+              <p className="route-stops-help">
+                Arrastra las paradas para reordenar o haz clic en cada parada para encoger sus productos:
+              </p>
+
+              <div
+                id="route-stops-list"
+                className="route-stops-list"
+                role="list"
+                aria-label="Lista de paradas del recorrido de compra"
+              >
             {displayedStops.length === 0 ? (
               <p className="empty-stops-text">
                 Aún no hay comercios cargados en tu lista de compras.
@@ -987,7 +1056,20 @@ export const MapView: React.FC<MapViewProps> = ({
                         {isIncluded ? orderedIndex + 1 : '—'}
                       </div>
 
-                      <div className="stop-info-body">
+                      <div
+                        className="stop-info-body"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={!areItemsCollapsed}
+                        onClick={() => toggleStopProductList(stop.storeName)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleStopProductList(stop.storeName);
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <div className="stop-name-row">
                           <strong className="stop-store-name">{stop.storeName}</strong>
                           <span className="stop-items-count tabular-nums">
@@ -1062,8 +1144,9 @@ export const MapView: React.FC<MapViewProps> = ({
                     {/* Lista de productos dentro de cada parada (pendientes y comprados) */}
                     {!areItemsCollapsed && allStopItems.length > 0 && (
                       <div className="stop-inline-items">
-                        {allStopItems.map((item) => {
+                        {allStopItems.map((item, idx) => {
                           const lineTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                          const sku = item.skuCode || formatSkuCode(item.seqNumber || idx + 1);
                           return (
                             <label
                               key={item.id}
@@ -1076,6 +1159,7 @@ export const MapView: React.FC<MapViewProps> = ({
                                 checked={item.completed}
                                 onChange={() => onToggleCompleted && onToggleCompleted(item.id)}
                               />
+                              <span className="item-sku-code tabular-nums">{sku}</span>
                               <span className="stop-inline-item-name">{item.name}</span>
                               <span className="stop-inline-item-meta tabular-nums">
                                 {item.quantity} un.
@@ -1090,7 +1174,9 @@ export const MapView: React.FC<MapViewProps> = ({
                 );
               })
             )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </aside>
 

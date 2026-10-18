@@ -26,7 +26,11 @@ import {
 } from 'lucide-react';
 import { ShoppingItem } from '../types';
 import { getCategoryIcon } from '../utils/categoryIcons';
-import { loadStoredHideEmptyStores, saveStoredHideEmptyStores } from '../utils/storage';
+import {
+  loadStoredHideEmptyStores,
+  saveStoredHideEmptyStores,
+  formatSkuCode,
+} from '../utils/storage';
 
 interface ListViewProps {
   items: ShoppingItem[];
@@ -57,6 +61,8 @@ const PENDING_LOCATION_NAMES = [
   'indefinido',
 ];
 
+const PENDING_SECTION_COLLAPSE_KEY = '__pending_unassigned_section__';
+
 export function isPendingLocationName(locName: string): boolean {
   if (!locName) return true;
   const clean = locName.trim().toLowerCase();
@@ -64,7 +70,11 @@ export function isPendingLocationName(locName: string): boolean {
 }
 
 function normalizeLocKey(loc: string): string {
-  return String(loc || 'General').trim().toLowerCase();
+  return String(loc || 'General')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 export const ListView: React.FC<ListViewProps> = ({
@@ -93,7 +103,9 @@ export const ListView: React.FC<ListViewProps> = ({
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [hideEmptyStores, setHideEmptyStores] = useState<boolean>(() => loadStoredHideEmptyStores());
+  const [hideEmptyStores, setHideEmptyStores] = useState<boolean>(() =>
+    loadStoredHideEmptyStores()
+  );
 
   // Drag & Drop state for store cards
   const [draggedLocation, setDraggedLocation] = useState<string | null>(null);
@@ -191,10 +203,25 @@ export const ListView: React.FC<ListViewProps> = ({
     onUpdateItem(item.id, { quantity: nextQty });
   };
 
-  // Pending location items
+  // Pending location items (also filtered by searchQuery if active)
   const pendingItems = useMemo(() => {
-    return items.filter((it) => !it.completed && isPendingLocationName(it.location));
-  }, [items]);
+    const query = searchQuery
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+    return items.filter((it, idx) => {
+      if (it.completed || !isPendingLocationName(it.location)) return false;
+      if (!query) return true;
+      const sku = it.skuCode || formatSkuCode(it.seqNumber || idx + 1);
+      const haystack = `${sku} ${it.name} ${it.location} ${it.category}`
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      return query.split(/\s+/).every((tok) => haystack.includes(tok));
+    });
+  }, [items, searchQuery]);
 
   const handleAssignPending = (itemId: string) => {
     const targetStore = pendingAssignMap[itemId];
@@ -218,12 +245,13 @@ export const ListView: React.FC<ListViewProps> = ({
       .replace(/[\u0300-\u036f]/g, '')
       .trim();
 
-    const filtered = items.filter((item) => {
+    const filtered = items.filter((item, idx) => {
       if (!item.completed && isPendingLocationName(item.location)) return false;
       if (hideCompleted && item.completed) return false;
       if (!query) return true;
 
-      const haystack = `${item.name} ${item.location} ${item.category}`
+      const sku = item.skuCode || formatSkuCode(item.seqNumber || idx + 1);
+      const haystack = `${sku} ${item.name} ${item.location} ${item.category}`
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
@@ -242,6 +270,9 @@ export const ListView: React.FC<ListViewProps> = ({
     Object.keys(groups).forEach((loc) => {
       groups[loc].sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        const seqA = Number(a.seqNumber || 0);
+        const seqB = Number(b.seqNumber || 0);
+        if (seqA !== seqB) return seqB - seqA;
         const timeA = Number(a.timestamp || 0);
         const timeB = Number(b.timestamp || 0);
         if (timeA !== timeB) return timeB - timeA;
@@ -257,12 +288,19 @@ export const ListView: React.FC<ListViewProps> = ({
       return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
     });
 
-    const result: Array<{ location: string; items: ShoppingItem[]; subtotal: number; pendingCount: number }> = [];
+    const result: Array<{
+      location: string;
+      items: ShoppingItem[];
+      subtotal: number;
+      pendingCount: number;
+      completedCount: number;
+    }> = [];
 
     sortedLocations.forEach((loc) => {
       const groupList = groups[loc];
       let subtotalCents = 0;
       let pendingCount = 0;
+      let completedCount = 0;
 
       groupList.forEach((it) => {
         if (!it.completed) {
@@ -270,6 +308,8 @@ export const ListView: React.FC<ListViewProps> = ({
           const qty = Number(it.quantity) || 1;
           const price = Number(it.unitPrice) || 0;
           subtotalCents += Math.round(qty * Math.round(price * 100));
+        } else {
+          completedCount++;
         }
       });
 
@@ -282,34 +322,51 @@ export const ListView: React.FC<ListViewProps> = ({
         items: groupList,
         subtotal: Math.round(subtotalCents) / 100,
         pendingCount,
+        completedCount,
       });
     });
 
     return result;
   }, [items, searchQuery, hideCompleted, hideEmptyStores, locationOrder]);
 
-  // Normalized collapse check
+  // Normalized collapse check (includes both store cards and the "Por averiguar" section)
   const collapsedSet = useMemo(() => {
     return new Set(collapsedGroups.map(normalizeLocKey));
   }, [collapsedGroups]);
 
   const isGroupCollapsed = (loc: string) => collapsedSet.has(normalizeLocKey(loc));
+  const isPendingSectionCollapsed = collapsedSet.has(
+    normalizeLocKey(PENDING_SECTION_COLLAPSE_KEY)
+  );
 
   const areAllVisibleCollapsed = useMemo(() => {
-    if (groupedItems.length === 0) return false;
-    return groupedItems.every((g) => collapsedSet.has(normalizeLocKey(g.location)));
-  }, [groupedItems, collapsedSet]);
+    const hasStores = groupedItems.length > 0;
+    const hasPendingBox = pendingItems.length > 0;
+    if (!hasStores && !hasPendingBox) return false;
+
+    const storesCollapsed = groupedItems.every((g) =>
+      collapsedSet.has(normalizeLocKey(g.location))
+    );
+    const pendingCollapsed =
+      !hasPendingBox || collapsedSet.has(normalizeLocKey(PENDING_SECTION_COLLAPSE_KEY));
+
+    return storesCollapsed && pendingCollapsed;
+  }, [groupedItems, pendingItems.length, collapsedSet]);
 
   const handleToggleCollapseAll = () => {
     if (areAllVisibleCollapsed) {
-      // Expand all visible groups
+      // Expand all visible store groups AND the pending section
       const visibleKeys = new Set(groupedItems.map((g) => normalizeLocKey(g.location)));
+      visibleKeys.add(normalizeLocKey(PENDING_SECTION_COLLAPSE_KEY));
       const remaining = collapsedGroups.filter((loc) => !visibleKeys.has(normalizeLocKey(loc)));
       onSetCollapsedGroups(remaining);
     } else {
-      // Collapse all 100% of visible groups
+      // Collapse 100% of visible store groups AND the pending section
       const nextSet = new Set(collapsedGroups.map((l) => l.trim()));
       groupedItems.forEach((g) => nextSet.add(g.location.trim()));
+      if (pendingItems.length > 0) {
+        nextSet.add(PENDING_SECTION_COLLAPSE_KEY);
+      }
       onSetCollapsedGroups(Array.from(nextSet));
     }
   };
@@ -357,9 +414,20 @@ export const ListView: React.FC<ListViewProps> = ({
   };
 
   return (
-    <section id="panel-list" className="view-panel active" role="tabpanel" aria-labelledby="tab-list" tabIndex={0}>
+    <section
+      id="panel-list"
+      className="view-panel active"
+      role="tabpanel"
+      aria-labelledby="tab-list"
+      tabIndex={0}
+    >
       {/* Formulario Superior de Ingesta */}
-      <form className="input-section" role="form" aria-label="Añadir nuevo producto" onSubmit={handleAddSubmit}>
+      <form
+        className="input-section"
+        role="form"
+        aria-label="Añadir nuevo producto"
+        onSubmit={handleAddSubmit}
+      >
         <div className="input-wrapper input-wrapper-item">
           <Package className="input-icon" size={18} aria-hidden="true" />
           <label htmlFor="itemInput" className="sr-only">
@@ -456,7 +524,12 @@ export const ListView: React.FC<ListViewProps> = ({
           </datalist>
         </div>
 
-        <button id="addItemButton" className="btn btn-primary" type="submit" aria-label="Añadir producto a la lista">
+        <button
+          id="addItemButton"
+          className="btn btn-primary"
+          type="submit"
+          aria-label="Añadir producto a la lista"
+        >
           <PlusCircle size={18} aria-hidden="true" />
           <span>Añadir</span>
         </button>
@@ -464,17 +537,21 @@ export const ListView: React.FC<ListViewProps> = ({
 
       <div className="main-content">
         {/* Barra de herramientas y filtros */}
-        <div className="toolbar-section" role="toolbar" aria-label="Herramientas de filtrado y búsqueda">
+        <div
+          className="toolbar-section"
+          role="toolbar"
+          aria-label="Herramientas de filtrado y búsqueda"
+        >
           <div className="input-wrapper toolbar-search">
             <Search className="input-icon" size={18} aria-hidden="true" />
             <label htmlFor="searchInput" className="sr-only">
-              Buscar en toda la lista
+              Buscar por #ID, nombre, comercio o categoría
             </label>
             <input
               type="search"
               id="searchInput"
-              placeholder="Buscar en toda la lista..."
-              aria-label="Buscar productos"
+              placeholder="Buscar por #ID (#001), producto o comercio..."
+              aria-label="Buscar productos por ID o nombre"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -505,14 +582,22 @@ export const ListView: React.FC<ListViewProps> = ({
               <label htmlFor="hideEmptyStoresSwitch">Ocultar 0 pendientes</label>
             </div>
 
-            {groupedItems.length > 0 && (
+            {(groupedItems.length > 0 || pendingItems.length > 0) && (
               <button
                 type="button"
                 id="btnToggleCollapseAll"
                 className="btn-collapse-all"
                 onClick={handleToggleCollapseAll}
-                title={areAllVisibleCollapsed ? 'Expandir todos los comercios' : 'Contraer todos los comercios'}
-                aria-label={areAllVisibleCollapsed ? 'Expandir todos los comercios' : 'Contraer todos los comercios'}
+                title={
+                  areAllVisibleCollapsed
+                    ? 'Expandir todas las listas y comercios'
+                    : 'Contraer todas las listas y comercios'
+                }
+                aria-label={
+                  areAllVisibleCollapsed
+                    ? 'Expandir todas las listas y comercios'
+                    : 'Contraer todas las listas y comercios'
+                }
               >
                 {areAllVisibleCollapsed ? (
                   <>
@@ -555,116 +640,165 @@ export const ListView: React.FC<ListViewProps> = ({
           </div>
         </div>
 
-        {/* Sección: Por averiguar / Sin lugar asignado */}
+        {/* Sección Plegable: Por averiguar / Sin lugar asignado */}
         {pendingItems.length > 0 && (
           <section
             id="pendingLocationSection"
-            className="pending-location-section"
+            className={`pending-location-section ${
+              isPendingSectionCollapsed ? 'is-collapsed' : ''
+            }`}
             aria-label="Productos por averiguar o sin lugar asignado"
           >
-            <div className="pending-location-header">
-              <div className="pending-title-group">
-                <HelpCircle className="pending-icon" size={20} aria-hidden="true" />
-                <h3>Por averiguar / Sin lugar asignado</h3>
-                <span id="pendingLocationCountBadge" className="pending-badge">
-                  {pendingItems.length} por asignar
-                </span>
+            <div
+              className="pending-location-header pending-collapsible-trigger"
+              role="button"
+              tabIndex={0}
+              aria-expanded={!isPendingSectionCollapsed}
+              onClick={() => onToggleGroupCollapse(PENDING_SECTION_COLLAPSE_KEY)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onToggleGroupCollapse(PENDING_SECTION_COLLAPSE_KEY);
+                }
+              }}
+            >
+              <div className="pending-header-top-row">
+                <div className="pending-title-group">
+                  {isPendingSectionCollapsed ? (
+                    <ChevronRight size={19} className="pending-chevron" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown size={19} className="pending-chevron" aria-hidden="true" />
+                  )}
+                  <HelpCircle className="pending-icon" size={20} aria-hidden="true" />
+                  <h3>Por averiguar / Sin lugar asignado</h3>
+                  <span id="pendingLocationCountBadge" className="pending-badge tabular-nums">
+                    {pendingItems.length} por asignar
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-collapse-section-inline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleGroupCollapse(PENDING_SECTION_COLLAPSE_KEY);
+                  }}
+                  aria-label={
+                    isPendingSectionCollapsed
+                      ? 'Expandir lista Por averiguar'
+                      : 'Contraer lista Por averiguar'
+                  }
+                >
+                  {isPendingSectionCollapsed ? 'Expandir' : 'Contraer'}
+                </button>
               </div>
-              <p className="pending-hint">
-                Productos agregados sin comercio definido. Elige el comercio en el menú y pulsa la flecha para guardarlo en su lugar.
-              </p>
+
+              {!isPendingSectionCollapsed && (
+                <p className="pending-hint">
+                  Productos agregados sin comercio definido. Elige el comercio en el menú y pulsa la
+                  flecha para guardarlo en su lugar.
+                </p>
+              )}
             </div>
 
-            <div id="pendingLocationList" className="pending-items-grid">
-              {pendingItems.map((item) => {
-                const itemTotalPrice = (item.unitPrice || 0) * (item.quantity || 1);
-                return (
-                  <div key={item.id} className="pending-item-card" data-id={item.id}>
-                    <div className="pending-item-main">
-                      <div className="pending-item-info">
-                        <span className="pending-item-name" title={item.name}>
-                          {item.name}
-                        </span>
-                        <div className="pending-item-details">
-                          <span className="pending-qty-badge">Cant: {item.quantity}</span>
-                          {itemTotalPrice > 0 && (
-                            <span className="pending-price-badge">${itemTotalPrice.toFixed(2)}</span>
-                          )}
-                          <span className="pending-cat-badge">{item.category || 'General'}</span>
+            {!isPendingSectionCollapsed && (
+              <div id="pendingLocationList" className="pending-items-grid">
+                {pendingItems.map((item) => {
+                  const itemTotalPrice = (item.unitPrice || 0) * (item.quantity || 1);
+                  const sku = item.skuCode || formatSkuCode(item.seqNumber || 1);
+                  return (
+                    <div key={item.id} className="pending-item-card" data-id={item.id}>
+                      <div className="pending-item-main">
+                        <div className="pending-item-info">
+                          <div className="pending-item-title-line">
+                            <span className="item-sku-code tabular-nums">{sku}</span>
+                            <span className="pending-item-name" title={item.name}>
+                              {item.name}
+                            </span>
+                          </div>
+                          <div className="pending-item-details tabular-nums">
+                            <span className="pending-qty-badge">Cant: {item.quantity}</span>
+                            {itemTotalPrice > 0 && (
+                              <span className="pending-price-badge">
+                                ${itemTotalPrice.toFixed(2)}
+                              </span>
+                            )}
+                            <span className="pending-cat-badge">{item.category || 'General'}</span>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          className="btn-remove-pending"
+                          data-id={item.id}
+                          title="Eliminar producto"
+                          aria-label={`Eliminar ${item.name}`}
+                          onClick={() => onDeleteItem(item.id)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="btn-remove-pending"
-                        data-id={item.id}
-                        title="Eliminar producto"
-                        aria-label={`Eliminar ${item.name}`}
-                        onClick={() => onDeleteItem(item.id)}
-                      >
-                        <Trash2 size={16} aria-hidden="true" />
-                      </button>
-                    </div>
 
-                    <div className="pending-assign-row">
-                      <select
-                        className="pending-assign-select"
-                        data-id={item.id}
-                        aria-label={`Elegir comercio para ${item.name}`}
-                        value={pendingAssignMap[item.id] || ''}
-                        onChange={(e) =>
-                          setPendingAssignMap({
-                            ...pendingAssignMap,
-                            [item.id]: e.target.value,
-                          })
-                        }
-                      >
-                        <option value="" disabled>
-                          Elegir comercio...
-                        </option>
-                        {distinctLocations.map((store) => (
-                          <option key={store} value={store}>
-                            {store}
-                          </option>
-                        ))}
-                        <option value="__new_store__">+ Nuevo comercio...</option>
-                      </select>
-                      {pendingAssignMap[item.id] === '__new_store__' && (
-                        <input
-                          type="text"
-                          className="pending-custom-store-input"
-                          placeholder="Nombre del comercio..."
-                          value={pendingCustomStoreMap[item.id] || ''}
+                      <div className="pending-assign-row">
+                        <select
+                          className="pending-assign-select"
+                          data-id={item.id}
+                          aria-label={`Elegir comercio para ${item.name}`}
+                          value={pendingAssignMap[item.id] || ''}
                           onChange={(e) =>
-                            setPendingCustomStoreMap({
-                              ...pendingCustomStoreMap,
+                            setPendingAssignMap({
+                              ...pendingAssignMap,
                               [item.id]: e.target.value,
                             })
                           }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleAssignPending(item.id);
-                          }}
-                        />
-                      )}
-                      <button
-                        type="button"
-                        className="btn-assign-arrow"
-                        data-id={item.id}
-                        title="Asignar y guardar en este comercio"
-                        aria-label={`Asignar ${item.name} al comercio seleccionado`}
-                        disabled={
-                          !pendingAssignMap[item.id] ||
-                          (pendingAssignMap[item.id] === '__new_store__' &&
-                            !(pendingCustomStoreMap[item.id] || '').trim())
-                        }
-                        onClick={() => handleAssignPending(item.id)}
-                      >
-                        <ArrowRight size={16} aria-hidden="true" />
-                      </button>
+                        >
+                          <option value="" disabled>
+                            Elegir comercio...
+                          </option>
+                          {distinctLocations.map((store) => (
+                            <option key={store} value={store}>
+                              {store}
+                            </option>
+                          ))}
+                          <option value="__new_store__">+ Nuevo comercio...</option>
+                        </select>
+                        {pendingAssignMap[item.id] === '__new_store__' && (
+                          <input
+                            type="text"
+                            className="pending-custom-store-input"
+                            placeholder="Nombre del comercio..."
+                            value={pendingCustomStoreMap[item.id] || ''}
+                            onChange={(e) =>
+                              setPendingCustomStoreMap({
+                                ...pendingCustomStoreMap,
+                                [item.id]: e.target.value,
+                              })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleAssignPending(item.id);
+                            }}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          className="btn-assign-arrow"
+                          data-id={item.id}
+                          title="Asignar y guardar en este comercio"
+                          aria-label={`Asignar ${item.name} al comercio seleccionado`}
+                          disabled={
+                            !pendingAssignMap[item.id] ||
+                            (pendingAssignMap[item.id] === '__new_store__' &&
+                              !(pendingCustomStoreMap[item.id] || '').trim())
+                          }
+                          onClick={() => handleAssignPending(item.id)}
+                        >
+                          <ArrowRight size={16} aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -679,7 +813,11 @@ export const ListView: React.FC<ListViewProps> = ({
           {groupedItems.length === 0 ? (
             <div className="empty-state">
               <Package size={48} className="empty-icon" aria-hidden="true" />
-              <h3>{items.length > 0 ? 'No hay comercios que coincidan con el filtro' : 'Tu lista está vacía'}</h3>
+              <h3>
+                {items.length > 0
+                  ? 'No hay comercios que coincidan con el filtro'
+                  : 'Tu lista está vacía'}
+              </h3>
               <p>
                 {items.length > 0
                   ? 'Prueba desactivando "Ocultar 0 pendientes" o "Ocultar Comprados" para ver todos los comercios.'
@@ -697,7 +835,9 @@ export const ListView: React.FC<ListViewProps> = ({
                   key={group.location}
                   className={`location-group-card ${isCollapsed ? 'is-collapsed' : ''} ${
                     group.pendingCount === 0 ? 'has-zero-pending' : ''
-                  } ${isDragging ? 'sortable-ghost' : ''} ${isDragOver ? 'drag-over-card' : ''}`}
+                  } ${isDragging ? 'sortable-ghost' : ''} ${
+                    isDragOver ? 'drag-over-card' : ''
+                  }`}
                   draggable
                   onDragStart={(e) => handleStoreDragStart(e, group.location)}
                   onDragOver={(e) => handleStoreDragOver(e, group.location)}
@@ -731,19 +871,25 @@ export const ListView: React.FC<ListViewProps> = ({
                         <ChevronDown size={18} aria-hidden="true" />
                       )}
                       <MapPin size={17} className="loc-pin-icon" aria-hidden="true" />
-                      <span className="location-name">{group.location}</span>
+                      <span className="location-name" title={group.location}>
+                        {group.location}
+                      </span>
                       <span
-                        className={`location-count-badge ${
+                        className={`location-count-badge tabular-nums ${
                           group.pendingCount === 0 ? 'badge-zero' : ''
                         }`}
                       >
-                        {group.pendingCount} {group.pendingCount === 1 ? 'pendiente' : 'pendientes'}
+                        {group.pendingCount}{' '}
+                        {group.pendingCount === 1 ? 'pendiente' : 'pendientes'}
                       </span>
                     </div>
 
                     <div className="location-actions" onClick={(e) => e.stopPropagation()}>
                       {group.subtotal > 0 && (
-                        <span className="location-subtotal-badge tabular-nums" title="Subtotal estimado para este comercio">
+                        <span
+                          className="location-subtotal-badge tabular-nums"
+                          title="Subtotal estimado para este comercio"
+                        >
                           ${group.subtotal.toFixed(2)}
                         </span>
                       )}
@@ -779,11 +925,13 @@ export const ListView: React.FC<ListViewProps> = ({
                         const isEditing = editingId === item.id;
                         const CategoryIcon = getCategoryIcon(item.category);
                         const itemTotal = (item.unitPrice || 0) * (item.quantity || 1);
+                        const sku = item.skuCode || formatSkuCode(item.seqNumber || 1);
 
                         if (isEditing) {
                           return (
                             <div key={item.id} className="item-row editing-row">
                               <div className="edit-inputs-grid">
+                                <span className="item-sku-code tabular-nums">{sku}</span>
                                 <input
                                   type="text"
                                   className="edit-input-name"
@@ -863,14 +1011,26 @@ export const ListView: React.FC<ListViewProps> = ({
                                   type="checkbox"
                                   checked={item.completed}
                                   onChange={() => onToggleCompleted(item.id)}
-                                  aria-label={`Marcar ${item.name} como ${item.completed ? 'pendiente' : 'comprado'}`}
+                                  aria-label={`Marcar ${sku} ${item.name} como ${
+                                    item.completed ? 'pendiente' : 'comprado'
+                                  }`}
                                 />
                                 <span className="checkmark" />
                               </label>
 
-                              <div className="category-avatar-pill" title={`Categoría: ${item.category || 'General'}`}>
+                              <div
+                                className="category-avatar-pill"
+                                title={`Categoría: ${item.category || 'General'}`}
+                              >
                                 <CategoryIcon size={16} aria-hidden="true" />
                               </div>
+
+                              <span
+                                className="item-sku-code tabular-nums"
+                                title={`ID de producto ${sku}`}
+                              >
+                                {sku}
+                              </span>
 
                               <span
                                 className="item-name"
@@ -914,7 +1074,10 @@ export const ListView: React.FC<ListViewProps> = ({
                                   <span className="item-price-tag">
                                     ${itemTotal.toFixed(2)}
                                     {item.quantity > 1 && (
-                                      <small className="unit-price-sub"> (${item.unitPrice.toFixed(2)} c/u)</small>
+                                      <small className="unit-price-sub">
+                                        {' '}
+                                        (${item.unitPrice.toFixed(2)} c/u)
+                                      </small>
                                     )}
                                   </span>
                                 )}
@@ -956,7 +1119,7 @@ export const ListView: React.FC<ListViewProps> = ({
         <div id="printListSummary" className="print-list-summary" aria-hidden="true">
           <div className="print-summary-content">
             <span className="print-summary-title">Total Estimado de Compra:</span>
-            <span id="printGrandTotalValue" className="print-summary-value">
+            <span id="printGrandTotalValue" className="print-summary-value tabular-nums">
               ${grandTotalPending.toFixed(2)}
             </span>
           </div>

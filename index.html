@@ -15,7 +15,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-    <!-- Anti-FOUC: Inicialización síncrona de tema antes de la primera pintura de pantalla -->
+    <!-- Anti-FOUC y limpieza automática de Service Workers / Cachés antiguas -->
     <script>
         (function () {
             try {
@@ -32,6 +32,13 @@
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {
                     for (var i = 0; i < registrations.length; i++) {
                         registrations[i].unregister();
+                    }
+                });
+            }
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (var i = 0; i < names.length; i++) {
+                        caches.delete(names[i]);
                     }
                 });
             }

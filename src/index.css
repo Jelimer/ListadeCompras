@@ -55,6 +55,82 @@
 }
 
 /* ==========================================================================
+   CÓDIGO SECUENCIAL DE PRODUCTO (#001, #002...)
+   ========================================================================== */
+
+.item-sku-code {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.pending-item-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   SECCIÓN PLEGABLE: POR AVERIGUAR / SIN LUGAR ASIGNADO
+   ========================================================================== */
+
+.pending-location-section.is-collapsed {
+  padding-bottom: 14px;
+}
+
+.pending-location-section.is-collapsed .pending-location-header {
+  margin-bottom: 0;
+}
+
+.pending-collapsible-trigger {
+  cursor: pointer;
+  user-select: none;
+}
+
+.pending-header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pending-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.btn-collapse-section-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-collapse-section-inline:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* ==========================================================================
    BARRA DE HERRAMIENTAS: FILTROS Y BOTÓN CONTRAER / EXPANDIR TODO
    ========================================================================== */
 
@@ -129,6 +205,10 @@
 
 .location-group-card.is-collapsed .location-header {
   border-bottom: none;
+}
+
+.location-group-card.is-collapsed .items-list {
+  display: none !important;
 }
 
 .location-group-card.has-zero-pending {
@@ -302,7 +382,7 @@
 .item-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
@@ -453,6 +533,7 @@
 .edit-inputs-grid {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   flex: 1;
 }
@@ -536,6 +617,319 @@
 .empty-icon {
   margin: 0 auto 14px;
   opacity: 0.4;
+}
+
+/* ==========================================================================
+   DASHBOARD DE KPIs Y ANALÍTICA DE PRODUCTOS POR #ID (StatsView)
+   ========================================================================== */
+
+.kpi-dashboard-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.kpi-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.kpi-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kpi-card-header .stat-label {
+  margin-bottom: 0;
+}
+
+.kpi-icon {
+  flex-shrink: 0;
+}
+
+.kpi-icon-primary {
+  color: var(--primary);
+}
+
+.kpi-icon-success {
+  color: var(--success);
+}
+
+.kpi-icon-warning {
+  color: var(--warning);
+}
+
+.budget-input-inline-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.currency-prefix {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--warning);
+}
+
+.kpi-Dual-values {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.kpi-right-align {
+  text-align: right;
+}
+
+.kpi-mini-caption {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.stat-value-emerald {
+  color: var(--success) !important;
+}
+
+.stat-value-secondary {
+  color: var(--secondary) !important;
+}
+
+.kpi-main-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kpi-highlight-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.kpi-inline-detail {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.kpi-sub-metrics {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.kpi-status-danger {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.kpi-status-ok {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.kpi-charts-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 1024px) {
+  .kpi-charts-row {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+.kpi-main-chart-card,
+.kpi-donut-chart-card {
+  height: auto !important;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chart-header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-card-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.chart-segmented-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-body);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.seg-btn:hover {
+  color: var(--text-main);
+}
+
+.seg-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tablas analíticas plegables en Estadísticas */
+.kpi-collapsible-table-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kpi-section-collapse-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.kpi-collapse-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi-collapse-title-wrap h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.kpi-table-Controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.kpi-audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.kpi-audit-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.kpi-audit-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  vertical-align: middle;
+}
+
+.kpi-audit-table tr:last-child td {
+  border-bottom: none;
+}
+
+.kpi-audit-table tr:hover td {
+  background: var(--bg-surface-elevated);
+}
+
+.kpi-audit-table .num-col {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.kpi-audit-table .font-bold {
+  font-weight: 700;
+}
+
+.kpi-audit-table .text-emerald {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.kpi-audit-table .text-indigo {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.audit-row-completed td {
+  opacity: 0.65;
+}
+
+.audit-row-completed td:nth-child(3) {
+  text-decoration: line-through;
 }
 
 /* ==========================================================================
