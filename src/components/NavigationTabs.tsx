@@ -6,13 +6,22 @@ export type ViewType = 'list' | 'stats' | 'map';
 interface NavigationTabsProps {
   currentView: ViewType;
   onSelectView: (view: ViewType) => void;
+  totalItemsCount?: number;
+  storesCount?: number;
+  receiptsCount?: number;
 }
 
-export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onSelectView }) => {
+export const NavigationTabs: React.FC<NavigationTabsProps> = ({
+  currentView,
+  onSelectView,
+  totalItemsCount = 0,
+  storesCount = 0,
+  receiptsCount = 0,
+}) => {
   return (
     <>
-      {/* Selector de Vistas / Navigation Tabs (WAI-ARIA) */}
-      <nav className="view-tabs" role="tablist" aria-label="Selector de vistas principales">
+      {/* Selector de Vistas / Navigation Tabs Ejecutivas (WAI-ARIA) */}
+      <nav className="view-tabs executive-nav-tabs" role="tablist" aria-label="Selector de vistas principales">
         <button
           id="tab-list"
           className={`tab-btn ${currentView === 'list' ? 'active' : ''}`}
@@ -23,8 +32,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onS
           data-view="list"
           onClick={() => onSelectView('list')}
         >
-          <ShoppingCart size={18} aria-hidden="true" />
+          <ShoppingCart size={16} aria-hidden="true" />
           <span>Lista de Compras</span>
+          {totalItemsCount > 0 && (
+            <span className="nav-tab-counter tabular-nums">{totalItemsCount}</span>
+          )}
         </button>
 
         <button
@@ -37,8 +49,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onS
           data-view="stats"
           onClick={() => onSelectView('stats')}
         >
-          <BarChart2 size={18} aria-hidden="true" />
+          <BarChart2 size={16} aria-hidden="true" />
           <span>Estadísticas Financieras</span>
+          {receiptsCount > 0 && (
+            <span className="nav-tab-counter tabular-nums">{receiptsCount} tickets</span>
+          )}
         </button>
 
         <button
@@ -51,8 +66,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onS
           data-view="map"
           onClick={() => onSelectView('map')}
         >
-          <Map size={18} aria-hidden="true" />
+          <Map size={16} aria-hidden="true" />
           <span>Ruta en Mapa</span>
+          {storesCount > 0 && (
+            <span className="nav-tab-counter tabular-nums">{storesCount} paradas</span>
+          )}
         </button>
       </nav>
 
@@ -68,7 +86,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onS
           data-view="list"
           onClick={() => onSelectView('list')}
         >
-          <ShoppingCart size={20} aria-hidden="true" />
+          <ShoppingCart size={19} aria-hidden="true" />
           <span>Lista</span>
         </button>
 
@@ -82,7 +100,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onS
           data-view="stats"
           onClick={() => onSelectView('stats')}
         >
-          <BarChart2 size={20} aria-hidden="true" />
+          <BarChart2 size={19} aria-hidden="true" />
           <span>Estadísticas</span>
         </button>
 
@@ -96,7 +114,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ currentView, onS
           data-view="map"
           onClick={() => onSelectView('map')}
         >
-          <MapPin size={20} aria-hidden="true" />
+          <MapPin size={19} aria-hidden="true" />
           <span>Ruta</span>
         </button>
       </nav>

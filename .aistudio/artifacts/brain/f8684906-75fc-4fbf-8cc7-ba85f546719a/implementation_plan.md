@@ -1,111 +1,101 @@
-# Lista de Compra | PRO — Sistema de IDs por Producto (#001), Dashboard de KPIs Reales y Plegado Universal de Listas
+# Rediseño Visual Ejecutivo y Empresarial — Lista de Compra | PRO
 
-Esta actualización incorpora un identificador secuencial único (`#001`, `#002`, `#003`...) para cada producto, transforma la pestaña de **Estadísticas** en un tablero analítico de KPIs financieros y operativos reales, y garantiza que **todas las listas de la aplicación** (Comercios, sección *Por averiguar* y Paradas del Mapa) puedan encogerse al 100% de forma individual o masiva.
+Transformación estética integral hacia una interfaz corporativa, moderna y de grado empresarial para la gestión de suministros, auditoría de tickets, rutas logísticas y analítica financiera, manteniendo intactas todas las funcionalidades existentes.
 
----
-
-## User Review & Critical Decisions
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Se han integrado todas tus respuestas para estructurar esta mejora:
+> Se han consolidado las decisiones de diseño confirmadas para garantizar una estética sobria, ejecutiva y de alta legibilidad tanto en modo claro como en modo oscuro:
 
-- **ID Secuencial Corto (`#001`, `#002`, `#003`)**: Cada producto existente y nuevo recibe automáticamente un código secuencial único (ej. `#001`, `#002`) visible junto al nombre del artículo, buscable desde la barra de búsqueda y utilizado para auditar unidades y costos en las tablas y gráficos de estadísticas.
-- **Suite Completa de KPIs y Gráficos en Estadísticas**:
-  - **Comparativa de Presupuesto vs. Comprometido y Gastado**: Desglose exacto entre *Presupuesto*, *Total Comprometido (Comprado + Pendiente)*, *Gastado Real ($)* y *Saldo Disponible / Excedente ($)*.
-  - **Gasto Real ($) por Comercio y por Categoría**: Gráfico interactivo ECharts con selector para alternar entre **Monto ($)** y **Unidades**, y agrupar por **Comercio** o **Categoría** (diferenciando *Comprado* vs. *Pendiente*).
-  - **Avance de Compra (% Comprados vs. Pendientes)**: Indicador y gráfico de progreso porcentual tanto en cantidad de productos únicos (`#ID`) como en unidades totales y presupuesto ejecutado.
-  - **Top Productos Más Caros y Promedio por Unidad**: Ranking detallado con `#ID`, nombre, comercio, costo unitario, subtotal y porcentaje de incidencia sobre el gasto total, además del KPI de costo promedio por producto y por unidad.
-- **Plegado Universal (Comercios, "Por averiguar" y Paradas del Mapa)**:
-  - La sección **"Por averiguar / Sin lugar asignado"** ahora cuenta con encabezado interactivo y botón para encogerse/expandirse, e ingresa dentro de la acción global **"Contraer todo / Expandir todo"**.
-  - Las tarjetas de **Comercios** en *Mi Lista* permiten contraer el 100% de los grupos (incluso cuando hay un único comercio) con ocultamiento estricto del cuerpo de ítems.
-  - Las **Paradas del Itinerario** en *Ruta en Mapa* incluyen botón para plegar/desplegar sus productos individuales y un botón rápido en la cabecera del itinerario para contraer o expandir todas las paradas a la vez.
+- **Paleta Cromática Confirmada**: **Azul Marino Ejecutivo, Pizarra y Acentos Cobalto** — Lienzos neutros fríos (`#F8FAFC` / `#FFFFFF` en modo claro y `#090D16` / `#111827` en modo oscuro), superficies estructurales en gris pizarra y acentos en Azul Cobalto corporativo (`#1D4ED8` / `#2563EB`) con indicadores semánticos de precisión financiera.
+- **Arquitectura de Navegación Confirmada**: **Cabecera Superior Ejecutiva y Lienzo Panorámico Fluido** — Barra superior de nivel empresarial con identidad de marca sobria, navegación por pestañas integrada con indicadores activos nítidos y barra de acciones rápidas alineada, aprovechando el ancho panorámico de escritorio (`1440px–1600px`).
+- **Densidad Visual y Tipografía Confirmada**: **Equilibrado con Bordes Finos de 1px y Números Tabulares** — Superficies planas de un solo nivel de elevación con divisores arquitectónicos de `1px`, radio de borde refinado (`6px–10px` en lugar de bordes redondeados excesivos) y fuente monoespaciada tabular (`JetBrains Mono` + `Plus Jakarta Sans`) para todos los importes, `#ID`, fechas y métricas.
 
 ---
 
-## 1. Overview & Core Concept
+### 1. Overview & Core Concept
 
-- **What It Does**: Convierte la lista de compras en un sistema trazable por ítem (`#001`, `#002`...) donde cada unidad y peso gastado se refleja en KPIs financieros accionables, manteniendo una interfaz limpia donde cualquier lista o bloque puede plegarse por completo.
-- **Target Audience / Persona**: Usuarios que planifican compras multi-comercio y necesitan auditar cuánto gastaron realmente, cuánto les falta por pagar, qué productos encarecen el carrito y mantener las listas compactas en pantalla.
-- **Key Value**: Control financiero exacto (diferenciando gasto ejecutado vs. pendiente), trazabilidad por código `#ID` de cada artículo y ergonomía visual sin listas bloqueadas abiertas.
+- **What It Does**: Eleva la experiencia visual de toda la plataforma (**Mi Lista**, **Mapa y Ruta**, **Estadísticas y KPIs** y **Escáner de Tickets**) al estándar de un software ERP / SaaS financiero moderno, eliminando ornamentos innecesarios, sombras pesadas y cápsulas saturadas en favor de una jerarquía tipográfica limpia, contrastes medidos y superficies estructuradas.
+- **Target Audience / Persona**: Usuarios y equipos que gestionan compras, presupuestos, comparativas de precios por comercio y auditoría de comprobantes con rigor analítico.
+- **Key Value**: Mayor velocidad de lectura visual en listas extensas y tablas de auditoría, apariencia profesional de nivel ejecutivo y alineación numérica impecable en precios y métricas con formato argentino (`$12.450,50`).
 
 ---
 
-## 2. User Experience & Visual Design
+### 2. User Experience & Visual Design
 
 - **Key User Flows**:
-  1. **Trazabilidad por `#ID` en Mi Lista y Búsqueda**: Al agregar o visualizar un producto, se muestra su código secuencial (`#001`, `#002`...) con tipografía tabular. El usuario puede escribir `#003` o `003` en el buscador para localizar el artículo al instante.
-  2. **Plegado Total en Todas las Vistas**:
-     - En *Mi Lista*, el usuario puede contraer cualquier comercio, la caja *Por averiguar / Sin lugar asignado*, o pulsar **"Contraer todo"** para dejar absolutamente todas las secciones compactadas en una sola línea de resumen.
-     - En *Ruta en Mapa*, cada parada del itinerario puede encoger su lista de productos con un clic, o plegarse todas juntas desde la cabecera del itinerario.
-  3. **Análisis en Estadísticas**: Al abrir la pestaña *Estadísticas*, el usuario visualiza la fila superior de KPIs ejecutivos, los gráficos interactivos (con filtros para ver Gasto `$` por Comercio o Categoría y dona de Avance/Presupuesto) y la tabla de **Top Productos Más Caros** identificada por `#ID`.
+  1. **Cabecera y Navegación Unificada**: El usuario accede a una barra superior ejecutiva que agrupa la identidad del sistema, el selector de vistas principales (**Mi Lista**, **Mapa y Ruta**, **Estadísticas**) con contadores tabulares discretos y las acciones globales (**Subir Ticket**, estado de red y cambio de tema Claro/Oscuro).
+  2. **Barra de Captura Rápida y Filtros Corporativos**: El formulario de carga de suministros se presenta como una consola horizontal estructurada con etiquetas claras, campos de entrada con bordes de precisión (`1px solid`) y foco en azul cobalto.
+  3. **Tarjetas de Comercios y Catálogo `#ID`**: Cada comercio se muestra como un módulo ejecutivo plegable con cabecera en contraste sutil, resumen financiero alineado a la derecha y filas de productos con separación limpia de `1px`, código `#001` en tipografía monoespaciada, fecha de compra discreta y controles de acción rápida al pasar el cursor o tocar.
+  4. **Tablero de KPIs y Auditoría de Tickets**: Las tarjetas de indicadores clave (Presupuesto, Comprometido, Gastado Real, Avance y Ticket Promedio) adoptan un diseño de banca corporativa con jerarquía numérica dominante, gráficos ECharts armonizados con la paleta Cobalto/Pizarra y tablas de auditoría de alta legibilidad.
+
 - **Visual Identity & Theme**:
-  - *Aesthetic Direction*: Dashboard analítico de alta densidad inspirado en herramientas financieras modernas, respetando el modo claro y oscuro (`data-theme="light" | "dark"`).
-  - *Color Palette & Mood*: Indigo (`#4f46e5` / `#a5b4fc`) para montos pendientes y serie principal; Esmeralda (`#047857` / `#34d399`) para gasto real comprado y presupuesto saludable; Ámbar (`#b45309` / `#fbbf24`) para advertencia (>80% del presupuesto); Rojo (`#b91c1c` / `#f87171`) para exceso presupuestario.
-  - *Typography & Hierarchy*: `Plus Jakarta Sans` con `font-variant-numeric: tabular-nums` obligatorio en todos los códigos `#001`, precios, porcentajes y tablas comparativas.
+  - *Aesthetic Direction*: **Executive Financial & Supply Chain SaaS** — Inspirado en plataformas financieras e institucionales modernas (precisión geométrica, sobriedad cromática, bordes definidos de `1px` y ausencia de ruido visual).
+  - *Color Palette & Mood* (Regla 60-30-10):
+    - **60% Lienzo Dominante**: Blanco puro y alabastro frío (`#F8FAFC` / `#FFFFFF`) en modo claro; Azul Noche profundo (`#0B0F19` / `#111827`) en modo oscuro.
+    - **30% Superficies Estructurales y Pizarra**: Cabeceras de tabla y paneles secundarios en `#F1F5F9` (claro) / `#1E293B` (oscuro), bordes arquitectónicos en `#E2E8F0` / `#263248` y texto secundario en `#334155` / `#94A3B8`.
+    - **10% Presupuesto de Acento Ejecutivo**: Azul Cobalto Institucional (`#1D4ED8` primario, `#1E40AF` hover en modo claro; `#60A5FA` / `#3B82F6` en modo oscuro), acompañado de Verde Esmeralda (`#047857` / `#34D399`) para compras confirmadas, Ámbar (`#B45309` / `#FBBF24`) para advertencias presupuestarias y Carmesí (`#B91C1C` / `#F87171`) para desvíos o eliminaciones.
+  - *Typography & Hierarchy* (Regla 2+1):
+    - **Display & UI Structure**: `Plus Jakarta Sans` (pesos 500, 600, 700) con `letter-spacing: -0.02em` en títulos de sección y cabeceras.
+    - **Monospace & Tabular Data**: `JetBrains Mono` con `font-variant-numeric: tabular-nums` para todos los códigos secuenciales (`#001`), precios unitarios, subtotales, porcentajes, distancias y fechas.
+  - *Component Styling & Layout*:
+    - Reducción de radios excesivos (`20px` → `10px–12px` en contenedores principales y `6px–8px` en controles e inputs) para proyectar un carácter más técnico y empresarial.
+    - Reemplazo de cápsulas decorativas estáticas por metadatos tipográficos limpios separados por puntos medios (`·`) y etiquetas técnicas sobrias.
+
+- **Interactive Feedback & Motion**:
+  - Transiciones rápidas de `150ms cubic-bezier(0.16, 1, 0.3, 1)` en estados hover/focus sobre filas de productos, pestañas y botones.
+  - Resaltado sutil de fila activa en tablas y listas de comercios sin desplazamientos bruscos de layout.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+### 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Asignación y Persistencia del Código `#ID` (`#001`, `#002`...)**:
-  - *Chosen Approach*: Asignar y persistir un número secuencial (`seqNumber` y `skuCode` formateado a 3 dígitos `#001`) ordenado cronológicamente para los productos existentes y auto-incremental para cada nuevo producto añadido.
-  - *Why*: Garantiza que el código `#001` de un producto no cambie al reordenar comercios ni al marcarlo como comprado, permitiendo referenciarlo de forma estable en los gráficos y rankings.
-- **Decision 2: Gráficos Duales con Selector de Métrica (`$` vs `Unidades`) y Dimensión (`Comercio` vs `Categoría`)**:
-  - *Chosen Approach*: Incorporar controles segmentados en el panel de gráficos para alternar instantáneamente entre **Gasto ($)** y **Unidades**, y entre **Por Comercio** y **Por Categoría**, apilando *Comprado* + *Pendiente*.
-  - *Why*: Evita que el gráfico quede vacío cuando todos los productos se marcan como comprados (error actual) y permite analizar tanto el dinero gastado como el volumen físico de compra.
+- **Decision 1: Radios Geométricos Sobrios y Bordes de 1px sobre Sombras Difusas**
+  - *Chosen Approach*: Sustituir las sombras pronunciadas y esquinas muy redondeadas por bordes de `1px solid` de alto contraste estructural y sombras micro-sutiles de una sola capa.
+  - *Why*: Las interfaces empresariales con alta densidad de datos (precios, cantidades, `#ID`, fechas y gráficos) se leen con mucha mayor claridad cuando los límites entre módulos están definidos por líneas limpias en lugar de sombras flotantes.
+  - *Alternatives Considered*: El estilo de tarjetas amplias con sombras profundas resta espacio útil en pantalla y genera fatiga visual al auditar decenas de productos.
+
+- **Decision 2: Tipografía Monoespaciada Tabular en Cifras e Identificadores**
+  - *Chosen Approach*: Incorporar `JetBrains Mono` junto a `tabular-nums` en columnas de precios, subtotales, contadores de comercios y códigos `#001`.
+  - *Why*: Garantiza alineación vertical exacta entre miles (`.`) y decimales (`,`), facilitando la comparación inmediata de importes en la lista y en el escáner de tickets.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+### 4. Technical Architecture & Data Strategy *(Technical Reference)*
 
-### Architecture & Component Diagram
+- **Architecture & Component Diagram**:
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                                 App State                                  │
-│  items (con seqNumber / skuCode #001) · budget · collapsedGroups · trips   │
-└───────────────┬─────────────────────────────┬──────────────────────────────┘
-                │                             │
-      ┌─────────▼──────────┐        ┌─────────▼──────────┐
-      │     ListView       │        │     StatsView      │
-      ├────────────────────┤        ├────────────────────┤
-      │ • Plegado 100% de: │        │ • 6 Tarjetas KPI   │
-      │   - Por averiguar  │        │ • Barra Dual de    │
-      │   - Comercios      │        │   Presupuesto      │
-      │ • Botón Contraer / │        │ • ECharts Gasto $  │
-      │   Expandir Todo    │        │   (Comercio / Cat) │
-      │ • Etiqueta #001 en │        │ • ECharts Avance % │
-      │   cada producto    │        │ • Ranking Top #ID  │
-      └────────────────────┘        └────────────────────┘
-                │
-      ┌─────────▼──────────┐
-      │      MapView       │
-      ├────────────────────┤
-      │ • Paradas con      │
-      │   lista plegable   │
-      │ • Botón Contraer / │
-      │   Expandir Paradas │
-      │ • Código #001 en   │
-      │   ítems de parada  │
-      └────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                 LIENZO PANORÁMICO EJECUTIVO (1440px - 1600px)                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  CABECERA CORPORATIVA UNIFICADA                                              │
+│  [Identidad & Estado] ─── [Navegación: Lista · Mapa · KPIs] ─── [Acciones]   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────┬────────────────────────┬───────────────────────┐  │
+│  │   VISTA: MI LISTA     │   VISTA: MAPA Y RUTA   │  VISTA: ESTADÍSTICAS  │  │
+│  ├───────────────────────┼────────────────────────┼───────────────────────┤  │
+│  │ • Consola de Captura  │ • Panel Lateral de     │ • Cinta Ejecutiva de  │  │
+│  │   de Suministros      │   Paradas Plegables    │   5 KPIs Financieros  │  │
+│  │ • Barra de Filtros y  │ • Lienzo Cartográfico  │ • Gráficos ECharts    │  │
+│  │   Acciones en Lote    │   OSRM Panorámico      │   con Tema Cobalto    │  │
+│  │ • Módulos de Comercio │ • Resumen de Distancia │ • Tabla de Auditoría  │  │
+│  │   y Filas Tabulares   │   y Costo por Parada   │   #ID y Tickets       │  │
+│  └───────────┬───────────┴────────────────────────┴───────────┬───────────┘  │
+│              │                                                │              │
+│              ▼                                                ▼              │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │         MODAL DE AUDITORÍA Y ESCÁNER DE TICKETS (GEMINI / OCR)         │  │
+│  │  • Comparativa de Nomenclatura de Ticket vs. Nombre en Catálogo (#ID)  │  │
+│  │  • Edición Manual en Línea y Sincronización con Historial de Fechas    │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Model & State
-- **Entidad `ShoppingItem`**: Se enriquece con `seqNumber?: number` y `skuCode?: string` (ej. `"#001"`). La función de sanitización en almacenamiento asigna automáticamente códigos correlativos `#001`, `#002`... a cualquier lista previa guardada en `localStorage` o importada por CSV/JSON.
-- **Métricas Analíticas Extendidas (`ExtendedAnalytics`)**:
-  - `totalPending`, `totalSpent`, `totalOverall` (Comprometido Total = Gastado + Pendiente).
-  - `budget`, `budgetRemaining`, `budgetPercentage`, `spentPercentage`, `pendingPercentage`.
-  - `totalItemsCount`, `completedItemsCount`, `pendingItemsCount`, `completionRateItems` (%).
-  - `totalUnitsCount`, `completedUnitsCount`, `pendingUnitsCount`, `completionRateUnits` (%).
-  - `averageCostPerItem`, `averageCostPerUnit`.
-  - `storeBreakdown` (Gasto comprado, gasto pendiente, unidades y cantidad de `#ID` por comercio).
-  - `categoryBreakdown` (Gasto comprado, gasto pendiente, unidades y cantidad de `#ID` por categoría).
-  - `topExpensiveItems` (Lista ordenada por subtotal `$` descendente con `#ID`, precio unitario, cantidad, comercio, estado y `%` del total).
-
-### Interactive Component & State Mapping
-- **Plegado Universal en `ListView`**:
-  - La sección `#pendingLocationSection` utiliza la clave reservada `__pending_unassigned__` dentro de `collapsedGroups` (o estado sincronizado) para que tanto el clic en su propia cabecera como el botón global **"Contraer todo / Expandir todo"** la contraigan o desplieguen junto con todos los comercios.
-- **Plegado de Paradas en `MapView`**:
-  - Estado `collapsedStops` que permite contraer o expandir la lista de productos de cada parada del itinerario individualmente o todas a la vez mediante un botón en la cabecera del itinerario.
-- **Controles Interactivos en `StatsView`**:
-  - Selector segmentado `metricMode: 'currency' | 'units'` y `groupBy: 'store' | 'category'` que actualiza en tiempo real el gráfico principal de ECharts sin recargar la vista.
+- **Data Model & State**:
+  - Se conserva el 100% del modelo de datos en `localStorage` (`ShoppingItem`, `PurchaseReceipt`, `RouteOrigin`, `TripsData`), incluyendo los códigos secuenciales `#001`, el historial de compras por fecha y la sincronización de tickets.
+- **Interactive Component & State Mapping**:
+  - **Tokens de Diseño Globales**: Actualización del sistema de variables CSS (`--bg-body`, `--card-bg`, `--bg-surface-elevated`, `--primary`, `--border`, `--radius-*`) tanto en modo claro como oscuro para reflejar la paleta Azul Marino / Pizarra / Cobalto.
+  - **Gráficos ECharts Sincronizados**: Ajuste de la paleta de series, grillas, tooltips e indicadores en el tablero de Estadísticas para coincidir con la estética corporativa azul cobalto y pizarra.
+  - **Compatibilidad e Integridad DOM**: Se mantienen intactos todos los identificadores (`id`), atributos `aria-*` y manejadores de eventos en formularios, listas plegables, mapa interactivo y modal de tickets.

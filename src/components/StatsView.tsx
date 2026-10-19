@@ -206,6 +206,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
         splitLine: { lineStyle: { color: gridColor, type: 'dashed' } },
         axisLabel: {
           color: textColor,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
           formatter: (val: number) =>
             metricType === 'currency'
               ? `$${formatNumber(val, 0)}`
@@ -219,7 +221,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
           stack: 'total',
           emphasis: { focus: 'series' },
           itemStyle: {
-            color: isDark ? '#818cf8' : '#4f46e5',
+            color: isDark ? '#3b82f6' : '#1d4ed8',
             borderRadius: [0, 0, 0, 0],
           },
           data: pendingSeriesData,
@@ -230,8 +232,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
           stack: 'total',
           emphasis: { focus: 'series' },
           itemStyle: {
-            color: isDark ? '#34d399' : '#047857',
-            borderRadius: [6, 6, 0, 0],
+            color: isDark ? '#10b981' : '#047857',
+            borderRadius: [4, 4, 0, 0],
           },
           data: spentSeriesData,
         },
@@ -281,30 +283,30 @@ export const StatsView: React.FC<StatsViewProps> = ({
       donutData.push({
         value: analytics.totalSpent,
         name: 'Gastado Real ($)',
-        itemStyle: { color: isDark ? '#34d399' : '#047857' },
+        itemStyle: { color: isDark ? '#10b981' : '#047857' },
       });
       donutData.push({
         value: analytics.totalPending,
         name: 'Pendiente ($)',
-        itemStyle: { color: isDark ? '#818cf8' : '#4f46e5' },
+        itemStyle: { color: isDark ? '#3b82f6' : '#1d4ed8' },
       });
       if (analytics.budget > analytics.totalOverall) {
         donutData.push({
           value: Math.max(0, Math.round((analytics.budget - analytics.totalOverall) * 100) / 100),
           name: 'Presupuesto Libre ($)',
-          itemStyle: { color: isDark ? '#334155' : '#cbd5e1' },
+          itemStyle: { color: isDark ? '#1e293b' : '#cbd5e1' },
         });
       }
     } else {
       donutData.push({
         value: analytics.completedProducts,
         name: 'Comprados (#ID)',
-        itemStyle: { color: isDark ? '#34d399' : '#047857' },
+        itemStyle: { color: isDark ? '#10b981' : '#047857' },
       });
       donutData.push({
         value: analytics.pendingProducts,
         name: 'Pendientes (#ID)',
-        itemStyle: { color: isDark ? '#818cf8' : '#4f46e5' },
+        itemStyle: { color: isDark ? '#3b82f6' : '#1d4ed8' },
       });
     }
 
@@ -315,7 +317,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
         formatter: (p: any) => {
           const isMoney = String(p.name).includes('$');
           const valStr = isMoney ? formatMoney(p.value) : `${formatNumber(p.value, 0)} art.`;
-          return `<strong>${p.name}</strong><br/>${valStr} (${formatNumber(p.percent, 1)}%)`;
+          return `<strong>${p.name}</strong><br/><span style="font-family:'JetBrains Mono',monospace;">${valStr} (${formatNumber(p.percent, 1)}%)</span>`;
         },
       },
       legend: {
@@ -326,12 +328,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
         {
           name: 'Balance de Compra',
           type: 'pie',
-          radius: ['48%', '74%'],
+          radius: ['50%', '74%'],
           center: ['50%', '44%'],
           avoidLabelOverlap: true,
           itemStyle: {
-            borderRadius: 6,
-            borderColor: isDark ? '#1e293b' : '#ffffff',
+            borderRadius: 4,
+            borderColor: isDark ? '#111827' : '#ffffff',
             borderWidth: 2,
           },
           label: {

@@ -1929,4 +1929,658 @@
   cursor: pointer;
 }
 
+/* ==========================================================================
+   SISTEMA VISUAL EJECUTIVO Y EMPRESARIAL (NAVY, SLATE & COBALT)
+   Paleta Corporativa · Lienzo Panorámico · Bordes de 1px · Números Tabulares
+   ========================================================================== */
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Lienzo y Superficies Ejecutivas (Modo Claro) */
+  --bg-body: #f1f5f9;
+  --card-bg: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f8fafc;
+  --bg-input: #ffffff;
+
+  /* Tipografía de Alta Precisión */
+  --text-main: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  /* Acento Cobalto Ejecutivo y Semántica Financiera */
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --primary-fg: #ffffff;
+  --primary-soft: rgba(29, 78, 216, 0.08);
+  --primary-subtle: rgba(29, 78, 216, 0.08);
+
+  --secondary: #0369a1;
+  --secondary-soft: rgba(3, 105, 161, 0.08);
+
+  --success: #047857;
+  --success-soft: rgba(4, 120, 87, 0.08);
+  --success-subtle: rgba(4, 120, 87, 0.08);
+
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --warning-subtle: rgba(180, 83, 9, 0.1);
+
+  --danger: #b91c1c;
+  --danger-soft: rgba(185, 28, 28, 0.08);
+
+  /* Bordes Arquitectónicos de 1px y Elevación Sutil */
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --border-strong: #94a3b8;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 8px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -4px rgba(15, 23, 42, 0.12), 0 4px 8px -2px rgba(15, 23, 42, 0.06);
+
+  /* Radios Geométricos Empresariales */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+}
+
+[data-theme="dark"] {
+  --bg-body: #090d16;
+  --card-bg: #111827;
+  --bg-surface: #111827;
+  --bg-surface-elevated: #1e293b;
+  --bg-input: #0b1120;
+
+  --text-main: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-inverse: #090d16;
+
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-fg: #ffffff;
+  --primary-soft: rgba(59, 130, 246, 0.14);
+  --primary-subtle: rgba(59, 130, 246, 0.14);
+
+  --secondary: #38bdf8;
+  --secondary-soft: rgba(56, 189, 248, 0.14);
+
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.14);
+  --success-subtle: rgba(16, 185, 129, 0.14);
+
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --warning-subtle: rgba(245, 158, 11, 0.14);
+
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+
+  --border: #1e293b;
+  --border-subtle: #172033;
+  --border-strong: #334155;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 14px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.65);
+}
+
+/* Tipografía Monoespaciada Tabular para Cifras Financieras e Identificadores */
+.tabular-nums,
+.item-sku-code,
+.stat-value,
+.store-group-total,
+.item-price-badge,
+.item-qty-value,
+.receipt-history-total,
+.kpi-audit-table .num-col,
+.ledger-metric-value,
+.nav-tab-counter,
+.scan-ticket-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Lienzo Panorámico Fluido */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-body);
+  color: var(--text-main);
+  padding: 12px 10px;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (min-width: 768px) {
+  body {
+    padding: 18px 24px;
+  }
+}
+
+.container {
+  width: 100%;
+  max-width: 1560px;
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 0;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.dashboard-grid {
+  padding: 16px 14px 24px;
+}
+
+@media (min-width: 768px) {
+  .dashboard-grid {
+    padding: 22px 26px 30px;
+  }
+}
+
+/* ==========================================================================
+   CABECERA SUPERIOR EJECUTIVA Y NAVEGACIÓN INTEGRADA
+   ========================================================================== */
+
+.executive-topbar-shell {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+header.executive-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
+}
+
+@media (min-width: 768px) {
+  header.executive-header {
+    padding: 16px 26px;
+  }
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-xs);
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .brand-mark-box {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.brand-copy-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-heading-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+header.executive-header h1 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-main);
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  header.executive-header h1 {
+    font-size: 1.35rem;
+  }
+}
+
+.brand-edition-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid rgba(29, 78, 216, 0.2);
+}
+
+.brand-subtitle {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Cinta de Métricas Ejecutivas en Cabecera */
+.header-executive-ledger {
+  display: none;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+}
+
+@media (min-width: 1120px) {
+  .header-executive-ledger {
+    display: inline-flex;
+  }
+}
+
+.ledger-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ledger-metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.ledger-metric-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.ledger-metric-value small {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.ledger-metric-value.ledger-emerald {
+  color: var(--success);
+}
+
+.ledger-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+/* Grupo de Utilidades y Botón Subir Ticket en Cabecera */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-utility-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.header-utility-group .icon-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.header-utility-group .icon-button:hover {
+  background: var(--card-bg);
+  color: var(--primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-scan-ticket-header {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  border: 1px solid var(--primary-hover);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-scan-ticket-header:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Barra de Pestañas Ejecutivas */
+.view-tabs.executive-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0;
+  padding: 0 16px;
+  background: var(--bg-surface);
+  border: none;
+  border-radius: 0;
+  overflow-x: auto;
+}
+
+@media (min-width: 768px) {
+  .view-tabs.executive-nav-tabs {
+    padding: 0 26px;
+    gap: 8px;
+  }
+}
+
+.view-tabs.executive-nav-tabs .tab-btn {
+  position: relative;
+  flex: initial;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.view-tabs.executive-nav-tabs .tab-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-surface-elevated);
+}
+
+.view-tabs.executive-nav-tabs .tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.nav-tab-counter {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.view-tabs.executive-nav-tabs .tab-btn.active .nav-tab-counter {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: rgba(29, 78, 216, 0.2);
+}
+
+/* ==========================================================================
+   CONSOLA DE CAPTURA DE SUMINISTROS Y BARRA DE HERRAMIENTAS
+   ========================================================================== */
+
+.input-section {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  gap: 10px;
+  margin-bottom: 18px;
+  box-shadow: none;
+}
+
+input,
+select {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+#addItemButton,
+.btn-primary {
+  border-radius: 6px;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  box-shadow: var(--shadow-xs);
+}
+
+#addItemButton:hover,
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.toolbar-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 18px;
+}
+
+.btn-collapse-all,
+.btn-collapse-section-inline,
+.btn-toolbar-ticket {
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-height: 36px;
+  padding: 5px 11px;
+}
+
+/* ==========================================================================
+   MÓDULOS DE COMERCIO Y FILAS DE PRODUCTOS (DENSIDAD EQUILIBRADA 1PX)
+   ========================================================================== */
+
+.store-group-card,
+.pending-location-section {
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-xs) !important;
+  background: var(--card-bg);
+  overflow: hidden;
+}
+
+.store-group-header {
+  background: var(--bg-surface-elevated);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.store-group-card.collapsed .store-group-header {
+  border-bottom: none;
+}
+
+.store-group-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.store-group-total {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+}
+
+.shopping-list li,
+.item-row {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color 0.12s ease;
+}
+
+.shopping-list li:last-child,
+.item-row:last-child {
+  border-bottom: none;
+}
+
+.shopping-list li:hover,
+.item-row:hover {
+  background-color: var(--bg-surface-elevated);
+}
+
+.item-sku-code {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--primary);
+}
+
+.item-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.item-category-badge,
+.item-price-badge,
+.item-purchase-date-badge {
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   TABLERO FINANCIERO DE KPIs, GRÁFICOS Y AUDITORÍA
+   ========================================================================== */
+
+.stat-card,
+.kpi-card,
+.chart-card,
+.kpi-collapsible-table-card {
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  border-left: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-xs) !important;
+  background: var(--card-bg);
+  padding: 16px;
+}
+
+.kpi-card-header .stat-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.stat-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.segmented-control {
+  border-radius: 6px;
+  padding: 2px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border);
+}
+
+.seg-btn {
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+
+.kpi-audit-table th {
+  background: var(--bg-surface-elevated);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  padding: 9px 12px;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+.kpi-audit-table td {
+  padding: 9px 12px;
+  font-size: 12.5px;
+}
+
+/* ==========================================================================
+   MODALES Y ESCÁNER DE TICKETS EMPRESARIAL
+   ========================================================================== */
+
+.modal-content,
+.receipt-modal-card {
+  border-radius: 10px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.receipt-dropzone {
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-surface-elevated);
+}
+
+.receipt-meta-grid,
+.receipt-history-card,
+.route-stop-card {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface-elevated);
+}
+
+
 

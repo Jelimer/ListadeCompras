@@ -696,22 +696,34 @@ export const App: React.FC = () => {
         Saltar al contenido principal
       </a>
 
-      {/* Header */}
-      <Header
-        isOnline={isOnline}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
-        receiptsCount={receipts.length}
-        onOpenShare={() => setIsShareOpen(true)}
-        onPrint={handlePrint}
-        onExport={() => setIsExportOpen(true)}
-        onImportClick={handleImportClick}
-        onFileChange={handleFileChange}
-      />
+      {/* Cabecera y Navegación Ejecutiva Unificada */}
+      <div className="executive-topbar-shell">
+        <Header
+          isOnline={isOnline}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
+          receiptsCount={receipts.length}
+          totalItemsCount={items.length}
+          pendingCount={items.filter((i) => !i.completed).length}
+          totalPendingAmount={metrics.totalPending}
+          totalSpentAmount={metrics.totalSpent}
+          onOpenShare={() => setIsShareOpen(true)}
+          onPrint={handlePrint}
+          onExport={() => setIsExportOpen(true)}
+          onImportClick={handleImportClick}
+          onFileChange={handleFileChange}
+        />
 
-      {/* Main Tabs */}
-      <NavigationTabs currentView={currentView} onSelectView={setCurrentView} />
+        {/* Main Tabs */}
+        <NavigationTabs
+          currentView={currentView}
+          onSelectView={setCurrentView}
+          totalItemsCount={items.length}
+          storesCount={distinctLocations.length}
+          receiptsCount={receipts.length}
+        />
+      </div>
 
       {/* Main Panels */}
       <main id="main-content" className="dashboard-grid" role="main">
