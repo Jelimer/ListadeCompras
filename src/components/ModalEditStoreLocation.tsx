@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, X, Search, Check, Crosshair } from 'lucide-react';
 import { StoredStoreCoordinate } from '../types';
 import { geocodeAddress } from '../utils/mapRoute';
@@ -17,6 +17,50 @@ export const ModalEditStoreLocation: React.FC<ModalEditStoreLocationProps> = ({
   onStartMapPicker,
   onLocationSaved,
 }) => {
+  const modalCardRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!storeName) return;
+    const prevActive = document.activeElement as HTMLElement | null;
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && modalCardRef.current) {
+        const focusable = Array.from(
+          modalCardRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (prevActive && typeof prevActive.focus === 'function') {
+        prevActive.focus();
+      }
+    };
+  }, [storeName, onClose]);
+
   if (!storeName) return null;
 
   const stored = loadStoredCoordinates();
@@ -67,8 +111,11 @@ export const ModalEditStoreLocation: React.FC<ModalEditStoreLocationProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-store-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div className="modal-card">
+      <div className="modal-card" ref={modalCardRef}>
         <div className="modal-header">
           <div className="modal-title-wrap">
             <MapPin size={20} aria-hidden="true" />
@@ -97,6 +144,7 @@ export const ModalEditStoreLocation: React.FC<ModalEditStoreLocationProps> = ({
             <div className="input-wrapper">
               <Search className="input-icon" size={18} aria-hidden="true" />
               <input
+                ref={inputRef}
                 type="text"
                 id="input-store-address"
                 placeholder="Ej: Av. 3 de Abril 1200, Corrientes"

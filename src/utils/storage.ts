@@ -36,7 +36,13 @@ export const DEFAULT_TRIP: Trip = {
   customOrder: null,
 };
 
+// Respaldo en memoria ante QuotaExceededError o modo privado estricto (Safari/iOS)
+const memoryFallback = new Map<string, string>();
+
 function safeGet(key: string): string | null {
+  if (memoryFallback.has(key)) {
+    return memoryFallback.get(key) ?? null;
+  }
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       return window.localStorage.getItem(key);
@@ -51,10 +57,13 @@ function safeSet(key: string, value: string): void {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(key, value);
+      memoryFallback.delete(key);
+      return;
     }
   } catch (e) {
-    console.warn(`[Storage] Failed to save ${key}:`, e);
+    console.warn(`[Storage] Failed to save ${key}, using in-memory fallback:`, e);
   }
+  memoryFallback.set(key, value);
 }
 
 export function formatSkuCode(seqNumber: number): string {
@@ -488,4 +497,3 @@ export function loadStoredReceipts(): PurchaseReceipt[] {
 export function saveStoredReceipts(receipts: PurchaseReceipt[]): void {
   safeSet(STORAGE_KEYS.RECEIPTS_HISTORY, JSON.stringify(receipts));
 }
-
