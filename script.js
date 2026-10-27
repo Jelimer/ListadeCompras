@@ -3,6 +3,69 @@
  * Orquestador Principal y Controlador de UI para Lista de Compra | PRO.
  * Integración bidireccional en tiempo real con Firebase Firestore + Resiliencia Offline-First.
  */
+
+// Polyfill defensivo para DocumentFragment en entornos headless / mock_dom que no lo implementan
+if (typeof document !== 'undefined') {
+  const docProto = Object.getPrototypeOf(document) || document;
+  if (typeof docProto.createDocumentFragment !== 'function') {
+    class MockDocumentFragment {
+      constructor() {
+        this.nodeType = 11;
+        this.childNodes = [];
+      }
+      get children() {
+        return this.childNodes.filter(n => n.nodeType === 1);
+      }
+      get textContent() {
+        return this.childNodes.map(n => n.textContent || '').join('');
+      }
+      appendChild(child) {
+        if (!child) return child;
+        if (child.parentNode) child.parentNode.removeChild(child);
+        child.parentNode = this;
+        this.childNodes.push(child);
+        return child;
+      }
+    }
+    docProto.createDocumentFragment = () => new MockDocumentFragment();
+    if (typeof document.createDocumentFragment !== 'function') {
+      document.createDocumentFragment = () => new MockDocumentFragment();
+    }
+  }
+
+  // Garantizar que appendChild en mock_dom desempaquete DocumentFragment según W3C
+  const testEl = document.createElement ? document.createElement('div') : null;
+  if (testEl && testEl.appendChild) {
+    let proto = Object.getPrototypeOf(testEl);
+    while (proto && !Object.prototype.hasOwnProperty.call(proto, 'appendChild')) {
+      proto = Object.getPrototypeOf(proto);
+    }
+    if (proto && proto.appendChild && !proto._unpacksDocumentFragment) {
+      const testFrag = document.createDocumentFragment();
+      const testChild = document.createElement('span');
+      testFrag.appendChild(testChild);
+      const testParent = document.createElement('div');
+      testParent.appendChild(testFrag);
+      if (testParent.childNodes.length === 1 && testParent.childNodes[0] === testFrag) {
+        const origAppend = proto.appendChild;
+        proto.appendChild = function(child) {
+          if (child && child.nodeType === 11 && Array.isArray(child.childNodes)) {
+            const children = [...child.childNodes];
+            child.childNodes = [];
+            children.forEach(c => {
+              c.parentNode = null;
+              origAppend.call(this, c);
+            });
+            return child;
+          }
+          return origAppend.call(this, child);
+        };
+      }
+      proto._unpacksDocumentFragment = true;
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
@@ -162,15 +225,22 @@ document.addEventListener('DOMContentLoaded', () => {
   let mapDirty = true;
 
   // --- 2.1.b. Estado de Diseño de Lista / Cuadrícula (Grid View) ---
-  let currentLayout = (typeof localStorage !== 'undefined' && localStorage.getItem('shopping_view_layout')) || 'list';
+  let currentLayout = 'list';
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage) {
+      currentLayout = localStorage.getItem('shopping_view_layout') || 'list';
+    }
+  } catch (_) {}
 
   function setLayoutMode(layout) {
     currentLayout = layout === 'grid' ? 'grid' : 'list';
-    if (typeof localStorage !== 'undefined') {
-      try {
+    try {
+      if (typeof localStore !== 'undefined' && localStore && typeof localStore.setItem === 'function') {
+        localStore.setItem('shopping_view_layout', currentLayout);
+      } else if (typeof localStorage !== 'undefined' && localStorage) {
         localStorage.setItem('shopping_view_layout', currentLayout);
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     const isGrid = currentLayout === 'grid';
     if (elements.btnViewList) {
@@ -232,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : [];
 
     elements.pendingLocationList.innerHTML = '';
+    const pendingFragment = document.createDocumentFragment();
 
     pendingItems.forEach(item => {
       const card = document.createElement('div');
@@ -275,8 +346,10 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
 
-      elements.pendingLocationList.appendChild(card);
+      pendingFragment.appendChild(card);
     });
+
+    elements.pendingLocationList.appendChild(pendingFragment);
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons({ root: elements.pendingLocationSection });
@@ -411,29 +484,65 @@ document.addEventListener('DOMContentLoaded', () => {
     mapDirty
   });
 
-  // Registro inmediato y directo de eventos de navegación
-  const navTabBindings = [
+  // Registro inmediato y directo de eventos de navegación (con soporte WAI-ARIA APG Tabs)
+  const topTabGroup = [
     { btn: elements.tabList, view: 'list' },
     { btn: elements.tabStats, view: 'stats' },
-    { btn: elements.tabMap, view: 'map' },
+    { btn: elements.tabMap, view: 'map' }
+  ];
+
+  const bottomTabGroup = [
     { btn: elements.bottomTabList, view: 'list' },
     { btn: elements.bottomTabStats, view: 'stats' },
     { btn: elements.bottomTabMap, view: 'map' }
   ];
 
-  navTabBindings.forEach(({ btn, view }) => {
-    if (!btn) return;
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      switchView(view);
-    });
-    btn.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
+  function bindTabGroup(group) {
+    const validTabs = group.filter(t => t.btn);
+    validTabs.forEach(({ btn, view }, index) => {
+      btn.addEventListener('click', (e) => {
         e.preventDefault();
         switchView(view);
-      }
+      });
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          switchView(view);
+        } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextTab = validTabs[(index + 1) % validTabs.length];
+          if (nextTab && nextTab.btn) {
+            if (typeof nextTab.btn.focus === 'function') nextTab.btn.focus();
+            switchView(nextTab.view);
+          }
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prevTab = validTabs[(index - 1 + validTabs.length) % validTabs.length];
+          if (prevTab && prevTab.btn) {
+            if (typeof prevTab.btn.focus === 'function') prevTab.btn.focus();
+            switchView(prevTab.view);
+          }
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          const firstTab = validTabs[0];
+          if (firstTab && firstTab.btn) {
+            if (typeof firstTab.btn.focus === 'function') firstTab.btn.focus();
+            switchView(firstTab.view);
+          }
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          const lastTab = validTabs[validTabs.length - 1];
+          if (lastTab && lastTab.btn) {
+            if (typeof lastTab.btn.focus === 'function') lastTab.btn.focus();
+            switchView(lastTab.view);
+          }
+        }
+      });
     });
-  });
+  }
+
+  bindTabGroup(topTabGroup);
+  bindTabGroup(bottomTabGroup);
 
   // Delegación de eventos global a nivel de documento para blindar cualquier clic en pestañas
   document.addEventListener('click', (e) => {
@@ -479,10 +588,35 @@ document.addEventListener('DOMContentLoaded', () => {
     isFirebaseActive = false;
   }
 
-  // --- 4. Inicialización del Store Local Reactivo ---
-  const localStore = (typeof window !== 'undefined' && window.localStorage)
-    ? window.localStorage
-    : (typeof localStorage !== 'undefined' ? localStorage : { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+  // --- 4. Inicialización del Store Local Reactivo (F-STO02) ---
+  const localStore = (() => {
+    const memoryFallback = {
+      _data: new Map(),
+      getItem(k) { return this._data.has(String(k)) ? this._data.get(String(k)) : null; },
+      setItem(k, v) { this._data.set(String(k), String(v)); },
+      removeItem(k) { this._data.delete(String(k)); },
+      clear() { this._data.clear(); },
+      key(i) { return Array.from(this._data.keys())[i] || null; },
+      get length() { return this._data.size; }
+    };
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const probeKey = '__storage_probe__';
+        window.localStorage.setItem(probeKey, '1');
+        window.localStorage.removeItem(probeKey);
+        return window.localStorage;
+      }
+    } catch (_) {}
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage) {
+        const probeKey = '__storage_probe__';
+        localStorage.setItem(probeKey, '1');
+        localStorage.removeItem(probeKey);
+        return localStorage;
+      }
+    } catch (_) {}
+    return memoryFallback;
+  })();
 
   let initialItems = [];
   try {
@@ -517,12 +651,73 @@ document.addEventListener('DOMContentLoaded', () => {
     uiPreferences: { locationOrder: initialLocationOrder, collapsedGroups: initialCollapsed }
   }, StorageModule);
 
+  if (typeof window !== 'undefined') {
+    window.store = store;
+  }
+
+  // --- 4.1. Seguimiento de Eliminaciones Locales (Tombstones) para Sincronización Segura (F-SYN01) ---
+  const DELETED_IDS_STORAGE_KEY = 'shopping_deleted_ids';
+  let deletedItemMap = {}; // id -> timestamp
+
+  try {
+    const rawDeleted = JSON.parse(localStore.getItem(DELETED_IDS_STORAGE_KEY) || '{}');
+    if (rawDeleted && typeof rawDeleted === 'object') {
+      if (Array.isArray(rawDeleted)) {
+        rawDeleted.forEach(id => { deletedItemMap[String(id)] = Date.now(); });
+      } else {
+        const now = Date.now();
+        for (const [k, v] of Object.entries(rawDeleted)) {
+          if (now - Number(v) < 7 * 24 * 60 * 60 * 1000) {
+            deletedItemMap[k] = Number(v);
+          }
+        }
+      }
+    }
+  } catch (_) {
+    deletedItemMap = {};
+  }
+
+  function recordDeletedId(id) {
+    if (!id) return;
+    deletedItemMap[String(id)] = Date.now();
+    try {
+      localStore.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(deletedItemMap));
+    } catch (_) {}
+  }
+
+  function removeDeletedId(id) {
+    if (!id) return;
+    delete deletedItemMap[String(id)];
+    try {
+      localStore.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(deletedItemMap));
+    } catch (_) {}
+  }
+
+  function isItemDeleted(id) {
+    if (!id) return false;
+    return Boolean(deletedItemMap[String(id)]);
+  }
+
   // --- 5. Sincronización en Tiempo Real con Firebase Firestore ---
   if (isFirebaseActive && itemsCollection) {
     itemsCollection.onSnapshot(
       snapshot => {
         if (!snapshot || !snapshot.docs) return;
-        const remoteItems = snapshot.docs.map(doc => {
+
+        // F-SYN01: Ignorar documentos eliminados localmente para evitar resurrección y sincronizar borrado
+        const validDocs = [];
+        snapshot.docs.forEach(doc => {
+          if (isItemDeleted(doc.id)) {
+            // El documento fue eliminado localmente (ej: offline). Propagar eliminación pendiente a Firestore.
+            if (isFirebaseActive && itemsCollection) {
+              itemsCollection.doc(doc.id).delete().catch(() => {});
+            }
+          } else {
+            validDocs.push(doc);
+          }
+        });
+
+        const remoteItems = validDocs.map(doc => {
           const d = doc.data() || {};
           let ts = Date.now();
           if (d.timestamp) {
@@ -682,11 +877,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const distinctLocs = [...new Set(items.map(it => (it.location || '').trim()).filter(Boolean))].sort();
     const distinctCats = [...new Set(items.map(it => (it.category || '').trim()).filter(Boolean))].sort();
 
+    const escapeDatalistVal = (val) => {
+      if (typeof ValidationModule !== 'undefined' && ValidationModule && typeof ValidationModule.escapeHtml === 'function') {
+        return ValidationModule.escapeHtml(val);
+      }
+      if (typeof ShoppingValidation !== 'undefined' && ShoppingValidation && typeof ShoppingValidation.escapeHtml === 'function') {
+        return ShoppingValidation.escapeHtml(val);
+      }
+      if (val === null || val === undefined) return '';
+      return String(val)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
     if (elements.locationSuggestions) {
-      elements.locationSuggestions.innerHTML = distinctLocs.map(l => `<option value="${l}">`).join('');
+      elements.locationSuggestions.innerHTML = distinctLocs.map(l => `<option value="${escapeDatalistVal(l)}">`).join('');
     }
     if (elements.categorySuggestions) {
-      elements.categorySuggestions.innerHTML = distinctCats.map(c => `<option value="${c}">`).join('');
+      elements.categorySuggestions.innerHTML = distinctCats.map(c => `<option value="${escapeDatalistVal(c)}">`).join('');
     }
 
     renderShoppingList(state);
@@ -1046,6 +1257,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const allLocations = Object.keys(grouped);
     const regularLocations = allLocations.filter(loc => !isPendingLocationName(loc));
 
+    // F-FN01: Si mostrar completados está activo (!hideCompleted), permitir ver ítems completados asociados a ubicaciones pendientes
+    const isHideCompleted = elements.hideCompletedSwitch
+      ? elements.hideCompletedSwitch.checked
+      : Boolean((state.filters && state.filters.hideCompleted) || (state.filter && state.filter.hideCompleted));
+    if (!isHideCompleted) {
+      const pendingLocations = allLocations.filter(loc => isPendingLocationName(loc));
+      const pendingCompletedItems = [];
+      pendingLocations.forEach(loc => {
+        (grouped[loc] || []).forEach(it => {
+          if (it && it.completed) {
+            pendingCompletedItems.push(it);
+          }
+        });
+      });
+      if (pendingCompletedItems.length > 0) {
+        const pendingGroupName = 'Por averiguar (comprados)';
+        grouped[pendingGroupName] = pendingCompletedItems;
+        regularLocations.push(pendingGroupName);
+      }
+    }
+
     elements.shoppingListContainer.innerHTML = '';
 
     if (regularLocations.length === 0) {
@@ -1073,6 +1305,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const rawCollapsed = state.collapsedGroups || (state.uiPreferences && state.uiPreferences.collapsedGroups) || [];
     const collapsedSet = new Set(rawCollapsed);
+
+    // Optimización DOM R1: Fragmento atómico para agrupar todas las tiendas antes de insertar en el DOM
+    const fragment = document.createDocumentFragment();
 
     regularLocations.forEach(loc => {
       const itemsInGroup = grouped[loc];
@@ -1107,8 +1342,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       groupDiv.appendChild(header);
       groupDiv.appendChild(listDiv);
-      elements.shoppingListContainer.appendChild(groupDiv);
+      fragment.appendChild(groupDiv);
     });
+
+    elements.shoppingListContainer.innerHTML = '';
+    elements.shoppingListContainer.appendChild(fragment);
 
     if (window.lucide) window.lucide.createIcons(elements.shoppingListContainer ? { root: elements.shoppingListContainer } : undefined);
   }
@@ -1264,6 +1502,9 @@ document.addEventListener('DOMContentLoaded', () => {
             addedItem = { ...newItemData, id: `item_${Date.now()}` };
             store.state.items.unshift(addedItem);
           }
+          if (addedItem && addedItem.id) {
+            removeDeletedId(addedItem.id);
+          }
           clearInputs();
           if (elements.itemInput) elements.itemInput.focus();
 
@@ -1291,7 +1532,10 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelEditing();
         if (FeedbackModule.showToast) FeedbackModule.showToast('Producto actualizado correctamente', 'success');
       } else {
-        if (typeof store.addItem === 'function') store.addItem(clean);
+        if (typeof store.addItem === 'function') {
+          const added = store.addItem(clean);
+          if (added && added.id) removeDeletedId(added.id);
+        }
         clearInputs();
         if (elements.itemInput) elements.itemInput.focus();
       }
@@ -1369,6 +1613,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item) return;
 
         const removedSnapshot = { ...item };
+        recordDeletedId(itemId);
         if (typeof store.deleteItem === 'function') {
           store.deleteItem(itemId);
         }
@@ -1386,6 +1631,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (FeedbackModule.showUndoToast) {
           FeedbackModule.showUndoToast(`"${removedSnapshot.name}" eliminado`, async () => {
+            removeDeletedId(removedSnapshot.id);
             if (typeof store.undoLastAction === 'function') {
               store.undoLastAction();
             } else if (typeof store.addItem === 'function') {
@@ -1450,6 +1696,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- 11.3 Delegación de Asignación Rápida para Productos "Por averiguar" ---
   if (elements.pendingLocationSection) {
+    // F-FN02: Evento change en el selector de tienda en la bandeja de pendientes
+    elements.pendingLocationSection.addEventListener('change', (e) => {
+      const select = e.target.closest('.pending-assign-select');
+      if (!select) return;
+      if (select.value === '__new_store__') {
+        const customPrompt = prompt('Ingresa el nombre del nuevo comercio o supermercado:');
+        if (!customPrompt || !customPrompt.trim()) {
+          select.value = '';
+          return;
+        }
+        const trimmed = customPrompt.trim();
+        const optsArray = select.options ? Array.from(select.options) : (select.querySelectorAll ? Array.from(select.querySelectorAll('option')) : []);
+        let existingOpt = optsArray.find(opt => opt && opt.value && opt.value.toLowerCase() === trimmed.toLowerCase());
+        if (!existingOpt) {
+          const newOpt = document.createElement('option');
+          newOpt.value = trimmed;
+          newOpt.textContent = trimmed;
+          const newStoreOpt = select.querySelector('option[value="__new_store__"]');
+          if (newStoreOpt && typeof select.insertBefore === 'function') {
+            select.insertBefore(newOpt, newStoreOpt);
+          } else if (typeof select.appendChild === 'function') {
+            select.appendChild(newOpt);
+          }
+          select.value = trimmed;
+        } else {
+          select.value = existingOpt.value;
+        }
+      }
+    });
+
     elements.pendingLocationSection.addEventListener('click', async (e) => {
       const arrowBtn = e.target.closest('.btn-assign-arrow');
       const removeBtn = e.target.closest('.btn-remove-pending');
@@ -1473,9 +1749,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (targetLocation === '__new_store__') {
           const customPrompt = prompt('Ingresa el nombre del nuevo comercio o supermercado:');
           if (!customPrompt || !customPrompt.trim()) {
+            select.value = '';
             return;
           }
-          targetLocation = customPrompt.trim().toUpperCase();
+          targetLocation = customPrompt.trim();
         }
 
         // Actualizar ítem en el store con su nuevo lugar
@@ -1508,9 +1785,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (removeBtn) {
         const itemId = removeBtn.dataset.id;
+        const item = store.getItemById ? store.getItemById(itemId) : (store.getItems && store.getItems().find(i => i.id === itemId));
+        const removedSnapshot = item ? { ...item } : { id: itemId, name: 'Producto' };
+        recordDeletedId(itemId);
+
         if (typeof store.deleteItem === 'function') {
           store.deleteItem(itemId);
         }
+        if (currentEditingId === itemId) {
+          cancelEditing();
+        }
+
         if (isFirebaseActive && itemsCollection) {
           try {
             await itemsCollection.doc(itemId).delete();
@@ -1518,8 +1803,26 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('[App] Error al eliminar en Firebase:', err);
           }
         }
-        if (FeedbackModule && FeedbackModule.showToast) {
-          FeedbackModule.showToast('Producto eliminado', 'info');
+
+        if (FeedbackModule && FeedbackModule.showUndoToast) {
+          FeedbackModule.showUndoToast(`"${removedSnapshot.name}" eliminado`, async () => {
+            removeDeletedId(removedSnapshot.id);
+            if (typeof store.undoLastAction === 'function') {
+              store.undoLastAction();
+            } else if (typeof store.addItem === 'function') {
+              store.addItem(removedSnapshot);
+            }
+
+            if (isFirebaseActive && itemsCollection) {
+              try {
+                await itemsCollection.doc(removedSnapshot.id).set(removedSnapshot);
+              } catch (err) {
+                console.warn('[App] Error al restaurar en Firebase:', err);
+              }
+            }
+          });
+        } else if (FeedbackModule && FeedbackModule.showToast) {
+          FeedbackModule.showToast(`"${removedSnapshot.name}" eliminado`, 'info');
         }
       }
     });
@@ -1599,6 +1902,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof store.clearCompleted === 'function') {
         store.clearCompleted();
       }
+      completedItems.forEach(it => recordDeletedId(it.id));
 
       if (isFirebaseActive && db && itemsCollection) {
         try {
@@ -1618,6 +1922,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (FeedbackModule.showUndoToast) {
         FeedbackModule.showUndoToast(`Se limpiaron ${completedItems.length} productos comprados`, async () => {
+          completedItems.forEach(it => removeDeletedId(it.id));
           if (typeof store.undoLastAction === 'function') {
             store.undoLastAction();
           } else {
@@ -1812,9 +2117,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Actualización optimista inmediata en Store local y UI
         if (mode === 'overwrite') {
+          deletedItemMap = {};
+          try { localStore.setItem(DELETED_IDS_STORAGE_KEY, '{}'); } catch (_) {}
           if (typeof store.hydrate === 'function') store.hydrate(result.items);
           else store.state.items = result.items;
         } else {
+          result.items.forEach(it => removeDeletedId(it.id));
           // Modo append: hidratar lote unificado para emitir un solo evento reactivo
           if (typeof store.hydrate === 'function') {
             const currentItems = (typeof store.getItems === 'function') ? store.getItems() : (store.state.items || []);
@@ -1885,6 +2193,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // A. Actualización de Métricas, Itinerario y Renderizado de Ruta en el Mapa
   let stopsSortableInstance = null;
+  let currentActiveStops = [];
 
   function renderRouteStopsList(route) {
     if (!elements.routeStopsList) return;
@@ -1913,6 +2222,9 @@ document.addEventListener('DOMContentLoaded', () => {
       ...allCandidateStops.filter(s => !orderedSet.has(s.storeName))
     ];
 
+    // F-FN04: Fragmento atómico para agrupar origen y paradas antes de insertar en el DOM vivo
+    const stopsFragment = document.createDocumentFragment();
+
     // 1. Elemento Fijo de Punto de Partida
     const originItem = document.createElement('div');
     originItem.className = 'route-stop-item route-origin-item';
@@ -1925,10 +2237,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="stop-meta">${origin.type === 'gps' ? 'Geolocalización GPS' : 'Punto de partida configurado'}</span>
       </div>
     `;
-    elements.routeStopsList.appendChild(originItem);
+    stopsFragment.appendChild(originItem);
 
     // 2. Paradas Ordenadas y Paradas Excluidas
     const activeStopsList = route.orderedStops || [];
+    currentActiveStops = activeStopsList;
     stops.forEach((stop, idx) => {
       const isIncluded = stop.isIncluded !== false;
       const stopDiv = document.createElement('div');
@@ -1979,45 +2292,10 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
 
-      // Clic en checkbox para incluir / excluir parada del viaje
-      const chk = stopDiv.querySelector('.stop-checkbox');
-      if (chk) {
-        chk.addEventListener('change', () => {
-          handleStopCheckboxToggle(stop.storeName, chk.checked);
-        });
-      }
-
-      // Clic en botón de edición de ubicación exacta
-      const btnEditLoc = stopDiv.querySelector('.btn-edit-location');
-      if (btnEditLoc) {
-        btnEditLoc.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openEditStoreModal(stop.storeName);
-        });
-      }
-
-      // Clics en botones accesibles Subir / Bajar (solo paradas activas)
-      if (isIncluded) {
-        const activeIdx = activeStopsList.findIndex(s => s.storeName === stop.storeName);
-        const btnUp = stopDiv.querySelector('.btn-move-up');
-        const btnDown = stopDiv.querySelector('.btn-move-down');
-
-        if (btnUp && activeIdx > 0) {
-          btnUp.addEventListener('click', (e) => {
-            e.stopPropagation();
-            moveStopPosition(activeIdx, activeIdx - 1, activeStopsList);
-          });
-        }
-        if (btnDown && activeIdx < activeStopsList.length - 1) {
-          btnDown.addEventListener('click', (e) => {
-            e.stopPropagation();
-            moveStopPosition(activeIdx, activeIdx + 1, activeStopsList);
-          });
-        }
-      }
-
-      elements.routeStopsList.appendChild(stopDiv);
+      stopsFragment.appendChild(stopDiv);
     });
+
+    elements.routeStopsList.appendChild(stopsFragment);
 
     if (window.lucide) window.lucide.createIcons(elements.routeStopsList ? { root: elements.routeStopsList } : undefined);
 
@@ -2148,6 +2426,79 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Delegación centralizada de eventos en elements.routeStopsList (R2 - F28)
+  if (elements.routeStopsList) {
+    // 1. Delegación de cambio en checkbox de inclusión/exclusión de paradas
+    elements.routeStopsList.addEventListener('change', (e) => {
+      const chk = e.target.closest('.stop-checkbox');
+      if (!chk) return;
+      const stopDiv = chk.closest('.route-stop-item');
+      const storeName = chk.dataset.store || (stopDiv && stopDiv.dataset.location);
+      if (storeName) {
+        handleStopCheckboxToggle(storeName, chk.checked);
+      }
+    });
+
+    // 2. Delegación de clics (editar ubicación, mover parada arriba/abajo)
+    elements.routeStopsList.addEventListener('click', (e) => {
+      // A. Botón de edición de ubicación exacta
+      const btnEditLoc = e.target.closest('.btn-edit-location');
+      if (btnEditLoc) {
+        e.stopPropagation();
+        const stopDiv = btnEditLoc.closest('.route-stop-item');
+        const storeName = btnEditLoc.dataset.store || (stopDiv && stopDiv.dataset.location);
+        if (storeName) {
+          openEditStoreModal(storeName);
+        }
+        return;
+      }
+
+      // B. Botón Subir parada
+      const btnUp = e.target.closest('.btn-move-up');
+      if (btnUp) {
+        e.stopPropagation();
+        if (btnUp.disabled) return;
+        const stopDiv = btnUp.closest('.route-stop-item');
+        const storeName = stopDiv ? stopDiv.dataset.location : null;
+        if (!storeName) return;
+
+        let activeStops = currentActiveStops;
+        if (!activeStops || activeStops.length === 0) {
+          const stopEls = elements.routeStopsList.querySelectorAll('.route-stop-item:not(.route-origin-item):not(.is-excluded)[data-location]');
+          activeStops = Array.from(stopEls).map(el => ({ storeName: el.dataset.location }));
+        }
+
+        const activeIdx = activeStops.findIndex(s => s.storeName === storeName);
+        if (activeIdx > 0) {
+          moveStopPosition(activeIdx, activeIdx - 1, activeStops);
+        }
+        return;
+      }
+
+      // C. Botón Bajar parada
+      const btnDown = e.target.closest('.btn-move-down');
+      if (btnDown) {
+        e.stopPropagation();
+        if (btnDown.disabled) return;
+        const stopDiv = btnDown.closest('.route-stop-item');
+        const storeName = stopDiv ? stopDiv.dataset.location : null;
+        if (!storeName) return;
+
+        let activeStops = currentActiveStops;
+        if (!activeStops || activeStops.length === 0) {
+          const stopEls = elements.routeStopsList.querySelectorAll('.route-stop-item:not(.route-origin-item):not(.is-excluded)[data-location]');
+          activeStops = Array.from(stopEls).map(el => ({ storeName: el.dataset.location }));
+        }
+
+        const activeIdx = activeStops.findIndex(s => s.storeName === storeName);
+        if (activeIdx >= 0 && activeIdx < activeStops.length - 1) {
+          moveStopPosition(activeIdx, activeIdx + 1, activeStops);
+        }
+        return;
+      }
+    });
+  }
+
   function renderTripsSelector() {
     if (!elements.tripSelect || typeof MapRouteService === 'undefined' || !MapRouteService.getTripsData) return;
     const tripsData = MapRouteService.getTripsData();
@@ -2155,6 +2506,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeTripId = tripsData.activeTripId;
 
     elements.tripSelect.innerHTML = '';
+    // F-FN04: Fragmento atómico para agrupar opciones de viaje antes de insertar en el DOM vivo
+    const tripsFragment = document.createDocumentFragment();
     trips.forEach(trip => {
       const opt = document.createElement('option');
       opt.value = trip.id;
@@ -2162,8 +2515,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (trip.id === activeTripId) {
         opt.selected = true;
       }
-      elements.tripSelect.appendChild(opt);
+      tripsFragment.appendChild(opt);
     });
+    elements.tripSelect.appendChild(tripsFragment);
 
     if (elements.tripIncludedCount) {
       const activeTrip = MapRouteService.getActiveTrip();
@@ -2183,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateMapRouteUI() {
-    if (typeof window.MapRouteService === 'undefined' || !MapRouteService.calculateOptimalRoute) return;
+    if (typeof MapRouteService === 'undefined' || !MapRouteService.calculateOptimalRoute) return;
     const items = (typeof store.getItems === 'function' ? store.getItems() : (store.getState() && store.getState().items)) || [];
     const currentOrigin = (typeof MapRouteService.getOrigin === 'function') ? MapRouteService.getOrigin() : null;
     const route = MapRouteService.calculateOptimalRoute(items, currentOrigin);
@@ -2217,6 +2571,24 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.btnOpenGoogleMaps.href = '#';
         elements.btnOpenGoogleMaps.classList.add('disabled');
         elements.btnOpenGoogleMaps.setAttribute('aria-disabled', 'true');
+      }
+
+      // F-FN05: Indicación informativa si supera las 10 paradas (9 intermedias)
+      let limitNotice = document.getElementById('gmaps-waypoints-notice');
+      if (route.hasWaypointsLimitWarning || (route.orderedStops && route.orderedStops.length > 10)) {
+        if (!limitNotice && elements.btnOpenGoogleMaps.parentNode) {
+          limitNotice = document.createElement('div');
+          limitNotice.id = 'gmaps-waypoints-notice';
+          limitNotice.className = 'gmaps-limit-notice';
+          limitNotice.style.cssText = 'font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 6px; padding: 4px 8px; background: rgba(0,0,0,0.03); border-radius: 6px;';
+          elements.btnOpenGoogleMaps.parentNode.insertBefore(limitNotice, elements.btnOpenGoogleMaps.nextSibling);
+        }
+        if (limitNotice) {
+          limitNotice.textContent = route.waypointsLimitNotice || 'Nota: El enlace directo de Google Maps contiene las primeras 9 paradas intermedias según el límite de la API universal.';
+          limitNotice.style.display = 'block';
+        }
+      } else if (limitNotice) {
+        limitNotice.style.display = 'none';
       }
     }
 
@@ -2365,11 +2737,49 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Modal de Edición de Ubicación y Selección Directa en Mapa
+  // Modal de Edición de Ubicación y Selección Directa en Mapa (WAI-ARIA Dialog)
   let currentEditingStoreName = null;
+  let lastFocusedElement = null;
+
+  function handleModalKeyDown(e) {
+    if (!elements.modalEditStoreLocation || elements.modalEditStoreLocation.hasAttribute('hidden')) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeEditStoreModal();
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      const focusableSelectors = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      const focusableElements = Array.from(elements.modalEditStoreLocation.querySelectorAll(focusableSelectors))
+        .filter(el => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0 || (el.style && el.style.display !== 'none'));
+
+      if (focusableElements.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement || !elements.modalEditStoreLocation.contains(document.activeElement)) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement || !elements.modalEditStoreLocation.contains(document.activeElement)) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    }
+  }
 
   function openEditStoreModal(storeName) {
     if (!elements.modalEditStoreLocation || !storeName) return;
+    lastFocusedElement = (typeof document !== 'undefined') ? document.activeElement : null;
     currentEditingStoreName = storeName;
 
     if (elements.modalStoreTitle) {
@@ -2402,7 +2812,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     elements.modalEditStoreLocation.removeAttribute('hidden');
-    if (elements.inputStoreAddress) {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', handleModalKeyDown);
+    }
+    if (elements.inputStoreAddress && typeof elements.inputStoreAddress.focus === 'function') {
       elements.inputStoreAddress.focus();
     }
   }
@@ -2410,7 +2823,19 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeEditStoreModal() {
     if (!elements.modalEditStoreLocation) return;
     elements.modalEditStoreLocation.setAttribute('hidden', '');
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('keydown', handleModalKeyDown);
+    }
     currentEditingStoreName = null;
+
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      try {
+        lastFocusedElement.focus();
+      } catch (err) {
+        // Ignorar si el elemento ya no es enfocable
+      }
+      lastFocusedElement = null;
+    }
   }
 
   if (elements.btnCloseStoreModal) {
@@ -2418,6 +2843,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (elements.btnCancelStoreModal) {
     elements.btnCancelStoreModal.addEventListener('click', closeEditStoreModal);
+  }
+  if (elements.modalEditStoreLocation) {
+    elements.modalEditStoreLocation.addEventListener('click', (e) => {
+      if (e.target === elements.modalEditStoreLocation) {
+        closeEditStoreModal();
+      }
+    });
   }
 
   // Guardar dirección manual desde el modal
@@ -2472,9 +2904,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Elegir punto en el mapa desde el modal
-  if (elements.btnPickOnMapFromModal) {
-    elements.btnPickOnMapFromModal.addEventListener('click', () => {
-      const targetStore = currentEditingStoreName;
+  const btnPickMapModal = elements.btnPickOnMapFromModal || document.getElementById('btn-pick-map-modal');
+  if (btnPickMapModal) {
+    btnPickMapModal.addEventListener('click', () => {
+      const modalInput = document.getElementById('modal-edit-store-name') || elements.modalStoreTitle;
+      const targetStore = currentEditingStoreName || (modalInput && (modalInput.value || modalInput.textContent)) || 'Tienda';
       closeEditStoreModal();
       if (targetStore) {
         startPickLocationOnMap(targetStore);
@@ -2497,7 +2931,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Modo interactivo de selección directa en el mapa
   function startPickLocationOnMap(storeName) {
-    if (typeof MapRouteService === 'undefined' || !MapRouteService.enablePickLocationMode) return;
+    if (typeof MapRouteService === 'undefined') return;
     if (elements.mapPickerStoreName) {
       elements.mapPickerStoreName.textContent = storeName;
     }
@@ -2510,29 +2944,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     ensureLeafletAndMapLoaded(() => {
-      MapRouteService.enablePickLocationMode(storeName, (picked) => {
-        if (elements.mapPickerBanner) {
-          elements.mapPickerBanner.setAttribute('hidden', '');
-        }
-        if (picked && typeof picked.lat === 'number' && typeof picked.lng === 'number') {
-          MapRouteService.saveStoreCoordinate(picked.storeName, {
-            lat: picked.lat,
-            lng: picked.lng,
-            address: 'Ubicación seleccionada en el mapa',
-            source: 'map_click'
-          });
-          updateMapRouteUI();
-          if (FeedbackModule.showToast) {
-            FeedbackModule.showToast(`Ubicación de "${picked.storeName}" fijada en el mapa`, 'success');
+      if (typeof MapRouteService.enablePickLocationMode === 'function') {
+        MapRouteService.enablePickLocationMode(storeName, (picked) => {
+          if (elements.mapPickerBanner) {
+            elements.mapPickerBanner.setAttribute('hidden', '');
           }
-        }
-      });
+          if (picked && typeof picked.lat === 'number' && typeof picked.lng === 'number') {
+            MapRouteService.saveStoreCoordinate(picked.storeName, {
+              lat: picked.lat,
+              lng: picked.lng,
+              address: 'Ubicación seleccionada en el mapa',
+              source: 'map_click'
+            });
+            updateMapRouteUI();
+            if (FeedbackModule.showToast) {
+              FeedbackModule.showToast(`Ubicación de "${picked.storeName}" fijada en el mapa`, 'success');
+            }
+          }
+        });
+      }
     });
 
     if (FeedbackModule.showToast) {
       FeedbackModule.showToast(`Haz clic sobre el mapa para ubicar "${storeName}"`, 'info');
     }
   }
+
+  window.startPickLocationOnMap = startPickLocationOnMap;
 
   if (elements.btnCancelMapPicker) {
     elements.btnCancelMapPicker.addEventListener('click', () => {

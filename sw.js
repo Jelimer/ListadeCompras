@@ -21,7 +21,6 @@ const CORE_PRECACHE_URLS = [
   '/js/state.js',
   '/js/storage.js',
   '/js/analytics.js',
-  '/js/feedback.js',
   '/js/ui-feedback.js',
   '/js/map-route.js',
   '/js/validation.js',

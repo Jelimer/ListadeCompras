@@ -140,12 +140,20 @@
     const toast = document.createElement('div');
     toast.className = 'undo-toast';
     toast.setAttribute('role', 'alert');
-    toast.innerHTML = `
-      <span class="undo-toast-msg">${message}</span>
-      <button class="btn-undo" type="button" aria-label="Deshacer acción">Deshacer</button>
-    `;
 
-    const undoBtn = toast.querySelector('.btn-undo');
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'undo-toast-msg';
+    msgSpan.textContent = message !== undefined && message !== null ? String(message) : '';
+
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'btn-undo';
+    undoBtn.type = 'button';
+    undoBtn.setAttribute('aria-label', 'Deshacer acción');
+    undoBtn.textContent = 'Deshacer';
+
+    toast.appendChild(msgSpan);
+    toast.appendChild(undoBtn);
+
     undoBtn.addEventListener('click', () => {
       dismissUndoToast();
       if (typeof onUndo === 'function') {

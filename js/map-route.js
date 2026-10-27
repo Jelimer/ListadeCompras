@@ -120,12 +120,17 @@
 
   function safeStorageGet(key) {
     try {
-      const driver = getStorageDriver();
-      const val = driver.getItem(key);
-      if (val !== null) return val;
-    } catch (_) {
-      // Intentar fallback en memoria
-    }
+      const memVal = memoryFallback.getItem(key);
+      if (memVal !== null) return memVal;
+    } catch (_) {}
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const val = window.localStorage.getItem(key);
+        if (val !== null && val !== undefined) return val;
+      }
+    } catch (_) {}
+
     return memoryFallback.getItem(key);
   }
 
@@ -134,6 +139,9 @@
     try {
       const driver = getStorageDriver();
       driver.setItem(key, str);
+      if (driver !== memoryFallback) {
+        memoryFallback.removeItem(key);
+      }
     } catch (_) {
       memoryFallback.setItem(key, str);
     }
@@ -1027,6 +1035,11 @@
 
     const googleMapsUrl = generateGoogleMapsUrl(origin, orderedStops);
 
+    const hasWaypointsLimitWarning = orderedStops.length > (DEFAULTS.MAX_GOOGLE_MAPS_WAYPOINTS + 1);
+    const waypointsLimitNotice = hasWaypointsLimitWarning
+      ? `El itinerario tiene ${orderedStops.length} paradas. El enlace directo de Google Maps contiene las primeras ${DEFAULTS.MAX_GOOGLE_MAPS_WAYPOINTS} paradas intermedias según el límite de la API universal.`
+      : null;
+
     return {
       origin,
       orderedStops,
@@ -1035,7 +1048,9 @@
       totalUrbanDistanceKm,
       estimatedDurationMinutes,
       googleMapsUrl,
-      isCustomOrder
+      isCustomOrder,
+      hasWaypointsLimitWarning,
+      waypointsLimitNotice
     };
   }
 

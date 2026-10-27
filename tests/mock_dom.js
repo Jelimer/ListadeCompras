@@ -1528,6 +1528,8 @@ module.exports = {
   matchesSelector,
   normalizeLatLng,
   createMockLeaflet,
+  createMockEcharts,
+  createMockSwal,
   MockGeolocation,
   createMockFetch,
   MOCK_STORE_DATABASE

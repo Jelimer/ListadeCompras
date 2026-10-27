@@ -493,9 +493,53 @@ async function runScriptLifecycleTests() {
   }
   console.log('  ✓ Test 23: Ordenamiento predeterminado por fecha más reciente verificado');
 
+  // Test 24: Accesibilidad de navegación por teclado en pestañas (WAI-ARIA ArrowRight/ArrowLeft)
+  const rightEvt = new env.DOMEvent('keydown', { bubbles: true });
+  rightEvt.key = 'ArrowRight';
+  tabList.dispatchEvent(rightEvt);
+  await new Promise(r => setTimeout(r, 40));
+  assert.strictEqual(panelStats.classList.contains('active'), true, 'ArrowRight desde tabList debe activar panelStats');
+
+  const leftEvt = new env.DOMEvent('keydown', { bubbles: true });
+  leftEvt.key = 'ArrowLeft';
+  tabStats.dispatchEvent(leftEvt);
+  await new Promise(r => setTimeout(r, 40));
+  assert.strictEqual(panelList.classList.contains('active'), true, 'ArrowLeft desde tabStats debe volver a activar panelList');
+  console.log('  ✓ Test 24: Navegación accesible por teclado en pestañas (WAI-ARIA) verificada');
+
+  // Test 25: Visibilidad de completados en "Por averiguar" y Undo Toast al eliminar en bandeja pendiente
+  itemInput.value = 'Especia Pendiente';
+  locationInput.value = 'Por averiguar';
+  addItemBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+
+  const delPendingBtn = pendingList.querySelector('.btn-remove-pending');
+  assert.ok(delPendingBtn, 'Debe existir botón de eliminar en tarjeta pendiente');
+  delPendingBtn.dispatchEvent(new env.DOMEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 40));
+  const undoContainer = env.document.getElementById('undoToastContainer');
+  assert.ok(undoContainer && undoContainer.textContent.includes('Especia Pendiente'), 'Eliminar desde bandeja pendiente debe mostrar Toast Deshacer');
+  console.log('  ✓ Test 25: Toast Deshacer en bandeja "Por averiguar" verificado');
+
+  // Test 26: Sanitización XSS en UIFeedback.showUndoToast y Datalists dinámicos
+  const UIFeedbackModule = require('../js/ui-feedback.js');
+  UIFeedbackModule.showUndoToast('<img src=x onerror=alert(1)>ProductoXSS', () => {});
+  const toastMsgEl = env.document.querySelector('.undo-toast-msg');
+  assert.ok(toastMsgEl, 'El mensaje del toast de deshacer debe existir');
+  assert.strictEqual(toastMsgEl.querySelectorAll('img').length, 0, 'No debe inyectar nodos <img> ejecutables en undo-toast-msg');
+  assert.ok(toastMsgEl.textContent.includes('<img src=x onerror=alert(1)>ProductoXSS'), 'El texto literal debe preservarse vía textContent');
+  UIFeedbackModule.dismissUndoToast();
+  console.log('  ✓ Test 26: Sanitización anti-XSS en Toast Deshacer verificada');
+
+  // Test 27: Integridad de precache en sw.js y resiliencia de cuota en MapRouteModule
+  const swSource = fs.readFileSync(path.resolve(__dirname, '../sw.js'), 'utf8');
+  assert.strictEqual(swSource.includes('/js/feedback.js'), false, 'sw.js no debe referenciar /js/feedback.js inexistente');
+  assert.ok(swSource.includes('/js/ui-feedback.js'), 'sw.js debe incluir /js/ui-feedback.js');
+  console.log('  ✓ Test 27: Precache limpio en sw.js sin rutas 404 verificado');
+
   console.log('\n==================================================');
   console.log('RESUMEN DE PRUEBAS LIFECYCLE DE SCRIPT.JS:');
-  console.log('Total: 23 | Aprobadas: 23 | Falladas: 0');
+  console.log('Total: 27 | Aprobadas: 27 | Falladas: 0');
   console.log('==================================================\n');
 }
 
