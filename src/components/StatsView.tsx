@@ -1,5 +1,24 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import { BarChart, PieChart } from 'echarts/charts';
+import {
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendPlainComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import type { EChartsType, EChartsCoreOption } from 'echarts/core';
+
+echarts.use([
+  BarChart,
+  PieChart,
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendPlainComponent,
+  CanvasRenderer,
+]);
 import {
   Trash2,
   Wallet,
@@ -72,10 +91,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
   }, [budget, isEditingBudget]);
 
   const mainChartRef = useRef<HTMLDivElement | null>(null);
-  const mainChartInstance = useRef<echarts.EChartsType | null>(null);
+  const mainChartInstance = useRef<EChartsType | null>(null);
+  const mainThemeRef = useRef<'light' | 'dark'>(theme);
 
   const donutChartRef = useRef<HTMLDivElement | null>(null);
-  const donutChartInstance = useRef<echarts.EChartsType | null>(null);
+  const donutChartInstance = useRef<EChartsType | null>(null);
+  const donutThemeRef = useRef<'light' | 'dark'>(theme);
 
   const analytics = useMemo(
     () => calculateDetailedAnalytics(items, budget),
@@ -86,13 +107,16 @@ export const StatsView: React.FC<StatsViewProps> = ({
   useEffect(() => {
     if (!mainChartRef.current) return;
 
-    if (mainChartInstance.current) {
-      mainChartInstance.current.dispose();
+    if (!mainChartInstance.current || mainThemeRef.current !== theme) {
+      if (mainChartInstance.current) {
+        mainChartInstance.current.dispose();
+      }
+      mainChartInstance.current = echarts.init(
+        mainChartRef.current,
+        theme === 'dark' ? 'dark' : undefined
+      );
+      mainThemeRef.current = theme;
     }
-    mainChartInstance.current = echarts.init(
-      mainChartRef.current,
-      theme === 'dark' ? 'dark' : undefined
-    );
 
     const isDark = theme === 'dark';
     const textColor = isDark ? '#f8fafc' : '#0f172a';
@@ -142,7 +166,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
     const unitSuffix =
       metricType === 'currency' ? '' : metricType === 'units' ? ' un.' : ' prod.';
 
-    const option: echarts.EChartsOption = {
+    const option: EChartsCoreOption = {
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'axis',
@@ -247,13 +271,16 @@ export const StatsView: React.FC<StatsViewProps> = ({
   useEffect(() => {
     if (!donutChartRef.current) return;
 
-    if (donutChartInstance.current) {
-      donutChartInstance.current.dispose();
+    if (!donutChartInstance.current || donutThemeRef.current !== theme) {
+      if (donutChartInstance.current) {
+        donutChartInstance.current.dispose();
+      }
+      donutChartInstance.current = echarts.init(
+        donutChartRef.current,
+        theme === 'dark' ? 'dark' : undefined
+      );
+      donutThemeRef.current = theme;
     }
-    donutChartInstance.current = echarts.init(
-      donutChartRef.current,
-      theme === 'dark' ? 'dark' : undefined
-    );
 
     const isDark = theme === 'dark';
     const textColor = isDark ? '#f8fafc' : '#0f172a';
@@ -310,7 +337,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
       });
     }
 
-    const option: echarts.EChartsOption = {
+    const option: EChartsCoreOption = {
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'item',

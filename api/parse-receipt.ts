@@ -56,21 +56,53 @@ export const RECEIPT_RESPONSE_SCHEMA = {
   required: ['storeName', 'date', 'items', 'total'],
 };
 
+// Whitelist de tipos MIME aceptados para procesamiento de tickets
+export const ALLOWED_RECEIPT_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+] as const;
+
+export type AllowedReceiptMimeType = (typeof ALLOWED_RECEIPT_MIME_TYPES)[number];
+
+// Singleton de cliente GoogleGenAI
+let cachedGenAIClient: GoogleGenAI | null = null;
+let lastApiKey: string | null = null;
+
+export function getGenAIClient(apiKey: string): GoogleGenAI {
+  if (!cachedGenAIClient || lastApiKey !== apiKey) {
+    cachedGenAIClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+    lastApiKey = apiKey;
+  }
+  return cachedGenAIClient;
+}
+
 export async function parseReceiptWithGemini(imageBase64: string, mimeType: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
   }
 
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
+  // Validación estricta de tipo y contenido de imageBase64
+  if (typeof imageBase64 !== 'string' || imageBase64.trim().length === 0) {
+    throw new Error('INVALID_IMAGE_PAYLOAD');
+  }
 
+  // Whitelist para mimeType con fallback seguro a image/jpeg
+  const validMime = ALLOWED_RECEIPT_MIME_TYPES.includes(mimeType as AllowedReceiptMimeType)
+    ? mimeType
+    : 'image/jpeg';
+
+  const ai = getGenAIClient(apiKey);
   const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
   const response = await ai.models.generateContent({
@@ -79,7 +111,7 @@ export async function parseReceiptWithGemini(imageBase64: string, mimeType: stri
       parts: [
         {
           inlineData: {
-            mimeType: mimeType || 'image/jpeg',
+            mimeType: validMime,
             data: cleanBase64,
           },
         },
@@ -100,26 +132,41 @@ export async function parseReceiptWithGemini(imageBase64: string, mimeType: stri
     throw new Error('El modelo no devolvió datos del ticket.');
   }
 
-  return JSON.parse(text.trim());
+  // Manejo seguro de JSON.parse con sanitización de delimitadores markdown
+  try {
+    const sanitizedText = text.trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
+    return JSON.parse(sanitizedText);
+  } catch {
+    throw new Error('Error al interpretar la respuesta estructurada del modelo.');
+  }
 }
 
 // Vercel Serverless Function Default Handler
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
+    res.status(405).json({ success: false, error: 'Method Not Allowed' });
     return;
   }
 
   try {
     const { imageBase64, mimeType } = req.body || {};
-    if (!imageBase64) {
-      res.status(400).json({ error: 'Falta la imagen del ticket (imageBase64).' });
+    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.trim().length < 20) {
+      res.status(400).json({
+        success: false,
+        error: 'Falta la imagen del ticket o el formato base64 es inválido.',
+      });
       return;
     }
 
-    const parsed = await parseReceiptWithGemini(imageBase64, mimeType || 'image/jpeg');
+    const cleanMime =
+      typeof mimeType === 'string' &&
+      ALLOWED_RECEIPT_MIME_TYPES.includes(mimeType as AllowedReceiptMimeType)
+        ? mimeType
+        : 'image/jpeg';
+
+    const parsed = await parseReceiptWithGemini(imageBase64, cleanMime);
     res.status(200).json({ success: true, source: 'gemini', data: parsed });
-  } catch (err: any) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({
       success: false,

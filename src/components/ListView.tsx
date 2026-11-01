@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import {
   Package,
   Hash,
@@ -114,6 +114,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [hideEmptyStores, setHideEmptyStores] = useState<boolean>(() =>
     loadStoredHideEmptyStores()
@@ -225,7 +226,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
   // Pending location items (also filtered by searchQuery if active)
   const pendingItems = useMemo(() => {
-    const query = searchQuery
+    const query = deferredSearchQuery
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -241,7 +242,7 @@ export const ListView: React.FC<ListViewProps> = ({
         .replace(/[\u0300-\u036f]/g, '');
       return query.split(/\s+/).every((tok) => haystack.includes(tok));
     });
-  }, [items, searchQuery]);
+  }, [items, deferredSearchQuery]);
 
   const handleAssignPending = (itemId: string) => {
     const targetStore = pendingAssignMap[itemId];
@@ -259,7 +260,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
   // Filtered and grouped items
   const groupedItems = useMemo(() => {
-    const query = searchQuery
+    const query = deferredSearchQuery
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -347,7 +348,7 @@ export const ListView: React.FC<ListViewProps> = ({
     });
 
     return result;
-  }, [items, searchQuery, hideCompleted, hideEmptyStores, locationOrder]);
+  }, [items, deferredSearchQuery, hideCompleted, hideEmptyStores, locationOrder]);
 
   // Normalized collapse check (includes both store cards and the "Por averiguar" section)
   const collapsedSet = useMemo(() => {

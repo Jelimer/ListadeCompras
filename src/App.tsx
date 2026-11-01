@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import confetti from 'canvas-confetti';
 import {
   ShoppingItem,
@@ -38,13 +38,54 @@ import { formatMoney } from './utils/formatters';
 import { Header } from './components/Header';
 import { NavigationTabs, ViewType } from './components/NavigationTabs';
 import { ListView, isPendingLocationName } from './components/ListView';
-import { StatsView } from './components/StatsView';
-import { MapView } from './components/MapView';
 import { ModalEditStoreLocation } from './components/ModalEditStoreLocation';
-import { ShareModal } from './components/ShareModal';
-import { ExportModal } from './components/ExportModal';
-import { ReceiptScannerModal } from './components/ReceiptScannerModal';
 import { UndoToast } from './components/UndoToast';
+
+const StatsView = React.lazy(() =>
+  import('./components/StatsView').then((m) => ({ default: m.StatsView }))
+);
+const MapView = React.lazy(() =>
+  import('./components/MapView').then((m) => ({ default: m.MapView }))
+);
+const ReceiptScannerModal = React.lazy(() =>
+  import('./components/ReceiptScannerModal').then((m) => ({ default: m.ReceiptScannerModal }))
+);
+const ExportModal = React.lazy(() =>
+  import('./components/ExportModal').then((m) => ({ default: m.ExportModal }))
+);
+const ShareModal = React.lazy(() =>
+  import('./components/ShareModal').then((m) => ({ default: m.ShareModal }))
+);
+
+const ViewFallback: React.FC = () => (
+  <div
+    className="view-loading-fallback"
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '280px',
+      gap: '12px',
+      color: 'var(--text-muted, #64748b)',
+    }}
+    role="status"
+    aria-live="polite"
+  >
+    <div
+      style={{
+        width: '32px',
+        height: '32px',
+        border: '3px solid rgba(59, 130, 246, 0.2)',
+        borderTopColor: '#3b82f6',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }}
+      aria-hidden="true"
+    />
+    <span style={{ fontSize: '14px', fontWeight: 500 }}>Cargando módulo...</span>
+  </div>
+);
 
 function normalizeLocKey(loc: string): string {
   return String(loc || 'General')
@@ -751,64 +792,74 @@ export const App: React.FC = () => {
         )}
 
         {currentView === 'stats' && (
-          <StatsView
-            items={items}
-            budget={budget}
-            onBudgetChange={setBudget}
-            metrics={metrics}
-            onResetAllCompleted={handleResetAllCompleted}
-            onResetItem={handleResetProduct}
-            onToggleCompleted={handleToggleCompleted}
-            receipts={receipts}
-            onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
-            onDeleteReceipt={handleDeleteReceipt}
-            theme={theme}
-          />
+          <Suspense fallback={<ViewFallback />}>
+            <StatsView
+              items={items}
+              budget={budget}
+              onBudgetChange={setBudget}
+              metrics={metrics}
+              onResetAllCompleted={handleResetAllCompleted}
+              onResetItem={handleResetProduct}
+              onToggleCompleted={handleToggleCompleted}
+              receipts={receipts}
+              onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
+              onDeleteReceipt={handleDeleteReceipt}
+              theme={theme}
+            />
+          </Suspense>
         )}
 
         {currentView === 'map' && (
-          <MapView
-            items={items}
-            origin={origin}
-            onOriginChange={setOrigin}
-            tripsData={tripsData}
-            onTripsDataChange={setTripsData}
-            theme={theme}
-            onEditStoreLocation={(store) => setEditStoreModalName(store)}
-            pickerStore={pickerStore}
-            onCancelPicker={() => setPickerStore(null)}
-            onCoordPicked={handleCoordPicked}
-            onToggleCompleted={handleToggleCompleted}
-          />
+          <Suspense fallback={<ViewFallback />}>
+            <MapView
+              items={items}
+              origin={origin}
+              onOriginChange={setOrigin}
+              tripsData={tripsData}
+              onTripsDataChange={setTripsData}
+              theme={theme}
+              onEditStoreLocation={(store) => setEditStoreModalName(store)}
+              pickerStore={pickerStore}
+              onCancelPicker={() => setPickerStore(null)}
+              onCoordPicked={handleCoordPicked}
+              onToggleCompleted={handleToggleCompleted}
+            />
+          </Suspense>
         )}
       </main>
 
       {/* Modals & Popups */}
       {isReceiptScannerOpen && (
-        <ReceiptScannerModal
-          isOpen={isReceiptScannerOpen}
-          onClose={() => setIsReceiptScannerOpen(false)}
-          items={items}
-          receipts={receipts}
-          distinctLocations={distinctLocations}
-          distinctCategories={distinctCategories}
-          onConfirmReceipt={handleConfirmReceipt}
-          onUpdateReceipt={handleUpdateReceipt}
-          onDeleteReceipt={handleDeleteReceipt}
-        />
+        <Suspense fallback={null}>
+          <ReceiptScannerModal
+            isOpen={isReceiptScannerOpen}
+            onClose={() => setIsReceiptScannerOpen(false)}
+            items={items}
+            receipts={receipts}
+            distinctLocations={distinctLocations}
+            distinctCategories={distinctCategories}
+            onConfirmReceipt={handleConfirmReceipt}
+            onUpdateReceipt={handleUpdateReceipt}
+            onDeleteReceipt={handleDeleteReceipt}
+          />
+        </Suspense>
       )}
 
       {isShareOpen && (
-        <ShareModal items={items} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
+        <Suspense fallback={null}>
+          <ShareModal items={items} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
+        </Suspense>
       )}
 
       {isExportOpen && (
-        <ExportModal
-          items={items}
-          budget={budget}
-          isOpen={isExportOpen}
-          onClose={() => setIsExportOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <ExportModal
+            items={items}
+            budget={budget}
+            isOpen={isExportOpen}
+            onClose={() => setIsExportOpen(false)}
+          />
+        </Suspense>
       )}
 
       {editStoreModalName && (

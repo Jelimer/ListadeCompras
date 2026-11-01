@@ -74,13 +74,13 @@ export const Header: React.FC<HeaderProps> = ({
         <span className="ledger-divider" aria-hidden="true" />
         <div className="ledger-metric-item">
           <span className="ledger-metric-label">Por Comprar</span>
-          <span className="ledger-metric-value tabular-nums">${formatMoney(totalPendingAmount)}</span>
+          <span className="ledger-metric-value tabular-nums">{formatMoney(totalPendingAmount)}</span>
         </div>
         <span className="ledger-divider" aria-hidden="true" />
         <div className="ledger-metric-item">
           <span className="ledger-metric-label">Ejecutado</span>
           <span className="ledger-metric-value ledger-emerald tabular-nums">
-            ${formatMoney(totalSpentAmount)}
+            {formatMoney(totalSpentAmount)}
           </span>
         </div>
       </div>

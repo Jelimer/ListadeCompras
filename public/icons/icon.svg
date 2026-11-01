@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Degradado principal azul/índigo para fondo squircle -->
+    <linearGradient id="pwaBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="60%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    
+    <!-- Degradado de checklist y acentos celestes -->
+    <linearGradient id="checkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#a5b4fc" />
+    </linearGradient>
+
+    <!-- Sombra sutil para profundidad -->
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0f172a" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Fondo Squircle / Rounded Container -->
+  <rect width="512" height="512" rx="112" fill="url(#pwaBgGrad)" />
+
+  <!-- Grupo Principal con Sombra -->
+  <g filter="url(#softShadow)">
+    <!-- Checklist items sobre el carrito -->
+    <!-- Checklist Item 1 -->
+    <rect x="195" y="130" width="34" height="34" rx="8" fill="none" stroke="#38bdf8" stroke-width="5" />
+    <path d="M202 147 L210 155 L222 138" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="245" y1="147" x2="330" y2="147" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.95" />
+
+    <!-- Checklist Item 2 -->
+    <rect x="195" y="180" width="34" height="34" rx="8" fill="none" stroke="#38bdf8" stroke-width="5" />
+    <path d="M202 197 L210 205 L222 188" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="245" y1="197" x2="310" y2="197" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.95" />
+
+    <!-- Carrito de Compras Moderno (Líneas vectoriales nítidas) -->
+    <!-- Asa y Cuerpo Principal -->
+    <path d="M 125 185 L 160 185 L 198 325 L 355 325 L 388 225 L 180 225" 
+          fill="none" 
+          stroke="#ffffff" 
+          stroke-width="16" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+
+    <!-- Barra Inferior de Soporte -->
+    <path d="M 198 325 L 188 360 L 362 360" 
+          fill="none" 
+          stroke="#ffffff" 
+          stroke-width="14" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+
+    <!-- Rueda Izquierda -->
+    <circle cx="218" cy="400" r="22" fill="#ffffff" />
+    <circle cx="218" cy="400" r="10" fill="#2563eb" />
+
+    <!-- Rueda Derecha -->
+    <circle cx="338" cy="400" r="22" fill="#ffffff" />
+    <circle cx="338" cy="400" r="10" fill="#2563eb" />
+  </g>
+</svg>
