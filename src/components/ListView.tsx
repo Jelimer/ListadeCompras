@@ -33,6 +33,7 @@ import {
   loadStoredHideEmptyStores,
   saveStoredHideEmptyStores,
   formatSkuCode,
+  getNextSequentialSku,
 } from '../utils/storage';
 import { formatMoney, formatNumber, parseLocaleNumber } from '../utils/formatters';
 
@@ -85,6 +86,18 @@ function normalizeLocKey(loc: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+export interface CatalogProductSuggestion {
+  id: string;
+  skuCode: string;
+  seqNumber?: number;
+  name: string;
+  category: string;
+  location: string;
+  unitPrice: number;
+  completed: boolean;
+  quantity?: number;
+}
+
 export const ListView: React.FC<ListViewProps> = ({
   items,
   layoutMode,
@@ -111,6 +124,21 @@ export const ListView: React.FC<ListViewProps> = ({
   const [unitPrice, setUnitPrice] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('');
+
+  // Autocomplete de productos para reutilizar ID / SKU existente
+  const [selectedExistingItem, setSelectedExistingItem] = useState<CatalogProductSuggestion | null>(null);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [highlightedSugIndex, setHighlightedSugIndex] = useState(-1);
+
+  // Quick-Add directo en tarjeta de comercio
+  const [quickAddStore, setQuickAddStore] = useState<string | null>(null);
+  const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddQty, setQuickAddQty] = useState('1');
+  const [quickAddPrice, setQuickAddPrice] = useState('');
+  const [quickAddCat, setQuickAddCat] = useState('');
+  const [quickAddSelectedExisting, setQuickAddSelectedExisting] = useState<CatalogProductSuggestion | null>(null);
+  const [showQuickAddSuggestions, setShowQuickAddSuggestions] = useState(false);
+  const [quickAddHighlightedIndex, setQuickAddHighlightedIndex] = useState(-1);
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,6 +175,108 @@ export const ListView: React.FC<ListViewProps> = ({
     saveStoredHideEmptyStores(checked);
   };
 
+  // Catálogo deduplicado de productos para autocompletado y reuso de ID
+  const catalogProducts = useMemo(() => {
+    const map = new Map<string, CatalogProductSuggestion>();
+    for (const it of items) {
+      const cleanName = it.name?.trim();
+      if (!cleanName) continue;
+      const key = cleanName.toLowerCase();
+      const sku = it.skuCode || formatSkuCode(it.seqNumber || 1);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          id: it.id,
+          skuCode: sku,
+          seqNumber: it.seqNumber,
+          name: cleanName,
+          category: it.category || 'General',
+          location: it.location || 'General',
+          unitPrice: Number(it.unitPrice) || 0,
+          completed: Boolean(it.completed),
+          quantity: Number(it.quantity) || 1,
+        });
+      } else {
+        if (!it.completed && existing.completed) {
+          map.set(key, {
+            id: it.id,
+            skuCode: sku,
+            seqNumber: it.seqNumber,
+            name: cleanName,
+            category: it.category || existing.category,
+            location: it.location || existing.location,
+            unitPrice: (Number(it.unitPrice) || 0) > 0 ? Number(it.unitPrice) : existing.unitPrice,
+            completed: false,
+            quantity: Number(it.quantity) || 1,
+          });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [items]);
+
+  // Sugerencias de productos en formulario principal
+  const nameSuggestions = useMemo(() => {
+    const q = name.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (!q) return [];
+    const cleanQ = q.replace(/^#/, '');
+    return catalogProducts
+      .filter((prod) => {
+        const prodName = prod.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const skuFull = prod.skuCode.toLowerCase();
+        const skuDigits = skuFull.replace('#', '');
+        return prodName.includes(q) || skuFull.includes(q) || (cleanQ && skuDigits.includes(cleanQ));
+      })
+      .sort((a, b) => {
+        const nameA = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const nameB = b.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const startsA = nameA.startsWith(q);
+        const startsB = nameB.startsWith(q);
+        if (startsA && !startsB) return -1;
+        if (!startsA && startsB) return 1;
+        return nameA.localeCompare(nameB, 'es');
+      })
+      .slice(0, 6);
+  }, [name, catalogProducts]);
+
+  // Sugerencias para quick-add en tarjetas de comercio
+  const quickAddNameSuggestions = useMemo(() => {
+    const q = quickAddName.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (!q) return [];
+    const cleanQ = q.replace(/^#/, '');
+    return catalogProducts
+      .filter((prod) => {
+        const prodName = prod.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const skuFull = prod.skuCode.toLowerCase();
+        const skuDigits = skuFull.replace('#', '');
+        return prodName.includes(q) || skuFull.includes(q) || (cleanQ && skuDigits.includes(cleanQ));
+      })
+      .sort((a, b) => {
+        const nameA = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const nameB = b.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const startsA = nameA.startsWith(q);
+        const startsB = nameB.startsWith(q);
+        if (startsA && !startsB) return -1;
+        if (!startsA && startsB) return 1;
+        return nameA.localeCompare(nameB, 'es');
+      })
+      .slice(0, 6);
+  }, [quickAddName, catalogProducts]);
+
+  // Código SKU estimado a mostrar en el formulario
+  const nextSkuCode = useMemo(() => {
+    if (selectedExistingItem) {
+      return selectedExistingItem.skuCode;
+    }
+    const exact = catalogProducts.find(
+      (p) => p.name.toLowerCase() === name.trim().toLowerCase()
+    );
+    if (exact) {
+      return exact.skuCode;
+    }
+    return getNextSequentialSku(items).skuCode;
+  }, [items, selectedExistingItem, name, catalogProducts]);
+
   // Suggestions
   const distinctCategories = useMemo(() => {
     const set = new Set<string>();
@@ -166,25 +296,172 @@ export const ListView: React.FC<ListViewProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
   }, [items]);
 
+  const handleSelectSuggestion = (sug: CatalogProductSuggestion) => {
+    setName(sug.name);
+    setSelectedExistingItem(sug);
+    setShowNameSuggestions(false);
+    setHighlightedSugIndex(-1);
+    if (!category.trim() || category === 'General') {
+      setCategory(sug.category || 'General');
+    }
+    if (!location.trim() || location === 'General' || isPendingLocationName(location)) {
+      setLocation(sug.location || 'General');
+    }
+    if ((!unitPrice.trim() || unitPrice === '0') && sug.unitPrice > 0) {
+      setUnitPrice(String(sug.unitPrice));
+    }
+  };
+
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
 
     const parsedQty = parseLocaleNumber(quantity);
     const parsedPrice = parseLocaleNumber(unitPrice);
+    const finalQty = parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1;
+    const finalPrice = parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0;
+    const finalLoc = location.trim() || 'General';
+    const finalCat = category.trim() || 'General';
 
+    // Verificar si coincide con un producto existente en catálogo (reutilización de ID)
+    const existing =
+      selectedExistingItem ||
+      catalogProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+
+    if (existing) {
+      const targetInList = items.find((it) => it.id === existing.id);
+      if (targetInList) {
+        if (targetInList.completed) {
+          // Reactivar producto previamente comprado preservando su ID y SKU
+          onUpdateItem(targetInList.id, {
+            completed: false,
+            quantity: finalQty,
+            unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
+            location: finalLoc !== 'General' ? finalLoc : targetInList.location,
+            category: finalCat !== 'General' ? finalCat : targetInList.category,
+          });
+        } else {
+          // Ya está en lista como pendiente: sumar cantidad y actualizar precio
+          const updatedQty = Math.round(((targetInList.quantity || 1) + finalQty) * 1000) / 1000;
+          onUpdateItem(targetInList.id, {
+            quantity: updatedQty,
+            unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
+            location: finalLoc !== 'General' ? finalLoc : targetInList.location,
+            category: finalCat !== 'General' ? finalCat : targetInList.category,
+          });
+        }
+        setName('');
+        setQuantity('1');
+        setUnitPrice('');
+        setSelectedExistingItem(null);
+        setShowNameSuggestions(false);
+        return;
+      }
+    }
+
+    // Nuevo producto en el catálogo
     onAddItem({
-      name: name.trim(),
-      quantity: parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1,
-      unitPrice: parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0,
-      location: location.trim() || 'General',
-      category: category.trim() || 'General',
+      name: trimmedName,
+      quantity: finalQty,
+      unitPrice: finalPrice,
+      location: finalLoc,
+      category: finalCat,
       completed: false,
     });
 
     setName('');
     setQuantity('1');
     setUnitPrice('');
+    setSelectedExistingItem(null);
+    setShowNameSuggestions(false);
+  };
+
+  const handleToggleCardQuickAdd = (loc: string) => {
+    if (quickAddStore === loc) {
+      setQuickAddStore(null);
+      setQuickAddName('');
+      setQuickAddQty('1');
+      setQuickAddPrice('');
+      setQuickAddCat('');
+      setQuickAddSelectedExisting(null);
+      setShowQuickAddSuggestions(false);
+    } else {
+      if (isGroupCollapsed(loc)) {
+        onToggleGroupCollapse(loc);
+      }
+      setQuickAddStore(loc);
+      setQuickAddName('');
+      setQuickAddQty('1');
+      setQuickAddPrice('');
+      setQuickAddCat('');
+      setQuickAddSelectedExisting(null);
+      setShowQuickAddSuggestions(false);
+    }
+  };
+
+  const handleCardQuickAddSubmit = (storeName: string, e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmedName = quickAddName.trim();
+    if (!trimmedName) return;
+
+    const parsedQty = parseLocaleNumber(quickAddQty);
+    const parsedPrice = parseLocaleNumber(quickAddPrice);
+    const finalQty = parsedQty > 0 ? Math.round(parsedQty * 1000) / 1000 : 1;
+    const finalPrice = parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0;
+    const finalCat = quickAddCat.trim() || 'General';
+
+    const existing =
+      quickAddSelectedExisting ||
+      catalogProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+
+    if (existing) {
+      const targetInList = items.find((it) => it.id === existing.id);
+      if (targetInList) {
+        if (targetInList.completed) {
+          onUpdateItem(targetInList.id, {
+            completed: false,
+            quantity: finalQty,
+            unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
+            location: storeName,
+            category: finalCat !== 'General' ? finalCat : targetInList.category,
+          });
+        } else {
+          const updatedQty = Math.round(((targetInList.quantity || 1) + finalQty) * 1000) / 1000;
+          onUpdateItem(targetInList.id, {
+            quantity: updatedQty,
+            unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
+            location: storeName,
+            category: finalCat !== 'General' ? finalCat : targetInList.category,
+          });
+        }
+        setQuickAddStore(null);
+        setQuickAddName('');
+        setQuickAddQty('1');
+        setQuickAddPrice('');
+        setQuickAddCat('');
+        setQuickAddSelectedExisting(null);
+        setShowQuickAddSuggestions(false);
+        return;
+      }
+    }
+
+    onAddItem({
+      name: trimmedName,
+      quantity: finalQty,
+      unitPrice: finalPrice,
+      location: storeName,
+      category: finalCat,
+      completed: false,
+    });
+
+    setQuickAddStore(null);
+    setQuickAddName('');
+    setQuickAddQty('1');
+    setQuickAddPrice('');
+    setQuickAddCat('');
+    setQuickAddSelectedExisting(null);
+    setShowQuickAddSuggestions(false);
   };
 
   const startEditing = (item: ShoppingItem) => {
@@ -449,7 +726,7 @@ export const ListView: React.FC<ListViewProps> = ({
         aria-label="Añadir nuevo producto"
         onSubmit={handleAddSubmit}
       >
-        <div className="input-wrapper input-wrapper-item">
+        <div className="input-wrapper input-wrapper-item product-suggestions-wrapper">
           <Package className="input-icon" size={18} aria-hidden="true" />
           <label htmlFor="itemInput" className="sr-only">
             Nombre del producto
@@ -462,8 +739,119 @@ export const ListView: React.FC<ListViewProps> = ({
             autoComplete="off"
             required
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setName(val);
+              setShowNameSuggestions(true);
+              setHighlightedSugIndex(-1);
+              if (
+                selectedExistingItem &&
+                selectedExistingItem.name.toLowerCase() !== val.trim().toLowerCase()
+              ) {
+                setSelectedExistingItem(null);
+              }
+            }}
+            onFocus={() => {
+              if (name.trim()) setShowNameSuggestions(true);
+            }}
+            onBlur={() => {
+              setTimeout(() => setShowNameSuggestions(false), 200);
+            }}
+            onKeyDown={(e) => {
+              if (!showNameSuggestions || nameSuggestions.length === 0) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightedSugIndex((prev) => (prev + 1) % nameSuggestions.length);
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightedSugIndex((prev) =>
+                  prev <= 0 ? nameSuggestions.length - 1 : prev - 1
+                );
+              } else if (e.key === 'Enter' && highlightedSugIndex >= 0) {
+                e.preventDefault();
+                handleSelectSuggestion(nameSuggestions[highlightedSugIndex]);
+              } else if (e.key === 'Escape') {
+                setShowNameSuggestions(false);
+              }
+            }}
           />
+
+          {/* Menú flotante de sugerencias de productos */}
+          {showNameSuggestions && nameSuggestions.length > 0 && (
+            <div className="product-suggestions-dropdown" role="listbox">
+              <div className="suggestions-header">
+                <span>Productos existentes en catálogo (reutilizar ID)</span>
+              </div>
+              {nameSuggestions.map((sug, idx) => {
+                const CategoryIcon = getCategoryIcon(sug.category);
+                const isHighlighted = highlightedSugIndex === idx;
+                return (
+                  <div
+                    key={sug.id}
+                    className={`suggestion-item ${isHighlighted ? 'highlighted' : ''}`}
+                    role="option"
+                    aria-selected={isHighlighted}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectSuggestion(sug);
+                    }}
+                  >
+                    <div className="sug-left">
+                      <span className="item-sku-code tabular-nums" title={`ID #${sug.skuCode}`}>
+                        {sug.skuCode}
+                      </span>
+                      <div className="sug-icon-pill">
+                        <CategoryIcon size={14} aria-hidden="true" />
+                      </div>
+                      <span className="sug-name">{sug.name}</span>
+                    </div>
+                    <div className="sug-right">
+                      {sug.category && (
+                        <span className="sug-tag sug-category">{sug.category}</span>
+                      )}
+                      {sug.location && !isPendingLocationName(sug.location) && (
+                        <span className="sug-tag sug-location">📍 {sug.location}</span>
+                      )}
+                      {sug.unitPrice > 0 && (
+                        <span className="sug-price tabular-nums">{formatMoney(sug.unitPrice)}</span>
+                      )}
+                      <span
+                        className={`sug-status-badge ${
+                          sug.completed ? 'is-completed' : 'is-pending'
+                        }`}
+                      >
+                        {sug.completed ? '✓ Comprado' : '⏳ En lista'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Indicador de SKU / ID para el producto */}
+        <div
+          className={`form-sku-indicator ${
+            selectedExistingItem ||
+            catalogProducts.some((p) => p.name.toLowerCase() === name.trim().toLowerCase())
+              ? 'is-reused'
+              : 'is-new'
+          }`}
+          title={
+            selectedExistingItem ||
+            catalogProducts.some((p) => p.name.toLowerCase() === name.trim().toLowerCase())
+              ? `Reutilizando ${nextSkuCode} (Producto existente en catálogo)`
+              : `Nuevo código ID consecutivo: ${nextSkuCode}`
+          }
+        >
+          <span className="form-sku-code tabular-nums">{nextSkuCode}</span>
+          <span className="form-sku-label">
+            {selectedExistingItem ||
+            catalogProducts.some((p) => p.name.toLowerCase() === name.trim().toLowerCase())
+              ? 'Existente'
+              : 'Nuevo'}
+          </span>
         </div>
 
         <div className="input-wrapper input-wrapper-qty">
@@ -930,6 +1318,20 @@ export const ListView: React.FC<ListViewProps> = ({
                     </div>
 
                     <div className="location-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="btn-card-header-add"
+                        title={`Añadir producto a ${group.location}`}
+                        aria-label={`Añadir producto a ${group.location}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleCardQuickAdd(group.location);
+                        }}
+                      >
+                        <Plus size={13} aria-hidden="true" />
+                        <span>+ Producto</span>
+                      </button>
+
                       {group.completedCount > 0 && (
                         <button
                           type="button"
@@ -975,6 +1377,217 @@ export const ListView: React.FC<ListViewProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* Vista previa de productos para comercios contraídos en cuadrícula */}
+                  {isCollapsed && group.items.length > 0 && (
+                    <div className="card-collapsed-preview">
+                      <div className="preview-items-list">
+                        {group.items.slice(0, 3).map((it) => {
+                          const CategoryIcon = getCategoryIcon(it.category);
+                          const sku = it.skuCode || formatSkuCode(it.seqNumber || 1);
+                          return (
+                            <div
+                              key={it.id}
+                              className={`preview-item-row ${it.completed ? 'completed' : ''}`}
+                              onClick={() => onToggleGroupCollapse(group.location)}
+                            >
+                              <div className="preview-left">
+                                <span className="item-sku-code tabular-nums">{sku}</span>
+                                <div className="preview-cat-icon">
+                                  <CategoryIcon size={13} aria-hidden="true" />
+                                </div>
+                                <span className="preview-name">{it.name}</span>
+                              </div>
+                              <div className="preview-right">
+                                <span className="preview-qty tabular-nums">
+                                  {formatNumber(it.quantity)} un.
+                                </span>
+                                {it.unitPrice > 0 && (
+                                  <span className="preview-price tabular-nums">
+                                    {formatMoney(it.unitPrice * it.quantity)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="preview-footer">
+                        <button
+                          type="button"
+                          className="btn-preview-expand"
+                          onClick={() => onToggleGroupCollapse(group.location)}
+                        >
+                          {group.items.length > 3
+                            ? `Ver todos (${formatNumber(group.items.length, 0)} productos)`
+                            : 'Abrir lista completa'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-preview-quick-add"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleCardQuickAdd(group.location);
+                          }}
+                        >
+                          <Plus size={13} />
+                          <span>+ Producto</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Formulario rápido desplegable dentro de la tarjeta */}
+                  {quickAddStore === group.location && (
+                    <form
+                      className="card-quick-add-box"
+                      onSubmit={(e) => handleCardQuickAddSubmit(group.location, e)}
+                    >
+                      <div className="card-quick-add-title">
+                        <PlusCircle size={14} aria-hidden="true" />
+                        <span>Añadir producto a {group.location}</span>
+                      </div>
+                      <div className="card-quick-add-row">
+                        <div className="card-quick-input-name-wrap">
+                          <Package size={14} className="card-quick-icon" aria-hidden="true" />
+                          <input
+                            type="text"
+                            className="card-quick-input-name"
+                            placeholder="Nombre del producto..."
+                            value={quickAddName}
+                            autoFocus
+                            autoComplete="off"
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setQuickAddName(val);
+                              setShowQuickAddSuggestions(true);
+                              setQuickAddHighlightedIndex(-1);
+                              if (
+                                quickAddSelectedExisting &&
+                                quickAddSelectedExisting.name.toLowerCase() !== val.trim().toLowerCase()
+                              ) {
+                                setQuickAddSelectedExisting(null);
+                              }
+                            }}
+                            onFocus={() => {
+                              if (quickAddName.trim()) setShowQuickAddSuggestions(true);
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => setShowQuickAddSuggestions(false), 200);
+                            }}
+                            onKeyDown={(e) => {
+                              if (!showQuickAddSuggestions || quickAddNameSuggestions.length === 0) return;
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setQuickAddHighlightedIndex((prev) => (prev + 1) % quickAddNameSuggestions.length);
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setQuickAddHighlightedIndex((prev) =>
+                                  prev <= 0 ? quickAddNameSuggestions.length - 1 : prev - 1
+                                );
+                              } else if (e.key === 'Enter' && quickAddHighlightedIndex >= 0) {
+                                e.preventDefault();
+                                const picked = quickAddNameSuggestions[quickAddHighlightedIndex];
+                                setQuickAddName(picked.name);
+                                setQuickAddSelectedExisting(picked);
+                                setQuickAddCat(picked.category || '');
+                                if (picked.unitPrice > 0 && !quickAddPrice) {
+                                  setQuickAddPrice(String(picked.unitPrice));
+                                }
+                                setShowQuickAddSuggestions(false);
+                              } else if (e.key === 'Escape') {
+                                setShowQuickAddSuggestions(false);
+                              }
+                            }}
+                          />
+
+                          {/* Sugerencias para quick add en tarjeta */}
+                          {showQuickAddSuggestions && quickAddNameSuggestions.length > 0 && (
+                            <div className="product-suggestions-dropdown card-sug-dropdown" role="listbox">
+                              {quickAddNameSuggestions.map((sug, sIdx) => {
+                                const CatIcon = getCategoryIcon(sug.category);
+                                const isHigh = quickAddHighlightedIndex === sIdx;
+                                return (
+                                  <div
+                                    key={sug.id}
+                                    className={`suggestion-item ${isHigh ? 'highlighted' : ''}`}
+                                    role="option"
+                                    aria-selected={isHigh}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      setQuickAddName(sug.name);
+                                      setQuickAddSelectedExisting(sug);
+                                      setQuickAddCat(sug.category || '');
+                                      if (sug.unitPrice > 0 && !quickAddPrice) {
+                                        setQuickAddPrice(String(sug.unitPrice));
+                                      }
+                                      setShowQuickAddSuggestions(false);
+                                    }}
+                                  >
+                                    <div className="sug-left">
+                                      <span className="item-sku-code tabular-nums">{sug.skuCode}</span>
+                                      <div className="sug-icon-pill">
+                                        <CatIcon size={13} aria-hidden="true" />
+                                      </div>
+                                      <span className="sug-name">{sug.name}</span>
+                                    </div>
+                                    <div className="sug-right">
+                                      {sug.unitPrice > 0 && (
+                                        <span className="sug-price tabular-nums">{formatMoney(sug.unitPrice)}</span>
+                                      )}
+                                      <span
+                                        className={`sug-status-badge ${
+                                          sug.completed ? 'is-completed' : 'is-pending'
+                                        }`}
+                                      >
+                                        {sug.completed ? '✓ Comprado' : '⏳ En lista'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="card-quick-input-qty"
+                          placeholder="Cant."
+                          value={quickAddQty}
+                          onChange={(e) => setQuickAddQty(e.target.value)}
+                        />
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="card-quick-input-price"
+                          placeholder="$ Precio"
+                          value={quickAddPrice}
+                          onChange={(e) => setQuickAddPrice(e.target.value)}
+                        />
+
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-sm btn-card-quick-submit"
+                          title="Añadir a este comercio"
+                        >
+                          <Plus size={14} aria-hidden="true" />
+                          <span>Añadir</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-card-quick-cancel"
+                          onClick={() => setQuickAddStore(null)}
+                          title="Cancelar"
+                          aria-label="Cancelar"
+                        >
+                          <X size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </form>
+                  )}
 
                   {!isCollapsed && (
                     <div className="items-list">
@@ -1218,6 +1831,16 @@ export const ListView: React.FC<ListViewProps> = ({
                           </div>
                         );
                       })}
+
+                      <button
+                        type="button"
+                        className="btn-card-bottom-add"
+                        title={`Añadir nuevo producto a ${group.location}`}
+                        onClick={() => handleToggleCardQuickAdd(group.location)}
+                      >
+                        <Plus size={14} aria-hidden="true" />
+                        <span>Agregar producto a {group.location}</span>
+                      </button>
                     </div>
                   )}
                 </div>
