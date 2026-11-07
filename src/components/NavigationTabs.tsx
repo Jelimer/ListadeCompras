@@ -1,7 +1,7 @@
 import React from 'react';
-import { ShoppingCart, BarChart2, Map, MapPin } from 'lucide-react';
+import { ShoppingCart, BarChart2, Map, MapPin, Building2 } from 'lucide-react';
 
-export type ViewType = 'list' | 'stats' | 'map';
+export type ViewType = 'list' | 'stats' | 'map' | 'manage';
 
 interface NavigationTabsProps {
   currentView: ViewType;
@@ -9,9 +9,10 @@ interface NavigationTabsProps {
   totalItemsCount?: number;
   storesCount?: number;
   receiptsCount?: number;
+  duplicateCount?: number;
 }
 
-const VIEWS_ORDER: ViewType[] = ['list', 'stats', 'map'];
+const VIEWS_ORDER: ViewType[] = ['list', 'stats', 'map', 'manage'];
 
 export const NavigationTabs: React.FC<NavigationTabsProps> = ({
   currentView,
@@ -19,6 +20,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
   totalItemsCount = 0,
   storesCount = 0,
   receiptsCount = 0,
+  duplicateCount = 0,
 }) => {
   const handleTabKeyDown = (
     e: React.KeyboardEvent<HTMLButtonElement>,
@@ -111,6 +113,34 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
             <span className="nav-tab-counter tabular-nums">{storesCount} paradas</span>
           )}
         </button>
+
+        <button
+          id="tab-manage"
+          className={`tab-btn ${currentView === 'manage' ? 'active' : ''}`}
+          role="tab"
+          aria-selected={currentView === 'manage'}
+          aria-controls="panel-manage"
+          tabIndex={currentView === 'manage' ? 0 : -1}
+          type="button"
+          data-view="manage"
+          onClick={() => onSelectView('manage')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'manage', 'tab')}
+        >
+          <Building2 size={16} aria-hidden="true" />
+          <span>Catálogo y Locales</span>
+          {duplicateCount > 0 ? (
+            <span
+              className="nav-tab-counter badge-warning tabular-nums"
+              title={`${duplicateCount} posibles duplicados detectados`}
+            >
+              ⚠️ {duplicateCount}
+            </span>
+          ) : (
+            storesCount > 0 && (
+              <span className="nav-tab-counter tabular-nums">{storesCount} locales</span>
+            )
+          )}
+        </button>
       </nav>
 
       {/* Bottom Navigation Bar Móvil (<640px) */}
@@ -161,6 +191,25 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
         >
           <MapPin size={19} aria-hidden="true" />
           <span>Ruta</span>
+        </button>
+
+        <button
+          id="bottom-tab-manage"
+          className={`bottom-nav-btn ${currentView === 'manage' ? 'active' : ''}`}
+          role="tab"
+          aria-selected={currentView === 'manage'}
+          aria-controls="panel-manage"
+          tabIndex={currentView === 'manage' ? 0 : -1}
+          type="button"
+          data-view="manage"
+          onClick={() => onSelectView('manage')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'manage', 'bottom-tab')}
+        >
+          <Building2 size={19} aria-hidden="true" />
+          <span>Gestión</span>
+          {duplicateCount > 0 && (
+            <span className="bottom-nav-dot" title="Posibles duplicados detectados" />
+          )}
         </button>
       </nav>
     </>

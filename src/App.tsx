@@ -26,6 +26,9 @@ import {
   loadStoredOrigin as refreshOrigin,
   loadStoredTripsData,
   saveStoreCoordinate,
+  removeStoreCoordinate,
+  loadStoredCoordinates,
+  normalizeStoreKey,
   getNextSequentialSku,
   ensureSequentialSkus,
   loadStoredReceipts,
@@ -35,9 +38,11 @@ import {
 import { calculateMetrics } from './utils/analytics';
 import { importJSON, importCSV } from './utils/exportImport';
 import { formatMoney } from './utils/formatters';
+import { detectDuplicateGroups, mergeTwoProducts } from './utils/duplicates';
 import { Header } from './components/Header';
 import { NavigationTabs, ViewType } from './components/NavigationTabs';
 import { ListView, isPendingLocationName } from './components/ListView';
+import { ManageView } from './components/ManageView';
 import { ModalEditStoreLocation } from './components/ModalEditStoreLocation';
 import { UndoToast } from './components/UndoToast';
 
@@ -730,6 +735,100 @@ export const App: React.FC = () => {
     setItems((prev) => [...prev]);
   };
 
+  // Conteo de grupos de duplicados para la pestaña de navegación
+  const duplicateCount = useMemo(() => detectDuplicateGroups(items).length, [items]);
+
+  // Fusión de productos duplicados
+  const handleMergeItems = (primaryId: string, duplicateId: string) => {
+    const prim = items.find((i) => i.id === primaryId);
+    const sec = items.find((i) => i.id === duplicateId);
+    if (!prim || !sec) return;
+
+    const merged = mergeTwoProducts(prim, sec);
+    setItems((prev) =>
+      prev.filter((i) => i.id !== duplicateId).map((i) => (i.id === primaryId ? merged : i))
+    );
+
+    pushUndo({
+      type: 'UPDATE_ITEM',
+      timestamp: Date.now(),
+      payload: { previousItem: { ...prim } },
+      description: `Se fusionó duplicado en ${merged.skuCode || ''} "${merged.name}"`,
+    });
+  };
+
+  // Renombrar comercio y propagar a todos sus productos y coordenadas
+  const handleRenameStore = (oldName: string, newName: string) => {
+    const cleanOld = oldName.trim();
+    const cleanNew = newName.trim();
+    if (!cleanOld || !cleanNew || cleanOld.toLowerCase() === cleanNew.toLowerCase()) return;
+
+    setItems((prev) =>
+      prev.map((i) =>
+        (i.location || '').trim().toLowerCase() === cleanOld.toLowerCase()
+          ? { ...i, location: cleanNew, updatedAt: Date.now() }
+          : i
+      )
+    );
+
+    setLocationOrder((prev) =>
+      prev.map((loc) => (loc.trim().toLowerCase() === cleanOld.toLowerCase() ? cleanNew : loc))
+    );
+
+    setCollapsedGroups((prev) =>
+      prev.map((loc) => (loc.trim().toLowerCase() === cleanOld.toLowerCase() ? cleanNew : loc))
+    );
+
+    const coords = loadStoredCoordinates();
+    const oldKey = normalizeStoreKey(cleanOld);
+    if (coords[oldKey]) {
+      saveStoreCoordinate(cleanNew, {
+        ...coords[oldKey],
+        displayName: cleanNew,
+      });
+      removeStoreCoordinate(cleanOld);
+    }
+
+    pushUndo({
+      type: 'UPDATE_ITEM',
+      timestamp: Date.now(),
+      payload: { previousItem: items[0] },
+      description: `Se renombró comercio "${cleanOld}" a "${cleanNew}"`,
+    });
+  };
+
+  // Fusionar comercio en otro existente
+  const handleMergeStores = (sourceStoreName: string, targetStoreName: string) => {
+    const cleanSrc = sourceStoreName.trim();
+    const cleanTgt = targetStoreName.trim();
+    if (!cleanSrc || !cleanTgt || cleanSrc.toLowerCase() === cleanTgt.toLowerCase()) return;
+
+    setItems((prev) =>
+      prev.map((i) =>
+        (i.location || '').trim().toLowerCase() === cleanSrc.toLowerCase()
+          ? { ...i, location: cleanTgt, updatedAt: Date.now() }
+          : i
+      )
+    );
+
+    setLocationOrder((prev) =>
+      prev.filter((loc) => loc.trim().toLowerCase() !== cleanSrc.toLowerCase())
+    );
+
+    setCollapsedGroups((prev) =>
+      prev.filter((loc) => loc.trim().toLowerCase() !== cleanSrc.toLowerCase())
+    );
+
+    removeStoreCoordinate(cleanSrc);
+
+    pushUndo({
+      type: 'UPDATE_ITEM',
+      timestamp: Date.now(),
+      payload: { previousItem: items[0] },
+      description: `Se unificó "${cleanSrc}" en "${cleanTgt}"`,
+    });
+  };
+
   return (
     <div className={`container ${currentView === 'map' ? 'map-panoramic-mode' : ''}`}>
       {/* Skip link for accessibility */}
@@ -763,6 +862,7 @@ export const App: React.FC = () => {
           totalItemsCount={items.length}
           storesCount={distinctLocations.length}
           receiptsCount={receipts.length}
+          duplicateCount={duplicateCount}
         />
       </div>
 
@@ -825,6 +925,20 @@ export const App: React.FC = () => {
               onToggleCompleted={handleToggleCompleted}
             />
           </Suspense>
+        )}
+
+        {currentView === 'manage' && (
+          <ManageView
+            items={items}
+            onUpdateItem={handleUpdateItem}
+            onDeleteItem={handleDeleteItem}
+            onAddItem={handleAddItem}
+            onMergeItems={handleMergeItems}
+            onRenameStore={handleRenameStore}
+            onMergeStores={handleMergeStores}
+            onEditStoreLocation={(store) => setEditStoreModalName(store)}
+            theme={theme}
+          />
         )}
       </main>
 
