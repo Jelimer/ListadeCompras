@@ -20,10 +20,17 @@ import {
   Tag,
   Building2,
   ExternalLink,
+  Hash,
 } from 'lucide-react';
 import { ShoppingItem, StoredStoreCoordinate } from '../types';
 import { getCategoryIcon } from '../utils/categoryIcons';
-import { formatSkuCode, loadStoredCoordinates, removeStoreCoordinate } from '../utils/storage';
+import {
+  formatSkuCode,
+  loadStoredCoordinates,
+  removeStoreCoordinate,
+  parseSeqFromSku,
+  hasSkuGaps,
+} from '../utils/storage';
 import { formatMoney, formatNumber, parseLocaleNumber } from '../utils/formatters';
 import {
   detectDuplicateGroups,
@@ -38,6 +45,7 @@ interface ManageViewProps {
   onDeleteItem: (id: string) => void;
   onAddItem: (item: Omit<ShoppingItem, 'id' | 'timestamp' | 'updatedAt'>) => void;
   onMergeItems: (primaryId: string, duplicateId: string) => void;
+  onRecompactSkus?: () => void;
   onRenameStore: (oldStoreName: string, newStoreName: string) => void;
   onMergeStores: (sourceStoreName: string, targetStoreName: string) => void;
   onEditStoreLocation: (storeName: string) => void;
@@ -50,6 +58,7 @@ export const ManageView: React.FC<ManageViewProps> = ({
   onDeleteItem,
   onAddItem,
   onMergeItems,
+  onRecompactSkus,
   onRenameStore,
   onMergeStores,
   onEditStoreLocation,
@@ -61,6 +70,24 @@ export const ManageView: React.FC<ManageViewProps> = ({
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [storeFilter, setStoreFilter] = useState('ALL');
   const [onlyDuplicates, setOnlyDuplicates] = useState(false);
+
+  // Ordenamiento de tabla (#ID, Producto, Categoría, Local, Precio)
+  type SortField = 'id' | 'name' | 'category' | 'location' | 'price';
+  type SortDirection = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>('id');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Detección de huecos en los IDs
+  const gapsDetected = useMemo(() => hasSkuGaps(items), [items]);
 
   // Edición Inline de Producto
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -161,6 +188,29 @@ export const ManageView: React.FC<ManageViewProps> = ({
       );
     });
   }, [items, productSearch, categoryFilter, storeFilter, onlyDuplicates, duplicateItemIds]);
+
+  // Productos ordenados y filtrados
+  const sortedAndFilteredItems = useMemo(() => {
+    const list = [...filteredItems];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'id') {
+        const seqA = parseSeqFromSku(a.skuCode, a.seqNumber) ?? Number.MAX_SAFE_INTEGER;
+        const seqB = parseSeqFromSku(b.skuCode, b.seqNumber) ?? Number.MAX_SAFE_INTEGER;
+        cmp = seqA - seqB;
+      } else if (sortField === 'name') {
+        cmp = (a.name || '').localeCompare(b.name || '', 'es');
+      } else if (sortField === 'category') {
+        cmp = (a.category || '').localeCompare(b.category || '', 'es');
+      } else if (sortField === 'location') {
+        cmp = (a.location || '').localeCompare(b.location || '', 'es');
+      } else if (sortField === 'price') {
+        cmp = (a.unitPrice || 0) - (b.unitPrice || 0);
+      }
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+    return list;
+  }, [filteredItems, sortField, sortDirection]);
 
   // Comercios filtrados
   const filteredStores = useMemo(() => {
@@ -424,6 +474,24 @@ export const ManageView: React.FC<ManageViewProps> = ({
                           <span className={`status-pill ${it.completed ? 'completed' : 'pending'}`}>
                             {it.completed ? 'Comprado' : 'Pendiente'}
                           </span>
+                          <div className="group-item-actions">
+                            <button
+                              type="button"
+                              className="btn-action-icon btn-delete"
+                              title={`Eliminar este producto individualmente (${it.skuCode || ''} "${it.name}")`}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `¿Seguro que deseas eliminar individualmente "${it.name}" (${it.skuCode || ''})?\n\nLos #IDs de los productos restantes se moverán automáticamente para que no queden huecos.`
+                                  )
+                                ) {
+                                  onDeleteItem(it.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -495,11 +563,35 @@ export const ManageView: React.FC<ManageViewProps> = ({
           <div className="manage-table-card">
             <div className="table-header-info">
               <span className="table-results-count">
-                Mostrando <strong>{filteredItems.length}</strong> de {items.length} productos
+                Mostrando <strong>{sortedAndFilteredItems.length}</strong> de {items.length} productos
               </span>
+
+              {onRecompactSkus && (
+                <button
+                  type="button"
+                  className={`btn btn-sm ${gapsDetected ? 'btn-warning-glow' : 'btn-secondary'} btn-recompact-skus`}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `¿Renumerar los ${items.length} productos consecutivamente (#001 a #${String(items.length).padStart(3, '0')})?\n\nEsto moverá y cerrará automáticamente cualquier hueco de IDs eliminados.`
+                      )
+                    ) {
+                      onRecompactSkus();
+                    }
+                  }}
+                  title="Cierra huecos y renumera todos los productos de 1 a N"
+                >
+                  <Hash size={14} />
+                  <span>
+                    {gapsDetected
+                      ? `⚠️ Huecos detectados: Renumerar (#001 - #${String(items.length).padStart(3, '0')})`
+                      : `Renumerar #IDs (1 a ${items.length})`}
+                  </span>
+                </button>
+              )}
             </div>
 
-            {filteredItems.length === 0 ? (
+            {sortedAndFilteredItems.length === 0 ? (
               <div className="manage-empty-state">
                 <Package size={44} className="text-muted" />
                 <h4>No se encontraron productos</h4>
@@ -508,16 +600,61 @@ export const ManageView: React.FC<ManageViewProps> = ({
             ) : (
               <div className="manage-products-table">
                 <div className="table-row table-header-row">
-                  <div className="col-sku">#ID</div>
-                  <div className="col-product">Producto</div>
-                  <div className="col-cat">Categoría</div>
-                  <div className="col-loc">Local / Negocio</div>
-                  <div className="col-pricing">Cant. / Precio</div>
+                  <div
+                    className={`col-sku sortable-col ${sortField === 'id' ? 'is-sorted' : ''}`}
+                    onClick={() => handleSort('id')}
+                    role="button"
+                    tabIndex={0}
+                    title="Ordenar por #ID numérico (clic para alternar ascendente/descendente)"
+                  >
+                    <span>#ID</span>
+                    <span className="sort-icon">{sortField === 'id' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </div>
+                  <div
+                    className={`col-product sortable-col ${sortField === 'name' ? 'is-sorted' : ''}`}
+                    onClick={() => handleSort('name')}
+                    role="button"
+                    tabIndex={0}
+                    title="Ordenar alfabéticamente por producto"
+                  >
+                    <span>Producto</span>
+                    <span className="sort-icon">{sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </div>
+                  <div
+                    className={`col-cat sortable-col ${sortField === 'category' ? 'is-sorted' : ''}`}
+                    onClick={() => handleSort('category')}
+                    role="button"
+                    tabIndex={0}
+                    title="Ordenar por categoría"
+                  >
+                    <span>Categoría</span>
+                    <span className="sort-icon">{sortField === 'category' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </div>
+                  <div
+                    className={`col-loc sortable-col ${sortField === 'location' ? 'is-sorted' : ''}`}
+                    onClick={() => handleSort('location')}
+                    role="button"
+                    tabIndex={0}
+                    title="Ordenar por local"
+                  >
+                    <span>Local / Negocio</span>
+                    <span className="sort-icon">{sortField === 'location' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </div>
+                  <div
+                    className={`col-pricing sortable-col ${sortField === 'price' ? 'is-sorted' : ''}`}
+                    onClick={() => handleSort('price')}
+                    role="button"
+                    tabIndex={0}
+                    title="Ordenar por precio"
+                  >
+                    <span>Cant. / Precio</span>
+                    <span className="sort-icon">{sortField === 'price' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </div>
                   <div className="col-status">Estado</div>
                   <div className="col-actions">Acciones</div>
                 </div>
 
-                {filteredItems.map((item) => {
+                {sortedAndFilteredItems.map((item) => {
                   const isEditing = editingItemId === item.id;
                   const CatIcon = getCategoryIcon(item.category);
                   const isDup = duplicateItemIds.has(item.id);
@@ -680,7 +817,11 @@ export const ManageView: React.FC<ManageViewProps> = ({
                           className="btn-action-icon btn-delete"
                           title="Eliminar producto"
                           onClick={() => {
-                            if (window.confirm(`¿Seguro que deseas eliminar "${item.name}"?`)) {
+                            if (
+                              window.confirm(
+                                `¿Seguro que deseas eliminar "${item.name}" (${item.skuCode || ''})?\n\nLos #IDs de los productos restantes se moverán automáticamente para que no queden huecos.`
+                              )
+                            ) {
                               onDeleteItem(item.id);
                             }
                           }}
@@ -961,6 +1102,33 @@ export const ManageView: React.FC<ManageViewProps> = ({
                           <span className="choice-badge-primary">
                             {isSelected ? '✓ Conservar ID y SKU' : 'Se unificará'}
                           </span>
+                          <button
+                            type="button"
+                            className="btn-modal-delete-item"
+                            title="Eliminar este duplicado individualmente"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (
+                                window.confirm(
+                                  `¿Eliminar individualmente el duplicado "${it.name}" (${it.skuCode || ''})?\n\nLos #IDs de los productos restantes se moverán automáticamente para que no queden huecos.`
+                                )
+                              ) {
+                                onDeleteItem(it.id);
+                                if (mergeModalGroup.items.length <= 2) {
+                                  setMergeModalGroup(null);
+                                } else {
+                                  const nextItems = mergeModalGroup.items.filter((x) => x.id !== it.id);
+                                  setMergeModalGroup({ ...mergeModalGroup, items: nextItems });
+                                  if (mergePrimaryId === it.id) {
+                                    setMergePrimaryId(nextItems[0]?.id || null);
+                                  }
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                         <div className="choice-meta tabular-nums">
                           <span>📍 {it.location || 'General'}</span>

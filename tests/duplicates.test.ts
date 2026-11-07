@@ -6,6 +6,7 @@ import {
   detectDuplicateGroups,
   mergeTwoProducts,
 } from '../src/utils/duplicates';
+import { recompactSequentialSkus, hasSkuGaps } from '../src/utils/storage';
 
 describe('Duplicates detection & merge utility suite', () => {
   it('normaliza nombres de producto eliminando acentos y signos', () => {
@@ -163,5 +164,63 @@ describe('Duplicates detection & merge utility suite', () => {
     assert.strictEqual(merged.quantity, 5); // 2 + 3
     assert.strictEqual(merged.unitPrice, 1200); // conserva precio de primary
     assert.strictEqual(merged.purchaseHistory?.length, 2); // historial combinado
+  });
+
+  it('hasSkuGaps detecta huecos cuando se elimina un ID intermedio como el #045', () => {
+    const items: ShoppingItem[] = [];
+    for (let i = 1; i <= 100; i++) {
+      if (i === 45) continue; // Simulamos que el #045 fue eliminado
+      items.push({
+        id: `item_${i}`,
+        seqNumber: i,
+        skuCode: `#${String(i).padStart(3, '0')}`,
+        name: `Producto ${i}`,
+        quantity: 1,
+        unitPrice: 100,
+        location: 'Super',
+        category: 'General',
+        completed: false,
+        timestamp: i * 100,
+      });
+    }
+
+    assert.strictEqual(items.length, 99);
+    assert.strictEqual(hasSkuGaps(items), true); // Detecta que falta el 45
+  });
+
+  it('recompactSequentialSkus cierra automáticamente el hueco y desplaza los IDs posteriores', () => {
+    const items: ShoppingItem[] = [];
+    for (let i = 1; i <= 100; i++) {
+      if (i === 45) continue; // Hueco en #045
+      items.push({
+        id: `item_${i}`,
+        seqNumber: i,
+        skuCode: `#${String(i).padStart(3, '0')}`,
+        name: `Producto ${i}`,
+        quantity: 1,
+        unitPrice: 100,
+        location: 'Super',
+        category: 'General',
+        completed: false,
+        timestamp: i * 100,
+      });
+    }
+
+    const compacted = recompactSequentialSkus(items);
+    assert.strictEqual(compacted.length, 99);
+    // El item 44 (índice 43) se mantiene en #044
+    assert.strictEqual(compacted[43].seqNumber, 44);
+    assert.strictEqual(compacted[43].skuCode, '#044');
+    // El item que antes era #046 (índice 44) ahora pasa a ser #045
+    assert.strictEqual(compacted[44].seqNumber, 45);
+    assert.strictEqual(compacted[44].skuCode, '#045');
+    assert.strictEqual(compacted[44].id, 'item_46');
+    // El último producto pasa de #100 a #099
+    assert.strictEqual(compacted[98].seqNumber, 99);
+    assert.strictEqual(compacted[98].skuCode, '#099');
+    assert.strictEqual(compacted[98].id, 'item_100');
+
+    // Ahora no deben existir huecos
+    assert.strictEqual(hasSkuGaps(compacted), false);
   });
 });

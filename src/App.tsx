@@ -31,6 +31,8 @@ import {
   normalizeStoreKey,
   getNextSequentialSku,
   ensureSequentialSkus,
+  recompactSequentialSkus,
+  hasSkuGaps,
   loadStoredReceipts,
   saveStoredReceipts,
   formatSkuCode,
@@ -246,7 +248,10 @@ export const App: React.FC = () => {
     if (index === -1) return;
     const itemToDelete = items[index];
 
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => {
+      const remaining = prev.filter((i) => i.id !== id);
+      return recompactSequentialSkus(remaining);
+    });
 
     pushUndo({
       type: 'DELETE_ITEM',
@@ -745,15 +750,29 @@ export const App: React.FC = () => {
     if (!prim || !sec) return;
 
     const merged = mergeTwoProducts(prim, sec);
-    setItems((prev) =>
-      prev.filter((i) => i.id !== duplicateId).map((i) => (i.id === primaryId ? merged : i))
-    );
+    setItems((prev) => {
+      const remaining = prev
+        .filter((i) => i.id !== duplicateId)
+        .map((i) => (i.id === primaryId ? merged : i));
+      return recompactSequentialSkus(remaining);
+    });
 
     pushUndo({
       type: 'UPDATE_ITEM',
       timestamp: Date.now(),
       payload: { previousItem: { ...prim } },
       description: `Se fusionó duplicado en ${merged.skuCode || ''} "${merged.name}"`,
+    });
+  };
+
+  // Renumerar y compactar todos los IDs consecutivamente (1 a N) sin huecos
+  const handleRecompactSkus = () => {
+    setItems((prev) => recompactSequentialSkus(prev));
+    pushUndo({
+      type: 'UPDATE_ITEM',
+      timestamp: Date.now(),
+      payload: { previousItem: items[0] },
+      description: `Se renumeraron los #IDs consecutivamente (1 a ${items.length})`,
     });
   };
 
@@ -934,6 +953,7 @@ export const App: React.FC = () => {
             onDeleteItem={handleDeleteItem}
             onAddItem={handleAddItem}
             onMergeItems={handleMergeItems}
+            onRecompactSkus={handleRecompactSkus}
             onRenameStore={handleRenameStore}
             onMergeStores={handleMergeStores}
             onEditStoreLocation={(store) => setEditStoreModalName(store)}

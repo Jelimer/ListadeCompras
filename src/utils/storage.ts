@@ -135,6 +135,60 @@ export function ensureSequentialSkus(items: ShoppingItem[]): ShoppingItem[] {
   return result;
 }
 
+/**
+ * Compacta y renumera estrictamente los items de forma consecutiva (#001, #002... #N).
+ * Elimina huecos dejados por productos eliminados o fusionados preservando el orden relativo actual.
+ */
+export function recompactSequentialSkus(items: ShoppingItem[]): ShoppingItem[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  // Mapeamos preservando la información para ordenar por secuencia actual o fecha
+  const itemsWithMeta = items.map((item, originalIndex) => {
+    const seq = parseSeqFromSku(item.skuCode, item.seqNumber);
+    return { item, seq, originalIndex };
+  });
+
+  itemsWithMeta.sort((a, b) => {
+    if (a.seq !== null && b.seq !== null) {
+      if (a.seq !== b.seq) return a.seq - b.seq;
+    } else if (a.seq !== null) {
+      return -1;
+    } else if (b.seq !== null) {
+      return 1;
+    }
+    const timeA = Number(a.item.timestamp) || 0;
+    const timeB = Number(b.item.timestamp) || 0;
+    if (timeA !== timeB) return timeA - timeB;
+    return a.originalIndex - b.originalIndex;
+  });
+
+  return itemsWithMeta.map((entry, index) => {
+    const nextSeq = index + 1;
+    return {
+      ...entry.item,
+      seqNumber: nextSeq,
+      skuCode: formatSkuCode(nextSeq),
+    };
+  });
+}
+
+/**
+ * Detecta si existen huecos, duplicados o faltantes en la numeración de los #IDs.
+ */
+export function hasSkuGaps(items: ShoppingItem[]): boolean {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  let maxSeq = 0;
+  const seen = new Set<number>();
+  for (const it of items) {
+    const s = parseSeqFromSku(it.skuCode, it.seqNumber);
+    if (s === null) return true;
+    if (seen.has(s)) return true;
+    seen.add(s);
+    if (s > maxSeq) maxSeq = s;
+  }
+  return maxSeq !== items.length;
+}
+
 export function getNextSequentialSku(items: ShoppingItem[]): { seqNumber: number; skuCode: string } {
   let maxSeq = 0;
   for (const item of items) {
