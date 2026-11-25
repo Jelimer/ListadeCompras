@@ -48,7 +48,9 @@ import {
   TodayRouteSidePanel,
   getTodayFullDate,
   getTodayDayMonth,
+  getTomorrowFullDate,
   isItemScheduledForToday,
+  isItemScheduledForTomorrow,
   formatShortDayMonth,
 } from './TodayRouteSidePanel';
 
@@ -572,11 +574,19 @@ export const ListView: React.FC<ListViewProps> = ({
     [items]
   );
 
-  // Productos programados para comprar HOY
+  // Productos programados para comprar HOY y MAÑANA
   const todayScheduledItems = useMemo(
     () => items.filter((i) => isItemScheduledForToday(i)),
     [items]
   );
+
+  const tomorrowScheduledItems = useMemo(
+    () => items.filter((i) => isItemScheduledForTomorrow(i)),
+    [items]
+  );
+
+  const hasRoutePanelItems =
+    todayScheduledItems.length > 0 || tomorrowScheduledItems.length > 0;
 
   const handleToggleHideEmptyStores = (checked: boolean) => {
     setHideEmptyStores(checked);
@@ -1851,10 +1861,10 @@ export const ListView: React.FC<ListViewProps> = ({
           </section>
         )}
 
-        {/* Layout dividido cuando hay productos marcados para HOY */}
+        {/* Layout dividido cuando hay productos marcados para HOY o Mañana */}
         <div
           className={`list-workspace-split ${
-            todayScheduledItems.length > 0 ? 'has-today-route' : ''
+            hasRoutePanelItems ? 'has-today-route' : ''
           }`}
         >
           <div className="list-workspace-main">
@@ -2503,13 +2513,20 @@ export const ListView: React.FC<ListViewProps> = ({
             </div>
           </div>
 
-          {todayScheduledItems.length > 0 && (
+          {hasRoutePanelItems && (
             <TodayRouteSidePanel
               todayItems={todayScheduledItems}
+              tomorrowItems={tomorrowScheduledItems}
               origin={origin}
               coordsVersion={coordsVersion}
               onToggleCompleted={onToggleCompleted}
               onClearTodayDate={(id) => onUpdateItem(id, { plannedDate: undefined })}
+              onMoveToToday={(id) =>
+                onUpdateItem(id, { plannedDate: 'HOY', timestamp: Date.now() })
+              }
+              onMoveToTomorrow={(id) =>
+                onUpdateItem(id, { plannedDate: getTomorrowFullDate(), timestamp: Date.now() })
+              }
               onEditStoreLocation={onEditStoreLocation}
             />
           )}

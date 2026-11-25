@@ -161,6 +161,61 @@ export interface RankedProductItem {
   shareOfTotal: number;
 }
 
+export interface ParetoBreakdownItem {
+  name: string;
+  totalAmount: number;
+  spentAmount: number;
+  pendingAmount: number;
+  productCount: number;
+  sharePercent: number;
+  cumulativePercent: number;
+  paretoClass: 'A' | 'B' | 'C';
+}
+
+export interface TicketDatePoint {
+  date: string;
+  sortTimestamp: number;
+  totalAmount: number;
+  itemCount: number;
+  unitCount: number;
+  receiptCount: number;
+  stores: string[];
+}
+
+export interface ProductPriceVariationItem {
+  id: string;
+  skuCode: string;
+  name: string;
+  category: string;
+  currentStore: string;
+  currentPrice: number;
+  previousPrice: number;
+  previousDate: string;
+  previousStore: string;
+  minHistoricalPrice: number;
+  maxHistoricalPrice: number;
+  deltaAmount: number;
+  deltaPercent: number;
+  observationsCount: number;
+}
+
+export interface StoreEfficiencyItem {
+  name: string;
+  totalAmount: number;
+  spentAmount: number;
+  pendingAmount: number;
+  productCount: number;
+  completedProductCount: number;
+  pendingProductCount: number;
+  totalUnits: number;
+  avgCostPerProduct: number;
+  avgCostPerUnit: number;
+  shareOfTotalSpend: number;
+  cumulativeShare: number;
+  paretoClass: 'A' | 'B' | 'C';
+  completionRate: number;
+}
+
 export interface DetailedAnalytics extends FinancialMetrics {
   spentPercentageOfBudget: number;
   pendingPercentageOfBudget: number;
@@ -181,6 +236,14 @@ export interface DetailedAnalytics extends FinancialMetrics {
   storeBreakdown: GroupBreakdownItem[];
   categoryBreakdown: GroupBreakdownItem[];
   topProducts: RankedProductItem[];
+  paretoStores: ParetoBreakdownItem[];
+  paretoCategories: ParetoBreakdownItem[];
+  paretoClassAStoreCount: number;
+  paretoClassACategoryCount: number;
+  storeEfficiencyMatrix: StoreEfficiencyItem[];
+  ticketHistorySeries: TicketDatePoint[];
+  productPriceVariations: ProductPriceVariationItem[];
+  avgInflationPercent: number;
 }
 
 export type UndoAction =
