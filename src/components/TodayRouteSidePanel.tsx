@@ -8,8 +8,6 @@ import {
   ExternalLink,
   ChevronRight,
   ChevronLeft,
-  CheckCircle2,
-  Clock,
   Route,
   X,
   Compass,
@@ -72,6 +70,7 @@ export function formatShortDayMonth(dateStr?: string): string {
 interface TodayRouteSidePanelProps {
   todayItems: ShoppingItem[];
   origin?: RouteOrigin;
+  coordsVersion?: number;
   onToggleCompleted: (id: string) => void;
   onClearTodayDate: (id: string) => void;
   onEditStoreLocation?: (storeName: string) => void;
@@ -80,6 +79,7 @@ interface TodayRouteSidePanelProps {
 export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
   todayItems,
   origin: propOrigin,
+  coordsVersion = 0,
   onToggleCompleted,
   onClearTodayDate,
   onEditStoreLocation,
@@ -96,7 +96,7 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
 
   const routeResult = useMemo(() => {
     return calculateOptimalRoute(todayItems, activeOrigin);
-  }, [todayItems, activeOrigin]);
+  }, [todayItems, activeOrigin, coordsVersion]);
 
   // Fetch OSRM street geometry whenever today's route stops change
   useEffect(() => {
@@ -206,7 +206,7 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
             <ul class="map-popup-list">${itemsHtml}</ul>
             ${
               stop.estimatedTotal > 0
-                ? `<div class="map-popup-footer tabular-nums">Subtotal HOY: $${formatMoney(
+                ? `<div class="map-popup-footer tabular-nums">Subtotal HOY: ${formatMoney(
                     stop.estimatedTotal
                   )}</div>`
                 : ''
@@ -246,7 +246,7 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
         }
       }
       if (boundsPoints.length > 1) {
-        map.fitBounds(L.latLngBounds(boundsPoints), { padding: [32, 32], maxZoom: 16 });
+        map.fitBounds(L.latLngBounds(boundsPoints), { padding: [36, 36], maxZoom: 16 });
       } else {
         map.setView([activeOrigin.lat, activeOrigin.lng], 14);
       }
@@ -272,7 +272,7 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
       ...routeResult.orderedStops.map((s) => [s.lat, s.lng] as [number, number]),
     ];
     if (pts.length > 1) {
-      map.fitBounds(L.latLngBounds(pts), { padding: [32, 32], maxZoom: 16 });
+      map.fitBounds(L.latLngBounds(pts), { padding: [36, 36], maxZoom: 16 });
     } else {
       map.setView([activeOrigin.lat, activeOrigin.lng], 14);
     }
@@ -296,7 +296,7 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
 
   if (isMinimized) {
     return (
-      <aside className="today-side-panel is-minimized" aria-label="Panel de Ruta de HOY contraído">
+      <aside className="today-side-panel-collapsed" aria-label="Panel de Ruta de HOY contraído">
         <button
           type="button"
           className="btn-expand-today-panel"
@@ -304,13 +304,10 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
           title="Desplegar mapa y lista de compras de HOY"
         >
           <ChevronLeft size={18} />
-          <div className="minimized-vertical-text">
-            <Calendar size={15} />
-            <span>RUTA DE HOY ({todayDM})</span>
-            <span className="minimized-badge tabular-nums">
-              {routeResult.orderedStops.length} lugares · {todayItems.length} prod.
-            </span>
-          </div>
+          <span className="today-collapsed-badge tabular-nums">
+            {routeResult.orderedStops.length}
+          </span>
+          <span>RUTA DE HOY ({todayDM})</span>
         </button>
       </aside>
     );
@@ -318,70 +315,73 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
 
   return (
     <aside className="today-side-panel" aria-label="Mapa y lugares para comprar HOY">
-      {/* Cabecera del Panel de HOY */}
+      {/* Cabecera Ejecutiva del Panel de HOY */}
       <div className="today-panel-header">
         <div className="today-panel-title-row">
-          <div className="today-title-left">
-            <span className="today-live-badge">HOY · {todayDM}</span>
-            <h3 className="today-panel-heading">Lugares a visitar hoy</h3>
+          <div className="today-panel-badge-pulse">
+            <Calendar size={16} />
           </div>
-          <button
-            type="button"
-            className="btn-minimize-today-panel"
-            onClick={() => setIsMinimized(true)}
-            title="Contraer panel lateral de HOY"
-            aria-label="Contraer panel lateral de HOY"
-          >
-            <ChevronRight size={16} />
-          </button>
+          <div>
+            <h3 className="today-panel-title">
+              <span>Lugares a visitar hoy</span>
+              <span className="today-panel-date-tag tabular-nums">HOY · {todayDM}</span>
+            </h3>
+            <p className="today-panel-subtitle">
+              Ruta automática de locales con productos marcados para hoy
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          className="btn-collapse-today-panel"
+          onClick={() => setIsMinimized(true)}
+          title="Contraer panel lateral de HOY"
+          aria-label="Contraer panel lateral de HOY"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
 
-        <div className="today-panel-kpis tabular-nums">
-          <span className="today-kpi-item">
-            <Store size={13} />
-            <strong>{routeResult.orderedStops.length}</strong>{' '}
-            {routeResult.orderedStops.length === 1 ? 'lugar' : 'lugares'}
+      {/* Cinta de KPIs debajo de la cabecera oscura */}
+      <div className="today-panel-kpis tabular-nums">
+        <div className="today-kpi-item">
+          <span className="today-kpi-label">Paradas HOY</span>
+          <span className="today-kpi-val">
+            {routeResult.orderedStops.length}{' '}
+            {routeResult.orderedStops.length === 1 ? 'local' : 'locales'} ({todayItems.length} prod.)
           </span>
-          <span className="today-kpi-sep">·</span>
-          <span className="today-kpi-item">
-            <strong>{todayItems.length}</strong>{' '}
-            {todayItems.length === 1 ? 'producto' : 'productos'}
+        </div>
+        <div className="today-kpi-item">
+          <span className="today-kpi-label">Recorrido Est.</span>
+          <span className="today-kpi-val">
+            {totalDistanceKm > 0
+              ? `${formatNumber(totalDistanceKm, 1)} km (~${totalMinutes} min)`
+              : 'Directo'}
           </span>
-          {totalDistanceKm > 0 && (
-            <>
-              <span className="today-kpi-sep">·</span>
-              <span className="today-kpi-item">
-                <Route size={13} />
-                {formatNumber(totalDistanceKm, 1)} km (~{totalMinutes} min)
-              </span>
-            </>
-          )}
-          {totalTodayAmount > 0 && (
-            <>
-              <span className="today-kpi-sep">·</span>
-              <span className="today-kpi-item today-kpi-money">
-                ${formatMoney(totalTodayAmount)}
-              </span>
-            </>
-          )}
+        </div>
+        <div className="today-kpi-item">
+          <span className="today-kpi-label">Presupuesto HOY</span>
+          <span className="today-kpi-val today-kpi-money">
+            {formatMoney(totalTodayAmount)}
+          </span>
         </div>
       </div>
 
       {/* ARRIBA: Mapa Interactivo de los Lugares de HOY */}
-      <div className="today-map-box">
+      <div className="today-map-section">
         <div
           ref={mapContainerRef}
-          className="today-leaflet-canvas map-view-container"
+          className="today-map-box"
           aria-label="Mapa de lugares para ir hoy"
         />
-        <div className="today-map-overlay-actions">
+        <div className="today-map-overlay-controls">
           <button
             type="button"
-            className="btn-today-map-fit"
+            className="btn-today-map-tool"
             onClick={handleFitRoute}
             title="Encuadrar todos los lugares de HOY"
           >
-            <Compass size={14} />
+            <Compass size={13} />
             <span>Encuadrar</span>
           </button>
           {routeResult.googleMapsUrl && (
@@ -389,12 +389,12 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
               href={routeResult.googleMapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-today-gmaps-link"
+              className="btn-today-map-tool btn-today-gmaps"
               title="Abrir recorrido de HOY en Google Maps"
             >
-              <Navigation size={13} />
-              <span>Abrir en Google Maps</span>
-              <ExternalLink size={12} />
+              <Navigation size={12} />
+              <span>Google Maps</span>
+              <ExternalLink size={11} />
             </a>
           )}
         </div>
@@ -402,8 +402,12 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
 
       {/* ABAJO: Lista de Paradas y Productos de HOY */}
       <div className="today-stops-list-section">
-        <div className="today-stops-subheader">
-          <span>Itinerario y productos de HOY ({routeResult.orderedStops.length} paradas)</span>
+        <div className="today-stops-list-header">
+          <span>Itinerario y compras de HOY</span>
+          <span className="today-stops-count tabular-nums">
+            {routeResult.orderedStops.length}{' '}
+            {routeResult.orderedStops.length === 1 ? 'parada' : 'paradas'}
+          </span>
         </div>
 
         <div className="today-stops-scroll">
@@ -422,7 +426,7 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
               <div
                 key={stop.storeName}
                 className={`today-stop-card ${isFocused ? 'is-focused' : ''} ${
-                  stop.pendingItems.length === 0 ? 'all-completed' : ''
+                  stop.pendingItems.length === 0 ? 'is-stop-done' : ''
                 }`}
               >
                 <div
@@ -436,66 +440,67 @@ export const TodayRouteSidePanel: React.FC<TodayRouteSidePanelProps> = ({
                   tabIndex={0}
                   title="Clic para enfocar este comercio en el mapa superior"
                 >
-                  <span className="today-stop-number tabular-nums">{stepNum}</span>
-                  <div className="today-stop-info">
-                    <div className="today-stop-title-line">
-                      <strong className="today-stop-name">{stop.storeName}</strong>
-                      {stop.estimatedTotal > 0 && (
-                        <span className="today-stop-subtotal tabular-nums">
-                          ${formatMoney(stop.estimatedTotal)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="today-stop-meta tabular-nums">
-                      {legDist > 0 && (
-                        <span>
-                          +{formatNumber(legDist, 1)} km ({legMin} min)
-                        </span>
-                      )}
-                      {onEditStoreLocation && (
-                        <button
-                          type="button"
-                          className="btn-today-stop-gps"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditStoreLocation(stop.storeName);
-                          }}
-                          title={`Ajustar dirección o coordenadas de ${stop.storeName}`}
-                        >
-                          <MapPin size={11} />
-                          <span>Ubicación</span>
-                        </button>
-                      )}
+                  <div className="today-stop-title-group">
+                    <span className="today-stop-index tabular-nums">{stepNum}</span>
+                    <div className="today-stop-text">
+                      <div className="today-stop-name-row">
+                        <span className="today-stop-name">{stop.storeName}</span>
+                        {stop.estimatedTotal > 0 && (
+                          <span className="today-stop-subtotal tabular-nums">
+                            {formatMoney(stop.estimatedTotal)}
+                          </span>
+                        )}
+                      </div>
+                      <span className="today-stop-address" title={stop.address}>
+                        {stop.address}
+                        {legDist > 0 ? ` · +${formatNumber(legDist, 1)} km (${legMin} min)` : ''}
+                      </span>
                     </div>
                   </div>
+
+                  {onEditStoreLocation && (
+                    <button
+                      type="button"
+                      className="btn-today-edit-pin"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditStoreLocation(stop.storeName);
+                      }}
+                      title={`Ajustar dirección o coordenadas de ${stop.storeName}`}
+                    >
+                      <MapPin size={13} />
+                    </button>
+                  )}
                 </div>
 
-                <ul className="today-stop-products">
+                <ul className="today-stop-items">
                   {allStopItems.map((it) => {
                     const sku = it.skuCode || formatSkuCode(it.seqNumber || 1);
                     const lineTotal = (Number(it.unitPrice) || 0) * (Number(it.quantity) || 1);
                     return (
                       <li
                         key={it.id}
-                        className={`today-stop-product-row ${it.completed ? 'completed' : ''}`}
+                        className={`today-stop-item-row ${it.completed ? 'completed' : ''}`}
                       >
-                        <label className="today-prod-check-label">
+                        <label className="today-item-check-label">
                           <input
                             type="checkbox"
                             checked={it.completed}
                             onChange={() => onToggleCompleted(it.id)}
                           />
-                          <span className="item-sku-code tabular-nums">{sku}</span>
-                          <span className="today-prod-name">{it.name}</span>
+                          <span className="today-item-sku tabular-nums">{sku}</span>
+                          <span className="today-item-name" title={it.name}>
+                            {it.name}
+                          </span>
                         </label>
-                        <div className="today-prod-right tabular-nums">
-                          <span className="today-prod-qty">{formatNumber(it.quantity)} un.</span>
+                        <div className="today-item-meta tabular-nums">
+                          <span className="today-item-qty">{formatNumber(it.quantity)} un.</span>
                           {lineTotal > 0 && (
-                            <span className="today-prod-price">${formatMoney(lineTotal)}</span>
+                            <span className="today-stop-subtotal">{formatMoney(lineTotal)}</span>
                           )}
                           <button
                             type="button"
-                            className="btn-remove-from-today"
+                            className="btn-today-unschedule"
                             title="Quitar de las compras de HOY"
                             onClick={() => onClearTodayDate(it.id)}
                           >

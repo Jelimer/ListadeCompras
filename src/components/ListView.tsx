@@ -27,6 +27,7 @@ import {
   RotateCcw,
   Calendar,
   ArrowUpDown,
+  Navigation,
 } from 'lucide-react';
 import { ShoppingItem, ListSortOrder, RouteOrigin } from '../types';
 import { getCategoryIcon } from '../utils/categoryIcons';
@@ -35,9 +36,13 @@ import {
   saveStoredHideEmptyStores,
   loadStoredListSortOrder,
   saveStoredListSortOrder,
+  loadStoredCoordinates,
+  saveStoreCoordinate,
+  normalizeStoreKey,
   formatSkuCode,
   getNextSequentialSku,
 } from '../utils/storage';
+import { geocodeAddress } from '../utils/mapRoute';
 import { formatMoney, formatNumber, parseLocaleNumber } from '../utils/formatters';
 import {
   TodayRouteSidePanel,
@@ -235,21 +240,254 @@ const ProductPurchaseDateSelect: React.FC<ProductPurchaseDateSelectProps> = ({
   );
 };
 
+interface ProductStoreSelectProps {
+  item: ShoppingItem;
+  stores: string[];
+  onChangeStore: (newStore: string) => void;
+  compact?: boolean;
+}
+
+const ProductStoreSelect: React.FC<ProductStoreSelectProps> = ({
+  item,
+  stores,
+  onChangeStore,
+  compact = false,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const currentStore = (item.location && item.location.trim()) || 'General';
+
+  const filteredStores = useMemo(() => {
+    const q = filterText
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    const allCandidates = Array.from(new Set([...stores, 'Por averiguar']));
+    if (!q) return allCandidates;
+
+    return allCandidates
+      .filter((s) =>
+        s
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .includes(q)
+      )
+      .sort((a, b) => {
+        const na = a.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const nb = b.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const sa = na.startsWith(q);
+        const sb = nb.startsWith(q);
+        if (sa && !sb) return -1;
+        if (!sa && sb) return 1;
+        return na.localeCompare(nb, 'es');
+      });
+  }, [stores, filterText]);
+
+  const trimmedQuery = filterText.trim();
+  const exactMatchExists = useMemo(() => {
+    if (!trimmedQuery) return true;
+    const normQ = normalizeLocKey(trimmedQuery);
+    return (
+      stores.some((s) => normalizeLocKey(s) === normQ) ||
+      normQ === normalizeLocKey('Por averiguar')
+    );
+  }, [stores, trimmedQuery]);
+
+  const handleOpenToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isOpen) {
+      setIsOpen(false);
+      setFilterText('');
+    } else {
+      setIsOpen(true);
+      setFilterText('');
+      setHighlightIdx(0);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 20);
+    }
+  };
+
+  const handlePickStore = (targetStore: string) => {
+    const clean = targetStore.trim();
+    setIsOpen(false);
+    setFilterText('');
+    if (clean && normalizeLocKey(clean) !== normalizeLocKey(currentStore)) {
+      onChangeStore(clean);
+    }
+  };
+
+  return (
+    <div
+      ref={wrapRef}
+      className={`product-store-select-wrap ${compact ? 'is-compact' : ''} ${
+        isOpen ? 'is-open' : ''
+      }`}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={(e) => {
+        if (wrapRef.current && !wrapRef.current.contains(e.relatedTarget as Node)) {
+          setIsOpen(false);
+          setFilterText('');
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="product-store-select-btn"
+        onClick={handleOpenToggle}
+        title={`Cambiar lugar de "${item.name}" (actual: ${currentStore})`}
+        aria-label={`Cambiar lugar de ${item.name}`}
+        aria-expanded={isOpen}
+      >
+        <MapPin size={compact ? 11 : 12} className="product-store-select-icon" aria-hidden="true" />
+        <span className="product-store-select-label">{currentStore}</span>
+        <ChevronDown size={compact ? 11 : 12} className="product-store-select-caret" aria-hidden="true" />
+      </button>
+
+      {isOpen && (
+        <div className="product-store-popover" role="dialog" aria-label="Cambiar comercio">
+          <div className="product-store-search-box">
+            <Search size={12} className="product-store-search-icon" aria-hidden="true" />
+            <input
+              ref={inputRef}
+              type="text"
+              className="product-store-search-input"
+              placeholder="Buscar o nuevo local..."
+              value={filterText}
+              onChange={(e) => {
+                setFilterText(e.target.value);
+                setHighlightIdx(0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setIsOpen(false);
+                  setFilterText('');
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  const maxLen = filteredStores.length + (!exactMatchExists ? 1 : 0);
+                  if (maxLen > 0) setHighlightIdx((prev) => (prev + 1) % maxLen);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  const maxLen = filteredStores.length + (!exactMatchExists ? 1 : 0);
+                  if (maxLen > 0) setHighlightIdx((prev) => (prev <= 0 ? maxLen - 1 : prev - 1));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (filteredStores.length > 0 && highlightIdx < filteredStores.length) {
+                    handlePickStore(filteredStores[highlightIdx]);
+                  } else if (trimmedQuery) {
+                    handlePickStore(trimmedQuery);
+                  }
+                }
+              }}
+            />
+          </div>
+
+          <div className="product-store-options-list" role="listbox">
+            {filteredStores.map((st, idx) => {
+              const isCurrent = normalizeLocKey(st) === normalizeLocKey(currentStore);
+              const isHighlighted = highlightIdx === idx;
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  role="option"
+                  aria-selected={isCurrent}
+                  className={`product-store-option ${isCurrent ? 'is-current' : ''} ${
+                    isHighlighted ? 'is-highlighted' : ''
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handlePickStore(st);
+                  }}
+                >
+                  <MapPin size={12} className="opt-pin" aria-hidden="true" />
+                  <span className="opt-name">{st}</span>
+                  {isCurrent && <Check size={12} className="opt-check" aria-hidden="true" />}
+                </button>
+              );
+            })}
+
+            {!exactMatchExists && trimmedQuery && (
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                className={`product-store-option is-create-new ${
+                  highlightIdx === filteredStores.length ? 'is-highlighted' : ''
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handlePickStore(trimmedQuery);
+                }}
+              >
+                <Plus size={12} className="opt-pin" aria-hidden="true" />
+                <span className="opt-name">Enviar a "{trimmedQuery}"</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+function getSavedAddressForStore(locName: string): string {
+  const clean = (locName || '').trim();
+  if (!clean || isPendingLocationName(clean) || clean.toLowerCase() === 'general') {
+    return '';
+  }
+  const coordsMap = loadStoredCoordinates();
+  const key = normalizeStoreKey(clean);
+  const entry = coordsMap[key] || coordsMap[clean.toLowerCase()];
+  return entry?.address || '';
+}
+
+function getEffectiveItemActivityTime(item: ShoppingItem): number {
+  return Math.max(Number(item.timestamp || 0), Number(item.updatedAt || 0));
+}
+
 function compareItemsByLoadDateDesc(a: ShoppingItem, b: ShoppingItem): number {
-  const timeA = Number(a.timestamp || 0);
-  const timeB = Number(b.timestamp || 0);
+  const todayA = !a.completed && isItemScheduledForToday(a);
+  const todayB = !b.completed && isItemScheduledForToday(b);
+
+  // Priorizar siempre en la parte superior los productos marcados para HOY o recién cargados
+  const actA = getEffectiveItemActivityTime(a);
+  const actB = getEffectiveItemActivityTime(b);
+
+  // Si uno está marcado para HOY y el otro no, y el otro no fue cargado después de marcar HOY
+  if (todayA !== todayB) {
+    // Si ambos son recientes o uno es HOY sobre catálogo antiguo, HOY va arriba
+    // pero si el usuario acaba de cargar un producto nuevo hace segundos (act > actHoy),
+    // respetamos el orden cronológico de la acción más reciente entre los activos
+    const now = Date.now();
+    const aIsRecentSession = now - actA < 1000 * 60 * 60 * 12; // últimas 12h
+    const bIsRecentSession = now - actB < 1000 * 60 * 60 * 12;
+
+    if (todayA && !bIsRecentSession) return -1;
+    if (todayB && !aIsRecentSession) return 1;
+  }
+
+  // Comparar por timestamp/updatedAt real de carga o modificación
+  if (Math.abs(actA - actB) > 500) {
+    return actB - actA;
+  }
+
+  if (todayA !== todayB) {
+    return todayA ? -1 : 1;
+  }
+
   const seqA = Number(a.seqNumber || 0);
   const seqB = Number(b.seqNumber || 0);
-
-  // Si los timestamps difieren por más de 2 segundos, priorizar timestamp real de carga
-  if (Math.abs(timeA - timeB) > 2000) {
-    return timeB - timeA;
-  }
   if (seqA !== seqB) {
     return seqB - seqA;
-  }
-  if (timeA !== timeB) {
-    return timeB - timeA;
   }
   return a.name.localeCompare(b.name, 'es');
 }
@@ -281,6 +519,9 @@ export const ListView: React.FC<ListViewProps> = ({
   const [quantity, setQuantity] = useState('1');
   const [unitPrice, setUnitPrice] = useState('');
   const [location, setLocation] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
+  const [isAddressAutoFilled, setIsAddressAutoFilled] = useState(false);
+  const [coordsVersion, setCoordsVersion] = useState(0);
   const [category, setCategory] = useState('');
 
   // Autocomplete de productos para reutilizar ID / SKU existente
@@ -468,6 +709,102 @@ export const ListView: React.FC<ListViewProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
   }, [items]);
 
+  const handleLocationInputChange = (nextLoc: string) => {
+    setLocation(nextLoc);
+    const savedAddr = getSavedAddressForStore(nextLoc);
+    if (savedAddr) {
+      setStoreAddress(savedAddr);
+      setIsAddressAutoFilled(true);
+    } else if (isAddressAutoFilled) {
+      setStoreAddress('');
+      setIsAddressAutoFilled(false);
+    }
+  };
+
+  // Mueve un comercio al primer lugar de la pantalla y lo despliega si estaba contraído
+  const promoteStoreToTop = (storeName: string) => {
+    const clean = (storeName || '').trim();
+    if (!clean || isPendingLocationName(clean)) return;
+
+    // Si estaba en orden antiguo o manual, asegurar que se vea arriba
+    if (sortOrder === 'oldest') {
+      handleSortOrderChange('newest');
+    }
+
+    const normTarget = normalizeLocKey(clean);
+    const filteredOrder = locationOrder.filter((l) => normalizeLocKey(l) !== normTarget);
+    onSetLocationOrder([clean, ...filteredOrder]);
+
+    // Si el comercio estaba contraído, expandirlo para que el usuario vea el producto arriba
+    if (collapsedGroups.some((g) => normalizeLocKey(g) === normTarget)) {
+      onSetCollapsedGroups(collapsedGroups.filter((g) => normalizeLocKey(g) !== normTarget));
+    }
+  };
+
+  const persistAndGeocodeStoreAddress = (storeName: string, rawAddress: string) => {
+    const cleanStore = (storeName || '').trim();
+    const cleanAddr = (rawAddress || '').trim();
+    if (!cleanStore || isPendingLocationName(cleanStore) || !cleanAddr) return;
+
+    const currentSaved = getSavedAddressForStore(cleanStore);
+    const existingMap = loadStoredCoordinates();
+    const key = normalizeStoreKey(cleanStore);
+    const existingEntry = existingMap[key];
+
+    // Guardar de inmediato la dirección textual para que ya figure vinculada al local
+    saveStoreCoordinate(cleanStore, {
+      lat: existingEntry?.lat ?? origin?.lat ?? -27.469213,
+      lng: existingEntry?.lng ?? origin?.lng ?? -58.830635,
+      address: cleanAddr,
+      displayName: cleanStore,
+      source: 'manual',
+    });
+    setCoordsVersion((v) => v + 1);
+
+    // Si la dirección es nueva o cambió, geocodificar coordenadas exactas en segundo plano
+    if (cleanAddr.toLowerCase() !== currentSaved.toLowerCase() || !existingEntry) {
+      geocodeAddress(cleanAddr).then((resolved) => {
+        if (resolved && resolved.lat && resolved.lng) {
+          saveStoreCoordinate(cleanStore, {
+            lat: resolved.lat,
+            lng: resolved.lng,
+            address: cleanAddr,
+            displayName: cleanStore,
+            source: 'manual',
+          });
+          setCoordsVersion((v) => v + 1);
+        }
+      });
+    }
+  };
+
+  const handleProductDateChange = (item: ShoppingItem, newDate: string) => {
+    const now = Date.now();
+    const tempItem: ShoppingItem = { ...item, plannedDate: newDate || undefined };
+    const markedToday = isItemScheduledForToday(tempItem);
+
+    onUpdateItem(item.id, {
+      plannedDate: newDate || undefined,
+      ...(markedToday ? { timestamp: now } : {}),
+    });
+
+    if (markedToday && item.location) {
+      promoteStoreToTop(item.location);
+    }
+  };
+
+  const handleMoveItemToStore = (item: ShoppingItem, targetStore: string) => {
+    const cleanStore = targetStore.trim() || 'General';
+    const now = Date.now();
+    onUpdateItem(item.id, {
+      location: cleanStore,
+      timestamp: now,
+    });
+    if (!isPendingLocationName(cleanStore)) {
+      promoteStoreToTop(cleanStore);
+    }
+  };
+
   const handleSelectSuggestion = (sug: CatalogProductSuggestion) => {
     setName(sug.name);
     setSelectedExistingItem(sug);
@@ -477,7 +814,8 @@ export const ListView: React.FC<ListViewProps> = ({
       setCategory(sug.category || 'General');
     }
     if (!location.trim() || location === 'General' || isPendingLocationName(location)) {
-      setLocation(sug.location || 'General');
+      const nextLoc = sug.location || 'General';
+      handleLocationInputChange(nextLoc);
     }
     if ((!unitPrice.trim() || unitPrice === '0') && sug.unitPrice > 0) {
       setUnitPrice(String(sug.unitPrice));
@@ -495,6 +833,11 @@ export const ListView: React.FC<ListViewProps> = ({
     const finalPrice = parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : 0;
     const finalLoc = location.trim() || 'General';
     const finalCat = category.trim() || 'General';
+    const now = Date.now();
+
+    if (storeAddress.trim() && !isPendingLocationName(finalLoc)) {
+      persistAndGeocodeStoreAddress(finalLoc, storeAddress.trim());
+    }
 
     // Verificar si coincide con un producto existente en catálogo (reutilización de ID)
     const existing =
@@ -504,25 +847,33 @@ export const ListView: React.FC<ListViewProps> = ({
     if (existing) {
       const targetInList = items.find((it) => it.id === existing.id);
       if (targetInList) {
+        const resolvedLoc =
+          finalLoc !== 'General' ? finalLoc : targetInList.location || 'General';
         if (targetInList.completed) {
-          // Reactivar producto previamente comprado preservando su ID y SKU
+          // Reactivar producto previamente comprado preservando su ID y SKU y subiéndolo al 1° lugar
           onUpdateItem(targetInList.id, {
             completed: false,
             quantity: finalQty,
             unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
-            location: finalLoc !== 'General' ? finalLoc : targetInList.location,
+            location: resolvedLoc,
             category: finalCat !== 'General' ? finalCat : targetInList.category,
+            timestamp: now,
           });
         } else {
-          // Ya está en lista como pendiente: sumar cantidad y actualizar precio
+          // Ya está en lista como pendiente: actualizar cantidad, precio y subir al 1° lugar
           const updatedQty = Math.round(((targetInList.quantity || 1) + finalQty) * 1000) / 1000;
           onUpdateItem(targetInList.id, {
             quantity: updatedQty,
             unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
-            location: finalLoc !== 'General' ? finalLoc : targetInList.location,
+            location: resolvedLoc,
             category: finalCat !== 'General' ? finalCat : targetInList.category,
+            timestamp: now,
           });
         }
+        if (storeAddress.trim() && !isPendingLocationName(resolvedLoc)) {
+          persistAndGeocodeStoreAddress(resolvedLoc, storeAddress.trim());
+        }
+        promoteStoreToTop(resolvedLoc);
         setName('');
         setQuantity('1');
         setUnitPrice('');
@@ -542,6 +893,7 @@ export const ListView: React.FC<ListViewProps> = ({
       completed: false,
     });
 
+    promoteStoreToTop(finalLoc);
     setName('');
     setQuantity('1');
     setUnitPrice('');
@@ -590,6 +942,7 @@ export const ListView: React.FC<ListViewProps> = ({
     if (existing) {
       const targetInList = items.find((it) => it.id === existing.id);
       if (targetInList) {
+        const now = Date.now();
         if (targetInList.completed) {
           onUpdateItem(targetInList.id, {
             completed: false,
@@ -597,6 +950,7 @@ export const ListView: React.FC<ListViewProps> = ({
             unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
             location: storeName,
             category: finalCat !== 'General' ? finalCat : targetInList.category,
+            timestamp: now,
           });
         } else {
           const updatedQty = Math.round(((targetInList.quantity || 1) + finalQty) * 1000) / 1000;
@@ -605,8 +959,10 @@ export const ListView: React.FC<ListViewProps> = ({
             unitPrice: finalPrice > 0 ? finalPrice : targetInList.unitPrice,
             location: storeName,
             category: finalCat !== 'General' ? finalCat : targetInList.category,
+            timestamp: now,
           });
         }
+        promoteStoreToTop(storeName);
         setQuickAddStore(null);
         setQuickAddName('');
         setQuickAddQty('1');
@@ -627,6 +983,7 @@ export const ListView: React.FC<ListViewProps> = ({
       completed: false,
     });
 
+    promoteStoreToTop(storeName);
     setQuickAddStore(null);
     setQuickAddName('');
     setQuickAddQty('1');
@@ -1101,7 +1458,7 @@ export const ListView: React.FC<ListViewProps> = ({
             aria-label="Lugar o Supermercado"
             autoComplete="off"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            onChange={(e) => handleLocationInputChange(e.target.value)}
           />
           <datalist id="location-suggestions">
             <option value="Por averiguar" />
@@ -1109,6 +1466,34 @@ export const ListView: React.FC<ListViewProps> = ({
               <option key={loc} value={loc} />
             ))}
           </datalist>
+        </div>
+
+        <div
+          className={`input-wrapper input-wrapper-addr ${
+            isAddressAutoFilled && storeAddress ? 'has-saved-addr' : ''
+          }`}
+          title={
+            isAddressAutoFilled && storeAddress
+              ? `Dirección registrada de ${location}: ${storeAddress}`
+              : 'Dirección del local (se guarda automáticamente con el comercio)'
+          }
+        >
+          <Navigation className="input-icon" size={17} aria-hidden="true" />
+          <label htmlFor="storeAddressInput" className="sr-only">
+            Dirección del local
+          </label>
+          <input
+            type="text"
+            id="storeAddressInput"
+            placeholder="Dirección del local (ej: Av. 3 de Abril 1200)"
+            aria-label="Dirección del local"
+            autoComplete="off"
+            value={storeAddress}
+            onChange={(e) => {
+              setStoreAddress(e.target.value);
+              setIsAddressAutoFilled(false);
+            }}
+          />
         </div>
 
         <div className="input-wrapper input-wrapper-cat">
@@ -1371,9 +1756,13 @@ export const ListView: React.FC<ListViewProps> = ({
                             <ProductPurchaseDateSelect
                               item={item}
                               compact
-                              onChangeDate={(newDate) =>
-                                onUpdateItem(item.id, { plannedDate: newDate || undefined })
-                              }
+                              onChangeDate={(newDate) => handleProductDateChange(item, newDate)}
+                            />
+                            <ProductStoreSelect
+                              item={item}
+                              stores={distinctLocations}
+                              compact
+                              onChangeStore={(newStore) => handleMoveItemToStore(item, newStore)}
                             />
                             <span className="pending-qty-badge">
                               Cant: {formatNumber(item.quantity)}
@@ -1641,12 +2030,16 @@ export const ListView: React.FC<ListViewProps> = ({
                                 </span>
                               </div>
                               <div className="preview-right">
+                                <ProductStoreSelect
+                                  item={it}
+                                  stores={distinctLocations}
+                                  compact
+                                  onChangeStore={(newStore) => handleMoveItemToStore(it, newStore)}
+                                />
                                 <ProductPurchaseDateSelect
                                   item={it}
                                   compact
-                                  onChangeDate={(newDate) =>
-                                    onUpdateItem(it.id, { plannedDate: newDate || undefined })
-                                  }
+                                  onChangeDate={(newDate) => handleProductDateChange(it, newDate)}
                                 />
                                 <span className="preview-qty tabular-nums">
                                   {formatNumber(it.quantity)} un.
@@ -1968,9 +2361,13 @@ export const ListView: React.FC<ListViewProps> = ({
 
                               <ProductPurchaseDateSelect
                                 item={item}
-                                onChangeDate={(newDate) =>
-                                  onUpdateItem(item.id, { plannedDate: newDate || undefined })
-                                }
+                                onChangeDate={(newDate) => handleProductDateChange(item, newDate)}
+                              />
+
+                              <ProductStoreSelect
+                                item={item}
+                                stores={distinctLocations}
+                                onChangeStore={(newStore) => handleMoveItemToStore(item, newStore)}
                               />
 
                               {item.completed ? (
@@ -2110,6 +2507,7 @@ export const ListView: React.FC<ListViewProps> = ({
             <TodayRouteSidePanel
               todayItems={todayScheduledItems}
               origin={origin}
+              coordsVersion={coordsVersion}
               onToggleCompleted={onToggleCompleted}
               onClearTodayDate={(id) => onUpdateItem(id, { plannedDate: undefined })}
               onEditStoreLocation={onEditStoreLocation}
