@@ -19,6 +19,7 @@ const STORAGE_KEYS = {
   COLLAPSED_GROUPS: 'collapsedGroups',
   HIDE_EMPTY_STORES: 'shopping_hide_empty_stores',
   RECEIPTS_HISTORY: 'shopping_receipts_history',
+  LIST_SORT_ORDER: 'shopping_list_sort_order',
 };
 
 export const DEFAULT_ORIGIN: RouteOrigin = {
@@ -240,6 +241,10 @@ export function sanitizeShoppingItem(raw: unknown, index = 0): ShoppingItem | nu
     typeof obj.lastPurchasedDate === 'string' && obj.lastPurchasedDate.trim()
       ? obj.lastPurchasedDate.trim()
       : undefined;
+  const plannedDate =
+    typeof obj.plannedDate === 'string' && obj.plannedDate.trim()
+      ? obj.plannedDate.trim()
+      : undefined;
   const receiptId =
     typeof obj.receiptId === 'string' && obj.receiptId.trim() ? obj.receiptId.trim() : undefined;
   const purchaseHistory = Array.isArray(obj.purchaseHistory) ? obj.purchaseHistory : undefined;
@@ -265,6 +270,7 @@ export function sanitizeShoppingItem(raw: unknown, index = 0): ShoppingItem | nu
     completed,
     timestamp,
     updatedAt,
+    ...(plannedDate ? { plannedDate } : {}),
     ...(lastPurchasedDate ? { lastPurchasedDate } : {}),
     ...(receiptId ? { receiptId } : {}),
     ...(purchaseHistory ? { purchaseHistory } : {}),
@@ -551,3 +557,16 @@ export function loadStoredReceipts(): PurchaseReceipt[] {
 export function saveStoredReceipts(receipts: PurchaseReceipt[]): void {
   safeSet(STORAGE_KEYS.RECEIPTS_HISTORY, JSON.stringify(receipts));
 }
+
+export function loadStoredListSortOrder(): 'newest' | 'oldest' | 'manual' {
+  const raw = safeGet(STORAGE_KEYS.LIST_SORT_ORDER);
+  if (raw === 'oldest' || raw === 'manual' || raw === 'newest') {
+    return raw;
+  }
+  return 'newest';
+}
+
+export function saveStoredListSortOrder(order: 'newest' | 'oldest' | 'manual'): void {
+  safeSet(STORAGE_KEYS.LIST_SORT_ORDER, order);
+}
+

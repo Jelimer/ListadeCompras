@@ -332,6 +332,7 @@ export const App: React.FC = () => {
           ? {
               ...i,
               completed: false,
+              plannedDate: undefined,
               lastPurchasedDate: undefined,
               receiptId: undefined,
               updatedAt: Date.now(),
@@ -907,6 +908,8 @@ export const App: React.FC = () => {
             onReorderLocation={handleReorderLocation}
             grandTotalPending={metrics.totalPending}
             onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
+            origin={origin}
+            onEditStoreLocation={(store) => setEditStoreModalName(store)}
           />
         )}
 

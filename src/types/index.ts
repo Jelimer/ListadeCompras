@@ -19,6 +19,7 @@ export interface ShoppingItem {
   completed: boolean;
   timestamp: number;
   updatedAt: number;
+  plannedDate?: string;
   lastPurchasedDate?: string;
   receiptId?: string;
   purchaseHistory?: PurchaseHistoryEntry[];
@@ -27,6 +28,8 @@ export interface ShoppingItem {
     lng: number;
   };
 }
+
+export type ListSortOrder = 'newest' | 'oldest' | 'manual';
 
 export interface ReceiptLineItem {
   id: string;

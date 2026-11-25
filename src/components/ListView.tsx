@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useDeferredValue } from 'react';
+import React, { useState, useMemo, useDeferredValue, useRef } from 'react';
 import {
   Package,
   Hash,
@@ -26,16 +26,26 @@ import {
   Receipt,
   RotateCcw,
   Calendar,
+  ArrowUpDown,
 } from 'lucide-react';
-import { ShoppingItem } from '../types';
+import { ShoppingItem, ListSortOrder, RouteOrigin } from '../types';
 import { getCategoryIcon } from '../utils/categoryIcons';
 import {
   loadStoredHideEmptyStores,
   saveStoredHideEmptyStores,
+  loadStoredListSortOrder,
+  saveStoredListSortOrder,
   formatSkuCode,
   getNextSequentialSku,
 } from '../utils/storage';
 import { formatMoney, formatNumber, parseLocaleNumber } from '../utils/formatters';
+import {
+  TodayRouteSidePanel,
+  getTodayFullDate,
+  getTodayDayMonth,
+  isItemScheduledForToday,
+  formatShortDayMonth,
+} from './TodayRouteSidePanel';
 
 interface ListViewProps {
   items: ShoppingItem[];
@@ -56,6 +66,8 @@ interface ListViewProps {
   onReorderLocation: (direction: 'up' | 'down', location: string) => void;
   grandTotalPending: number;
   onOpenReceiptScanner?: () => void;
+  origin?: RouteOrigin;
+  onEditStoreLocation?: (storeName: string) => void;
 }
 
 const PENDING_LOCATION_NAMES = [
@@ -98,6 +110,150 @@ export interface CatalogProductSuggestion {
   quantity?: number;
 }
 
+interface DateOptionItem {
+  value: string;
+  label: string;
+}
+
+function buildQuickPurchaseDateOptions(): DateOptionItem[] {
+  const now = new Date();
+  const options: DateOptionItem[] = [];
+  for (let offset = 0; offset <= 8; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const fullVal = `${dd}/${mm}/${yyyy}`;
+    const shortDM = `${dd}/${mm}`;
+    if (offset === 0) {
+      options.push({ value: fullVal, label: `HOY (${shortDM})` });
+    } else if (offset === 1) {
+      options.push({ value: fullVal, label: `Mañana (${shortDM})` });
+    } else {
+      options.push({ value: fullVal, label: shortDM });
+    }
+  }
+  return options;
+}
+
+interface ProductPurchaseDateSelectProps {
+  item: ShoppingItem;
+  onChangeDate: (newDate: string) => void;
+  compact?: boolean;
+}
+
+const ProductPurchaseDateSelect: React.FC<ProductPurchaseDateSelectProps> = ({
+  item,
+  onChangeDate,
+  compact = false,
+}) => {
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const baseOptions = useMemo(() => buildQuickPurchaseDateOptions(), []);
+  const todayFull = getTodayFullDate();
+  const todayDM = getTodayDayMonth();
+
+  const rawCurrent = (item.plannedDate || '').trim();
+  const isTodaySelected = isItemScheduledForToday(item);
+
+  // Normalize current value so "HOY" or today's DD/MM matches todayFull in the select
+  const normalizedValue = isTodaySelected ? todayFull : rawCurrent;
+
+  const hasCustomValue =
+    Boolean(normalizedValue) && !baseOptions.some((o) => o.value === normalizedValue);
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === '__custom__') {
+      if (dateInputRef.current) {
+        if (typeof dateInputRef.current.showPicker === 'function') {
+          try {
+            dateInputRef.current.showPicker();
+            return;
+          } catch {
+            // Fallback
+          }
+        }
+        dateInputRef.current.focus();
+        dateInputRef.current.click();
+      }
+      return;
+    }
+    onChangeDate(val);
+  };
+
+  const handleNativeDatePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const iso = e.target.value; // YYYY-MM-DD
+    if (!iso) return;
+    const parts = iso.split('-');
+    if (parts.length === 3) {
+      const formatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      onChangeDate(formatted);
+    }
+  };
+
+  return (
+    <div
+      className={`product-date-select-wrap ${compact ? 'is-compact' : ''} ${
+        isTodaySelected ? 'is-today' : normalizedValue ? 'has-date' : 'no-date'
+      }`}
+      onClick={(e) => e.stopPropagation()}
+      title={
+        isTodaySelected
+          ? `Programado para comprar HOY (${todayDM}) — Visible en el mapa de hoy a la derecha`
+          : normalizedValue
+          ? `Fecha de compra programada: ${formatShortDayMonth(normalizedValue)}`
+          : 'Seleccionar fecha de compra (HOY o Día/Mes)'
+      }
+    >
+      <Calendar size={compact ? 11 : 12} className="product-date-select-icon" aria-hidden="true" />
+      <select
+        className="product-date-select tabular-nums"
+        aria-label={`Fecha de compra para ${item.name}`}
+        value={normalizedValue}
+        onChange={handleSelectChange}
+      >
+        <option value="">Sin fecha</option>
+        {baseOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+        {hasCustomValue && (
+          <option value={normalizedValue}>{formatShortDayMonth(normalizedValue)}</option>
+        )}
+        <option value="__custom__">Elegir fecha...</option>
+      </select>
+      <input
+        ref={dateInputRef}
+        type="date"
+        className="product-date-hidden-picker"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleNativeDatePicked}
+      />
+    </div>
+  );
+};
+
+function compareItemsByLoadDateDesc(a: ShoppingItem, b: ShoppingItem): number {
+  const timeA = Number(a.timestamp || 0);
+  const timeB = Number(b.timestamp || 0);
+  const seqA = Number(a.seqNumber || 0);
+  const seqB = Number(b.seqNumber || 0);
+
+  // Si los timestamps difieren por más de 2 segundos, priorizar timestamp real de carga
+  if (Math.abs(timeA - timeB) > 2000) {
+    return timeB - timeA;
+  }
+  if (seqA !== seqB) {
+    return seqB - seqA;
+  }
+  if (timeA !== timeB) {
+    return timeB - timeA;
+  }
+  return a.name.localeCompare(b.name, 'es');
+}
+
 export const ListView: React.FC<ListViewProps> = ({
   items,
   layoutMode,
@@ -117,6 +273,8 @@ export const ListView: React.FC<ListViewProps> = ({
   onReorderLocation,
   grandTotalPending,
   onOpenReceiptScanner,
+  origin,
+  onEditStoreLocation,
 }) => {
   // Input form state
   const [name, setName] = useState('');
@@ -140,12 +298,15 @@ export const ListView: React.FC<ListViewProps> = ({
   const [showQuickAddSuggestions, setShowQuickAddSuggestions] = useState(false);
   const [quickAddHighlightedIndex, setQuickAddHighlightedIndex] = useState(-1);
 
-  // Filters state
+  // Filters & Sort state
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [hideEmptyStores, setHideEmptyStores] = useState<boolean>(() =>
     loadStoredHideEmptyStores()
+  );
+  const [sortOrder, setSortOrder] = useState<ListSortOrder>(() =>
+    loadStoredListSortOrder()
   );
 
   // Drag & Drop state for store cards
@@ -170,9 +331,20 @@ export const ListView: React.FC<ListViewProps> = ({
     [items]
   );
 
+  // Productos programados para comprar HOY
+  const todayScheduledItems = useMemo(
+    () => items.filter((i) => isItemScheduledForToday(i)),
+    [items]
+  );
+
   const handleToggleHideEmptyStores = (checked: boolean) => {
     setHideEmptyStores(checked);
     saveStoredHideEmptyStores(checked);
+  };
+
+  const handleSortOrderChange = (nextOrder: ListSortOrder) => {
+    setSortOrder(nextOrder);
+    saveStoredListSortOrder(nextOrder);
   };
 
   // Catálogo deduplicado de productos para autocompletado y reuso de ID
@@ -501,7 +673,7 @@ export const ListView: React.FC<ListViewProps> = ({
     onUpdateItem(item.id, { quantity: nextQty });
   };
 
-  // Pending location items (also filtered by searchQuery if active)
+  // Pending location items (also filtered by searchQuery if active and sorted by load date)
   const pendingItems = useMemo(() => {
     const query = deferredSearchQuery
       .toLowerCase()
@@ -509,7 +681,7 @@ export const ListView: React.FC<ListViewProps> = ({
       .replace(/[\u0300-\u036f]/g, '')
       .trim();
 
-    return items.filter((it, idx) => {
+    const list = items.filter((it, idx) => {
       if (it.completed || !isPendingLocationName(it.location)) return false;
       if (!query) return true;
       const sku = it.skuCode || formatSkuCode(it.seqNumber || idx + 1);
@@ -519,7 +691,12 @@ export const ListView: React.FC<ListViewProps> = ({
         .replace(/[\u0300-\u036f]/g, '');
       return query.split(/\s+/).every((tok) => haystack.includes(tok));
     });
-  }, [items, deferredSearchQuery]);
+
+    return list.sort((a, b) => {
+      const cmp = compareItemsByLoadDateDesc(a, b);
+      return sortOrder === 'oldest' ? -cmp : cmp;
+    });
+  }, [items, deferredSearchQuery, sortOrder]);
 
   const handleAssignPending = (itemId: string) => {
     const targetStore = pendingAssignMap[itemId];
@@ -568,18 +745,40 @@ export const ListView: React.FC<ListViewProps> = ({
     Object.keys(groups).forEach((loc) => {
       groups[loc].sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        const seqA = Number(a.seqNumber || 0);
-        const seqB = Number(b.seqNumber || 0);
-        if (seqA !== seqB) return seqB - seqA;
-        const timeA = Number(a.timestamp || 0);
-        const timeB = Number(b.timestamp || 0);
-        if (timeA !== timeB) return timeB - timeA;
-        return a.name.localeCompare(b.name, 'es');
+        const cmp = compareItemsByLoadDateDesc(a, b);
+        return sortOrder === 'oldest' ? -cmp : cmp;
       });
     });
 
     const normalizedOrder = locationOrder.map(normalizeLocKey);
+
+    // Helper para obtener el ítem representativo de cada comercio según el orden de fecha de carga
+    const getRepresentativeItemForStore = (loc: string): ShoppingItem | undefined => {
+      const storeItems = groups[loc] || [];
+      if (storeItems.length === 0) return undefined;
+      const pendingInStore = storeItems.filter((i) => !i.completed);
+      const pool = pendingInStore.length > 0 ? pendingInStore : storeItems;
+      // Como storeItems ya está ordenado según sortOrder (más reciente primero o más antiguo primero),
+      // el primer elemento del pool es el representativo
+      return pool[0];
+    };
+
     const sortedLocations = Object.keys(groups).sort((a, b) => {
+      if (sortOrder === 'newest' || sortOrder === 'oldest') {
+        const repA = getRepresentativeItemForStore(a);
+        const repB = getRepresentativeItemForStore(b);
+        if (repA && repB) {
+          // Priorizar comercios que tienen productos pendientes sobre los que tienen 0 pendientes
+          if (repA.completed !== repB.completed) {
+            return repA.completed ? 1 : -1;
+          }
+          const cmp = compareItemsByLoadDateDesc(repA, repB);
+          if (cmp !== 0) {
+            return sortOrder === 'oldest' ? -cmp : cmp;
+          }
+        }
+      }
+
       const ia = normalizedOrder.indexOf(normalizeLocKey(a));
       const ib = normalizedOrder.indexOf(normalizeLocKey(b));
       if (ia === -1 && ib === -1) return a.localeCompare(b, 'es');
@@ -625,7 +824,7 @@ export const ListView: React.FC<ListViewProps> = ({
     });
 
     return result;
-  }, [items, deferredSearchQuery, hideCompleted, hideEmptyStores, locationOrder]);
+  }, [items, deferredSearchQuery, hideCompleted, hideEmptyStores, locationOrder, sortOrder]);
 
   // Normalized collapse check (includes both store cards and the "Por averiguar" section)
   const collapsedSet = useMemo(() => {
@@ -703,6 +902,9 @@ export const ListView: React.FC<ListViewProps> = ({
     const [moved] = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
 
+    if (sortOrder !== 'manual') {
+      handleSortOrderChange('manual');
+    }
     onSetLocationOrder(reordered);
   };
 
@@ -965,6 +1167,24 @@ export const ListView: React.FC<ListViewProps> = ({
           </div>
 
           <div className="toolbar-controls-group">
+            <div className="toolbar-sort-wrapper" title="Ordenar productos y comercios por fecha de carga">
+              <ArrowUpDown size={14} className="toolbar-sort-icon" aria-hidden="true" />
+              <label htmlFor="sortOrderSelect" className="toolbar-sort-label">
+                Fecha de carga:
+              </label>
+              <select
+                id="sortOrderSelect"
+                className="toolbar-sort-select"
+                aria-label="Ordenar por fecha de carga"
+                value={sortOrder}
+                onChange={(e) => handleSortOrderChange(e.target.value as ListSortOrder)}
+              >
+                <option value="newest">Últimos primero</option>
+                <option value="oldest">Más antiguos primero</option>
+                <option value="manual">Orden manual de locales</option>
+              </select>
+            </div>
+
             <div className="form-check">
               <input
                 type="checkbox"
@@ -1148,6 +1368,13 @@ export const ListView: React.FC<ListViewProps> = ({
                             </span>
                           </div>
                           <div className="pending-item-details tabular-nums">
+                            <ProductPurchaseDateSelect
+                              item={item}
+                              compact
+                              onChangeDate={(newDate) =>
+                                onUpdateItem(item.id, { plannedDate: newDate || undefined })
+                              }
+                            />
                             <span className="pending-qty-badge">
                               Cant: {formatNumber(item.quantity)}
                             </span>
@@ -1235,14 +1462,21 @@ export const ListView: React.FC<ListViewProps> = ({
           </section>
         )}
 
-        {/* Lista de compras agrupada por ubicación */}
+        {/* Layout dividido cuando hay productos marcados para HOY */}
         <div
-          id="shoppingListContainer"
-          className={`shopping-list-container ${layoutMode === 'grid' ? 'view-grid' : ''}`}
-          role="region"
-          aria-live="polite"
-          aria-label="Lista de compras agrupada por ubicación"
+          className={`list-workspace-split ${
+            todayScheduledItems.length > 0 ? 'has-today-route' : ''
+          }`}
         >
+          <div className="list-workspace-main">
+            {/* Lista de compras agrupada por ubicación */}
+            <div
+              id="shoppingListContainer"
+              className={`shopping-list-container ${layoutMode === 'grid' ? 'view-grid' : ''}`}
+              role="region"
+              aria-live="polite"
+              aria-label="Lista de compras agrupada por ubicación"
+            >
           {groupedItems.length === 0 ? (
             <div className="empty-state">
               <Package size={48} className="empty-icon" aria-hidden="true" />
@@ -1360,7 +1594,10 @@ export const ListView: React.FC<ListViewProps> = ({
                           title="Subir comercio"
                           aria-label={`Subir comercio ${group.location}`}
                           disabled={groupIdx === 0}
-                          onClick={() => onReorderLocation('up', group.location)}
+                          onClick={() => {
+                            if (sortOrder !== 'manual') handleSortOrderChange('manual');
+                            onReorderLocation('up', group.location);
+                          }}
                         >
                           <ChevronUp size={15} />
                         </button>
@@ -1370,7 +1607,10 @@ export const ListView: React.FC<ListViewProps> = ({
                           title="Bajar comercio"
                           aria-label={`Bajar comercio ${group.location}`}
                           disabled={groupIdx === groupedItems.length - 1}
-                          onClick={() => onReorderLocation('down', group.location)}
+                          onClick={() => {
+                            if (sortOrder !== 'manual') handleSortOrderChange('manual');
+                            onReorderLocation('down', group.location);
+                          }}
                         >
                           <ChevronDown size={15} />
                         </button>
@@ -1378,7 +1618,7 @@ export const ListView: React.FC<ListViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Vista previa de productos para comercios contraídos en cuadrícula */}
+                  {/* Vista previa de productos para comercios contraídos */}
                   {isCollapsed && group.items.length > 0 && (
                     <div className="card-collapsed-preview">
                       <div className="preview-items-list">
@@ -1396,9 +1636,18 @@ export const ListView: React.FC<ListViewProps> = ({
                                 <div className="preview-cat-icon">
                                   <CategoryIcon size={13} aria-hidden="true" />
                                 </div>
-                                <span className="preview-name">{it.name}</span>
+                                <span className="preview-name" title={it.name}>
+                                  {it.name}
+                                </span>
                               </div>
                               <div className="preview-right">
+                                <ProductPurchaseDateSelect
+                                  item={it}
+                                  compact
+                                  onChangeDate={(newDate) =>
+                                    onUpdateItem(it.id, { plannedDate: newDate || undefined })
+                                  }
+                                />
                                 <span className="preview-qty tabular-nums">
                                   {formatNumber(it.quantity)} un.
                                 </span>
@@ -1717,6 +1966,13 @@ export const ListView: React.FC<ListViewProps> = ({
                                 {item.name}
                               </span>
 
+                              <ProductPurchaseDateSelect
+                                item={item}
+                                onChangeDate={(newDate) =>
+                                  onUpdateItem(item.id, { plannedDate: newDate || undefined })
+                                }
+                              />
+
                               {item.completed ? (
                                 <span
                                   className={`item-purchase-date-badge tabular-nums ${
@@ -1846,6 +2102,18 @@ export const ListView: React.FC<ListViewProps> = ({
                 </div>
               );
             })
+          )}
+            </div>
+          </div>
+
+          {todayScheduledItems.length > 0 && (
+            <TodayRouteSidePanel
+              todayItems={todayScheduledItems}
+              origin={origin}
+              onToggleCompleted={onToggleCompleted}
+              onClearTodayDate={(id) => onUpdateItem(id, { plannedDate: undefined })}
+              onEditStoreLocation={onEditStoreLocation}
+            />
           )}
         </div>
 
